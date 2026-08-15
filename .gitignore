@@ -1,0 +1,10 @@
+# 中间产物，不入库（可从 CHM 用 hh.exe 重新生成）
+5z_src/
+
+# 发布包
+*.zip
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini

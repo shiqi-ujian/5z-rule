@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<div id="app">
+  <div id="mask"></div>
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="brand">5z 规则</div>
+      <div class="version">v1.59 · 共 __PAGE_COUNT__ 页</div>
+      <div class="search-box">
+        <input id="q" type="search" placeholder="搜索规则…（Ctrl+K）" autocomplete="off">
+        <div id="results" hidden></div>
+      </div>
+      <div class="search-options">
+        <label class="opt-label"><input type="checkbox" id="titleOnly"> 只匹配标题</label>
+        <select id="catFilter" class="opt-select"><option value="all">全部分类</option></select>
+        <button id="within-btn" class="opt-btn" type="button" title="在当前搜索结果中筛选">结果内筛选</button>
+      </div>
+    </div>
+    <nav id="toc" aria-label="目录"></nav>
+    <div class="side-foot">
+      <button id="theme-btn" title="切换深色模式">🌙</button>
+    </div>
+  </aside>
+  <main id="main">
+    <header id="topbar">
+      <button id="menu-btn" title="目录" aria-label="打开目录">☰</button>
+      <span id="crumb">5z 规则 1.59 版</span>
+      <button id="page-search-btn" title="页内搜索（替代 Ctrl+F）" aria-label="页内搜索">🔍</button>
+    </header>
+    <div id="page-search-bar" hidden>
+      <input id="ps-q" type="search" placeholder="在当前页面中查找…（Alt+↑↓ 跳转）" autocomplete="off">
+      <button id="ps-prev" title="上一个">↑</button>
+      <span id="ps-count"></span>
+      <button id="ps-next" title="下一个">↓</button>
+      <button id="ps-close" title="关闭">✕</button>
+    </div>
+    <iframe id="frame" title="正文" src="__DEFAULT_PAGE__"></iframe>
+  </main>
+</div>
+<script>
+window.__TOC__ = __TOC_JSON__;
+</script>
+<script src="assets/app.js"></script>
+</body>
+</html>

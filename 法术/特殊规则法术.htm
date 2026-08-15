@@ -1,0 +1,140 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>特殊规则法术</title>
+<meta name="GENERATOR" content="WinCHM">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8>
+<style>
+html,body { 
+	/* Default Font */
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 11pt;
+}
+</style>
+
+</head>
+
+<body>
+<div class="wz-nav"><span class="wz-crumbs"><span>法术</span><i>›</i><b>特殊规则法术</b></span><span class="wz-btns"><a class="wz-btn" href="../index.html" target="_top">☰ 目录</a><a class="wz-btn" href="法术详述/9环.htm">← 9环</a><a class="wz-btn" href="职业法术列表/其它职业.htm">非职业法术 →</a></span></div>
+
+<P>特殊规则法术，这一章节介绍了许多无法通过常规手段获得的特殊法术。其中有些是DM专属资源，有些是玩家可以通过特殊方法获得的。</P><script>
+(function () {
+  var state = { marks: [], index: -1, terms: [] };
+  var NAV_CSS = '#wz-hl-nav{position:fixed;bottom:14px;right:14px;z-index:2147483647;display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid rgba(148,163,184,.55);border-radius:10px;background:rgba(255,255,255,.97);color:#1e293b;box-shadow:0 4px 14px rgba(15,23,42,.2);font:13px/1.3 system-ui,"Microsoft YaHei","PingFang SC",sans-serif}' +
+    '#wz-hl-nav button{border:0;border-radius:6px;padding:7px 10px;cursor:pointer;background:#e0e7ff;color:#1e3a8a;font:inherit;font-size:13px;touch-action:manipulation}' +
+    '#wz-hl-nav button:hover{background:#c7d2fe}' +
+    '#wz-hl-nav .wz-hl-count{min-width:54px;text-align:center;font-weight:600;font-size:13px}' +
+    'mark[data-wz-hl]{background:#fde68a;color:inherit;padding:1px 2px;border-radius:2px}' +
+    'mark[data-wz-active]{background:#f59e0b;color:#111827;outline:2px solid rgba(245,158,11,.45)}' +
+    '@media (prefers-color-scheme: dark){#wz-hl-nav{background:rgba(30,41,59,.97);color:#e2e8f0;border-color:#475569}#wz-hl-nav button{background:#312e81;color:#c7d2fe}}';
+  function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function injectStyle() {
+    if (document.getElementById('wz-hl-style')) return;
+    var st = document.createElement('style');
+    st.id = 'wz-hl-style';
+    st.textContent = NAV_CSS;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function reportCount() {
+    try { parent.postMessage({ type: 'wz-hl-count', count: state.marks.length, index: state.index }, '*'); } catch (e) {}
+  }
+  function clearHighlights() {
+    if (state.nav && state.nav.parentNode) state.nav.parentNode.removeChild(state.nav);
+    state.nav = null;
+    var marks = document.querySelectorAll('mark[data-wz-hl]');
+    for (var i = 0; i < marks.length; i++) {
+      var m = marks[i];
+      if (m.parentNode) m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
+    }
+    state.marks = []; state.index = -1;
+    reportCount();
+  }
+  function jump(dir) {
+    if (!state.marks.length) return;
+    if (state.index >= 0 && state.marks[state.index]) {
+      state.marks[state.index].removeAttribute('data-wz-active');
+      state.marks[state.index].style.background = '';
+      state.marks[state.index].style.outline = '';
+    }
+    state.index = (state.index + dir + state.marks.length) % state.marks.length;
+    var mark = state.marks[state.index];
+    mark.setAttribute('data-wz-active', 'true');
+    mark.style.background = '#f59e0b';
+    mark.style.outline = '2px solid rgba(245,158,11,.5)';
+    try { mark.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { mark.scrollIntoView(true); }
+    if (state.nav && state.navCount) state.navCount.textContent = (state.index + 1) + ' / ' + state.marks.length;
+    reportCount();
+  }
+  function highlightAll(terms) {
+    terms = (terms || []).filter(function (t) { return t && String(t).trim(); })
+      .sort(function (a, b) { return String(b).length - String(a).length; });
+    clearHighlights();
+    if (!terms.length) return;
+    injectStyle();
+    var re;
+    try { re = new RegExp('(' + terms.map(escRe).join('|') + ')', 'gi'); } catch (e) { return; }
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    var nodes = [], node;
+    while ((node = walker.nextNode())) {
+      var tag = node.parentNode && node.parentNode.tagName;
+      if (tag !== 'SCRIPT' && tag !== 'STYLE' && tag !== 'NOSCRIPT' && tag !== 'MARK') nodes.push(node);
+    }
+    for (var i = 0; i < nodes.length; i++) {
+      var text = nodes[i].nodeValue || '';
+      if (!text) continue;
+      re.lastIndex = 0;
+      var m, last = 0, frag = null, found = false;
+      while ((m = re.exec(text)) !== null) {
+        found = true;
+        if (!frag) frag = document.createDocumentFragment();
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        var mk = document.createElement('mark');
+        mk.setAttribute('data-wz-hl', '1');
+        mk.textContent = m[0];
+        frag.appendChild(mk);
+        last = m.index + m[0].length;
+        if (m[0].length === 0) re.lastIndex++;
+      }
+      if (found) {
+        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+        nodes[i].parentNode.replaceChild(frag, nodes[i]);
+      }
+    }
+    state.marks = Array.prototype.slice.call(document.querySelectorAll('mark[data-wz-hl]'));
+    if (state.marks.length) {
+      var nav = document.createElement('div');
+      nav.id = 'wz-hl-nav';
+      var prev = document.createElement('button');
+      prev.type = 'button'; prev.textContent = '↑ 上一个';
+      var count = document.createElement('span');
+      count.className = 'wz-hl-count';
+      var next = document.createElement('button');
+      next.type = 'button'; next.textContent = '下一个 ↓';
+      var close = document.createElement('button');
+      close.type = 'button'; close.textContent = '✕';
+      nav.appendChild(prev); nav.appendChild(count); nav.appendChild(next); nav.appendChild(close);
+      document.body.appendChild(nav);
+      state.nav = nav; state.navCount = count;
+      prev.onclick = function () { jump(-1); };
+      next.onclick = function () { jump(1); };
+      close.onclick = function () { clearHighlights(); };
+      jump(0);
+    }
+    reportCount();
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      jump(e.key === 'ArrowUp' ? -1 : 1);
+    }
+  });
+  window.addEventListener('message', function (ev) {
+    var d = ev.data || {};
+    if (d.type === 'wz-highlight' || d.type === 'wz-search') highlightAll(d.terms);
+    else if (d.type === 'wz-nav') jump(d.dir);
+    else if (d.type === 'wz-clear') clearHighlights();
+  });
+})();
+</script>
+</body>
+</html>
