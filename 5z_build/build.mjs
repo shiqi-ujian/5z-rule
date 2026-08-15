@@ -458,6 +458,9 @@ fs.writeFileSync(path.join(OUT, 'assets', 'search-index.json'), indexJson);
 // 预压缩 gzip 版本（手机端加载更快；前端优先使用并自动解压）
 fs.writeFileSync(path.join(OUT, 'assets', 'search-index.json.gz'),
   zlib.gzipSync(Buffer.from(indexJson, 'utf8'), { level: 9 }));
+// 索引版本号（前端用它判断本地 IndexedDB 缓存是否过期）
+fs.writeFileSync(path.join(OUT, 'assets', 'idx-version.txt'),
+  new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14));
 log(`搜索索引: ${inv.size} 词条, ${(idxBytes / 1048576).toFixed(2)} MB (gzip ${(fs.statSync(path.join(OUT, 'assets', 'search-index.json.gz')).size / 1048576).toFixed(2)} MB)`);
 
 // ---------- 6. 生成应用壳 index.html ----------

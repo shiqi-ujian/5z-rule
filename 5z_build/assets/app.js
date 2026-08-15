@@ -131,28 +131,70 @@
   /* ---------- 全站搜索 ---------- */
   let idx = null;
   let idxLoading = false;
+  // IndexedDB 缓存（手机端首次下载后本地缓存，之后搜索秒开）
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      try {
+        const req = indexedDB.open('wz-search-idx', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('kv');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      } catch (e) { reject(e); }
+    });
+  }
+  async function idbGet(key) {
+    try {
+      const db = await idbOpen();
+      return await new Promise((res, rej) => {
+        const rq = db.transaction('kv', 'readonly').objectStore('kv').get(key);
+        rq.onsuccess = () => res(rq.result);
+        rq.onerror = () => rej(rq.error);
+      });
+    } catch (e) { return null; }
+  }
+  async function idbSet(key, val) {
+    try {
+      const db = await idbOpen();
+      return await new Promise((res, rej) => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(val, key);
+        tx.oncomplete = () => res();
+        tx.onerror = () => rej(tx.error);
+      });
+    } catch (e) { /* 忽略存储失败 */ }
+  }
+  async function fetchAndParse() {
+    const gzResp = await fetch('assets/search-index.json.gz');
+    if (gzResp.ok) {
+      const buf = await gzResp.arrayBuffer();
+      const enc = (gzResp.headers.get('content-encoding') || '').toLowerCase();
+      if (enc.includes('gzip')) {
+        return JSON.parse(new TextDecoder().decode(buf));
+      } else if (typeof DecompressionStream !== 'undefined') {
+        const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+        return JSON.parse(await new Response(stream).text());
+      }
+    }
+    const resp = await fetch('assets/search-index.json');
+    return await resp.json();
+  }
   async function loadIndex() {
     if (idx) return idx;
     if (idxLoading) { while (!idx) await new Promise(r => setTimeout(r, 60)); return idx; }
     idxLoading = true;
     try {
-      // 优先 gzip 预压缩版（体积约 1/4），服务器若已自动解压则直接解析
-      const gzResp = await fetch('assets/search-index.json.gz');
-      if (gzResp.ok) {
-        const buf = await gzResp.arrayBuffer();
-        const enc = (gzResp.headers.get('content-encoding') || '').toLowerCase();
-        if (enc.includes('gzip')) {
-          idx = JSON.parse(new TextDecoder().decode(buf));
-        } else if (typeof DecompressionStream !== 'undefined') {
-          const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
-          idx = JSON.parse(await new Response(stream).text());
-        } else {
-          const resp = await fetch('assets/search-index.json');
-          idx = await resp.json();
-        }
+      // 版本号对比：远程版本 vs 本地缓存版本（绕过 HTTP 缓存的 no-store 请求）
+      let remoteVer = null;
+      try {
+        const r = await fetch('assets/idx-version.txt?v=' + Date.now(), { cache: 'no-store' });
+        if (r.ok) remoteVer = (await r.text()).trim();
+      } catch (e) { /* file:// 或离线时忽略 */ }
+      const cached = await idbGet('idx');
+      if (cached && cached.v && cached.v === remoteVer) {
+        idx = cached.data;
       } else {
-        const resp = await fetch('assets/search-index.json');
-        idx = await resp.json();
+        idx = await fetchAndParse();
+        idbSet('idx', { v: remoteVer, data: idx });
       }
       buildCategories();
     } finally { idxLoading = false; }
