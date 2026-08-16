@@ -488,12 +488,16 @@ const defaultPage = pages.length ? encodeURI(pages[0].url) : '';
 
 let shell = fs.readFileSync(new URL('./shell.html', import.meta.url), 'utf8');
 const buildTs = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-shell = shell.replace('__TITLE__', VERSION ? `5z 规则 ${VERSION} 版` : '5z 规则网页版')
-  .replace('__VERSION__', VERSION)
-  .replace('__PAGE_COUNT__', String(pages.length))
-  .replace('__DEFAULT_PAGE__', defaultPage)
-  .replace('__TOC_JSON__', tocJson)
-  .replace('__BUILD_TS__', buildTs);
+// 占位符替换（split/join 全量替换，占位符可能出现多次）
+const shellRepl = [
+  ['__TITLE__', VERSION ? `5z 规则 ${VERSION} 版` : '5z 规则网页版'],
+  ['__VERSION__', VERSION],
+  ['__PAGE_COUNT__', String(pages.length)],
+  ['__DEFAULT_PAGE__', defaultPage],
+  ['__TOC_JSON__', tocJson],
+  ['__BUILD_TS__', buildTs],
+];
+for (const [ph, val] of shellRepl) shell = shell.split(ph).join(val);
 fs.writeFileSync(path.join(OUT, 'index.html'), shell, 'utf8');
 
 // ---------- 7. 复制壳资源 ----------
