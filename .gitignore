@@ -14,6 +14,13 @@ incoming/
 # 发布包
 *.zip
 
+# 自动化测试残留（Edge 无头测试 profile、临时调试/测试脚本、导出样例）
+5z_build/_edge-*/
+5z_build/_test-*.mjs
+5z_build/_dbg-*.mjs
+5z_build/_chk-*.mjs
+5z_build/_export-*.xlsx
+
 # 系统文件
 .DS_Store
 Thumbs.db
