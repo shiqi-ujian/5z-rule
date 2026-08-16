@@ -535,11 +535,19 @@ for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car
     'window.__TPL_XLSX_B64__ = "' + tplB64 + '";\n', 'utf8');
 }
 
-// ---------- 7.6 车卡页面（小页面，数据走独立 script） ----------
-fs.copyFileSync(new URL('./car.html', import.meta.url), path.join(OUT, 'car.html'));
+// ---------- 7.6 车卡页面（小页面，数据走独立 script；静态资源带构建版本防缓存） ----------
+{
+  let carHtml = fs.readFileSync(new URL('./car.html', import.meta.url), 'utf8');
+  carHtml = carHtml.split('__BUILD_TS__').join(buildTs);
+  fs.writeFileSync(path.join(OUT, 'car.html'), carHtml, 'utf8');
+}
 
 // ---------- 7.7 词典页面（法术/战技/程序） ----------
-fs.copyFileSync(new URL('./dict.html', import.meta.url), path.join(OUT, 'dict.html'));
+{
+  let dictHtml = fs.readFileSync(new URL('./dict.html', import.meta.url), 'utf8');
+  dictHtml = dictHtml.split('__BUILD_TS__').join(buildTs);
+  fs.writeFileSync(path.join(OUT, 'dict.html'), dictHtml, 'utf8');
+}
 
 // ---------- 8. 部署辅助文件 ----------
 fs.writeFileSync(path.join(OUT, '404.html'), `<!DOCTYPE html>
