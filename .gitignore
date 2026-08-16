@@ -8,6 +8,9 @@
 incoming/
 5z_build/archive/
 
+# 本地部署配置（含凭据，模板 deploy.config.example.json 入库）
+5z_build/deploy.config.json
+
 # 发布包
 *.zip
 

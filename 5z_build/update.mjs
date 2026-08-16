@@ -24,6 +24,7 @@ const opts = {
   noExtract: args.includes('--no-extract'),
   noPush: args.includes('--no-push'),
   dryRun: args.includes('--dry-run'),
+  skipDeploy: args.includes('--skip-deploy'),
 };
 
 // ---------- 工具 ----------
@@ -61,6 +62,54 @@ function siteVersion() {
   const hhc = fs.readdirSync(SRC).find(f => /\.hhc$/i.test(f));
   return hhc ? (/(\d+(?:\.\d+)+)/.exec(hhc)?.[1] || '未知版本') : '未知版本';
 }
+
+// ---------- 可选部署器：向多个托管平台发布（未来新平台在此添加） ----------
+// 部署配置从 5z_build/deploy.config.json 读取（不入库，见 deploy.config.example.json），
+// 敏感凭据一律走环境变量。每个部署器 { name, needs(), check(), run() }：
+//   needs() 返回是否配置了该平台（未配置则跳过）
+//   check() 返回缺失项说明（配置了但缺凭据时中止）
+//   run()   执行部署，失败抛错中止
+const DEPLOY_CONFIG = path.join(B, 'deploy.config.json');
+
+function readDeployConfig() {
+  try { return JSON.parse(fs.readFileSync(DEPLOY_CONFIG, 'utf8')); }
+  catch { return {}; }
+}
+
+const deployers = [
+  {
+    name: 'Cloudflare Pages',
+    needs: () => !!readDeployConfig().cloudflare,
+    check: () => {
+      const missing = [];
+      if (!process.env.CLOUDFLARE_API_TOKEN) missing.push('CLOUDFLARE_API_TOKEN');
+      return missing;
+    },
+    run() {
+      const cfg = readDeployConfig().cloudflare;
+      const token = process.env.CLOUDFLARE_API_TOKEN;
+      const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || cfg.accountId || '';
+      // 优先全局 wrangler，否则用 npx 临时拉取
+      const wr = spawnSync('wrangler', ['--version'], { encoding: 'utf8' }).status === 0
+        ? 'wrangler'
+        : 'npx --yes wrangler';
+      const cmd = wr.split(' ');
+      const argsArr = [...cmd, 'pages', 'deploy', '5z_web',
+        '--project-name', cfg.projectName || '5z-rule',
+        '--branch', cfg.branch || 'main'];
+      const r = spawnSync(argsArr[0], argsArr.slice(1), {
+        cwd: ROOT, encoding: 'utf8', timeout: 10 * 60 * 1000,
+        env: { ...process.env, CLOUDFLARE_API_TOKEN: token, ...(accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : {}) },
+      });
+      if (r.stdout) console.log(r.stdout.trimEnd());
+      if (r.stderr) process.stdout.write(r.stderr);
+      if (r.status !== 0) throw new Error(`wrangler 部署失败(exit ${r.status})`);
+      console.log('   ✓ Cloudflare Pages 部署成功');
+    },
+  },
+  // 未来平台示例（Vercel / Netlify 等）：
+  // { name: 'Vercel', needs: () => !!readDeployConfig().vercel, check: () => [], run() { ... } },
+];
 
 // ---------- 主流程 ----------
 console.log('========== 5z 规则 自动更新 ==========');
@@ -139,6 +188,25 @@ if (opts.dryRun) {
 } else {
   try { run('git', ['push']); console.log('   ✓ 已推送到 GitHub，GitHub Pages 即将自动更新上线'); }
   catch (e) { fail(`推送失败（构建已成功）：${e.message}\n请手动执行 git push`); }
+}
+
+// 7/7 可选部署器：同步到其他托管平台（Cloudflare Pages 等）
+console.log('\n[7/7] 同步到其他托管平台');
+if (opts.dryRun) {
+  console.log('   [dry-run] 跳过部署器');
+} else if (opts.skipDeploy) {
+  console.log('   [--skip-deploy] 跳过');
+} else {
+  let ran = 0;
+  for (const d of deployers) {
+    if (!d.needs()) { console.log(`   - ${d.name}: 未配置（见 5z_build/deploy.config.example.json），跳过`); continue; }
+    const missing = d.check();
+    if (missing.length) fail(`${d.name} 已配置但缺少凭据: ${missing.join(', ')}（可通过环境变量或 deploy.config.json 提供）`);
+    console.log(`   → ${d.name}`);
+    try { d.run(); ran++; }
+    catch (e) { fail(`${d.name} 部署失败（主站已上线，可重跑 update.mjs --no-extract --no-push --skip-deploy 跳过）: ${e.message}`); }
+  }
+  if (!ran) console.log('   （未配置任何部署器，仅 GitHub Pages 自动上线）');
 }
 
 // 收尾：归档已处理的 CHM（避免下次重复处理）

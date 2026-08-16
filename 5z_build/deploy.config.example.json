@@ -1,0 +1,8 @@
+{
+  "_comment": "复制本文件为 deploy.config.json（不入库）后填写。Cloudflare Pages 部署所需：环境变量 CLOUDFLARE_API_TOKEN（Cloudflare 后台 → 我的资料 → API 令牌 → 创建令牌，权限：Account > Cloudflare Pages > Edit），多账号时加 CLOUDFLARE_ACCOUNT_ID 或在此填 accountId。",
+  "cloudflare": {
+    "projectName": "5z-rule",
+    "accountId": "",
+    "branch": "main"
+  }
+}

@@ -27,16 +27,32 @@
 - **不想备案**：用境外托管（Cloudflare Pages / GitHub Pages 都免备案）
 - 绑定前先用免费子域名（`xxx.pages.dev`）确认效果
 
-## 更新发布
+## 更新发布（双站同步）
 
-CHM 出新版时重新构建，然后重新上传覆盖（Cloudflare 支持拖拽覆盖；GitHub 重新 push）：
+`一键更新.bat` 会推送到 GitHub（触发 GitHub Pages），Cloudflare Pages 按你选择的接入方式自动同步：
 
-```bash
-hh.exe -decompile 5z_src "新CHM路径"
-node 5z_build/build.mjs        # 重新生成 5z_web/
-node 5z_build/check-links.mjs  # 链接完整性检查
-node 5z_build/verify-complete.mjs # 页面完整性核对
-```
+### 方式一：Cloudflare Pages 连接 GitHub 仓库（推荐，一次性配置）
+
+1. 登录 https://dash.cloudflare.com → **Workers 和 Pages** → **创建** → **Pages** → **连接到 Git** → 选 `shiqi-ujian/5z-rule`
+2. 生产分支选 `main`；构建设置：**构建命令留空**、**构建输出目录填 `/`**（仓库根目录就是站点）
+3. 保存并部署，首次完成后即获得 `https://<项目名>.pages.dev`
+
+之后每次 `一键更新.bat` 推送，Cloudflare 通过 webhook 自动跟随更新，与 GitHub Pages 同时上线，本地零额外步骤。
+
+> 若之前用的是「上传资产」（Direct Upload）方式，需新建一个 Git 集成项目：新项目部署成功后，把旧项目删除即可（项目名保留则 `pages.dev` 域名不变）。
+
+### 方式二：本地部署器（wrangler + API Token）
+
+1. 复制 `5z_build/deploy.config.example.json` 为 `5z_build/deploy.config.json`，填 `projectName`
+2. Cloudflare 后台 → **我的资料** → **API 令牌** → **创建令牌**，权限含 **Account > Cloudflare Pages > Edit**
+3. 设置环境变量 `CLOUDFLARE_API_TOKEN`（多账号时再加 `CLOUDFLARE_ACCOUNT_ID`，或填进配置文件）
+4. 之后每次 `一键更新.bat` 在推送后自动调用 wrangler 部署到 Cloudflare Pages
+
+部署失败会中止并提示（主站 GitHub Pages 不受影响）；可用 `--skip-deploy` 跳过，或事后 `node 5z_build/update.mjs --no-extract --no-push` 重跑部署。
+
+### 添加其他托管平台
+
+`5z_build/update.mjs` 中的 `deployers` 数组是扩展点：按 `{ name, needs, check, run }` 格式添加（如 Vercel、Netlify），再在 `deploy.config.json` 加对应配置段即可。
 
 ## 技术备注
 

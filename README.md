@@ -47,6 +47,15 @@ node 5z_build/update.mjs --no-extract   # 跳过反编译，用现有 5z_src 重
 
 > 前提：本机装有 Node.js（构建工具链依赖）。版本号（如 v1.60）与页面标题会从 CHM 内自动提取，无需手改。
 
+## 多站点同步
+
+推送后 GitHub Pages 自动更新。Cloudflare Pages 同步方式（任选其一）：
+
+- **Git 集成（推荐）**：Cloudflare 后台 → Pages → 创建 → 连接到 Git → 选本仓库，构建输出目录 `/`。之后每次推送自动同步，零维护。步骤见 `5z_build/DEPLOY.md`
+- **本地部署器**：复制 `5z_build/deploy.config.example.json` 为 `deploy.config.json` 并配 Cloudflare API Token，`一键更新.bat` 会自动多部署一份到 Cloudflare Pages
+
+其他平台（Vercel 等）可在 `5z_build/update.mjs` 的 `deployers` 数组中扩展。
+
 ## 在线访问
 
 - GitHub Pages：`https://<用户名>.github.io/5z-rule/`
