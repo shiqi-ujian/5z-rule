@@ -3,9 +3,12 @@
 //   自动读取群友在腾讯文档收集表（链接发 QQ 群）提交的问题，
 //   写入 问题收集/inbox/<id>.json，供 agent 定时处理。
 //
+// 提取方式：登录态下进入收集表「统计 → 人员名单 → 已填写 → 表格视图」，
+//   读取官方表格视图的虚拟列表 DOM（表头 + 数据行），跨页面/接口变化更稳。
+//
 // 用法（在仓库根目录或任意目录运行均可）：
 //   node 5z_build/feedback-bridge/collect-docs.mjs            单次读取
-//   node 5z_build/feedback-bridge/collect-docs.mjs --probe    校准：dump 结果页 DOM 结构
+//   node 5z_build/feedback-bridge/collect-docs.mjs --probe    校准：dump 表格结构
 //   node 5z_build/feedback-bridge/collect-docs.mjs --login    有头打开登录页（一次性登录）
 //   node 5z_build/feedback-bridge/collect-docs.mjs --manual   导入 问题收集/manual/ 下的 CSV/XLSX
 //   node 5z_build/feedback-bridge/collect-docs.mjs --serve    常驻轮询（watch-collect 调用）
@@ -33,15 +36,29 @@ const ALERTS = path.join(ROOT, '问题收集', 'alerts.md');
 for (const d of [INBOX, MANUAL, MANUAL_DONE, ATTACH]) fs.mkdirSync(d, { recursive: true });
 
 const now = () => new Date();
-const iso = (d = new Date()) => {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}+08:00`;
-};
+const p2 = (n) => String(n).padStart(2, '0');
+const iso = (d = new Date()) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}+08:00`;
+
+/** 归一化时间："2026-08-16 21:58" / "2026-08-16T13:58:29Z" → ISO(+08:00) */
+function normTs(s) {
+  if (!s) return null;
+  let m = /(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(s);
+  if (m) {
+    const [, Y, Mo, D, h, mi, se] = m;
+    return `${Y}-${p2(Mo)}-${p2(D)}T${p2(h)}:${mi}:${se ? p2(se) : '00'}+08:00`;
+  }
+  m = /(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})/.exec(s);
+  if (m) {
+    const y = now().getFullYear();
+    return `${y}-${p2(m[1])}-${p2(m[2])}T${p2(m[3])}:${m[4]}:00+08:00`;
+  }
+  return null;
+}
 
 // ---------- 配置 / 状态 ----------
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
-    console.error(`[配置缺失] 请先复制 5z_build/feedback-bridge/config.example.json 为 config.json 并填写 formResultUrl。`);
+    console.error('[配置缺失] 请先复制 5z_build/feedback-bridge/config.example.json 为 config.json 并填写 formResultUrl。');
     process.exit(2);
   }
   return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -63,77 +80,109 @@ function alert(msg) {
 function hash(s) { return crypto.createHash('sha1').update(s).digest('hex').slice(0, 12); }
 
 function issueId(ts) {
-  const m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/.exec(ts || iso());
-  const base = m ? `${m[1]}${m[2]}${m[3]}-${m[4]}${m[5]}${m[6]}` : now().toISOString().replace(/\D/g, '').slice(0, 14);
+  const m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(ts || iso());
+  const base = m ? `${m[1]}${m[2]}${m[3]}-${m[4]}${m[5]}${m[6] || '00'}` : now().toISOString().replace(/\D/g, '').slice(0, 14);
   return `${base}-${hash(ts + Math.random()).slice(0, 4)}`;
 }
 
-/** 由块文本按字段标签解析字段值（Node 侧） */
-function parseBlock(text, labels) {
-  const out = {};
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-  let cur = null;
-  for (const line of lines) {
-    let matched = null;
-    for (const [key, label] of Object.entries(labels)) {
-      const esc = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`^${esc}\\s*[：:)\\]]?\\s*(.*)$`);
-      const m = line.match(re);
-      if (m) { matched = [key, m[1].trim()]; break; }
+// ---------- 表格视图提取（官方 UI 流程） ----------
+/** 进入「统计 → 人员名单 → 已填写」并切换「表格视图」，返回列定义 + 数据行（含滚动加载） */
+async function extractTable(ws, config) {
+  // 1) 进入已填写名单
+  const entered = await evalJs(ws, `(() => {
+    const el = Array.from(document.querySelectorAll('.category-child-name')).find(e =>
+      /^已填写/.test((e.innerText || '').trim()) && e.offsetParent !== null
+    );
+    if (!el) return false;
+    el.click(); return true;
+  })()`);
+  if (!entered) return { ok: false, reason: '未找到「已填写」名单入口（可能未登录或页面结构变化）', columns: [], rows: [] };
+  await sleep(2000);
+
+  // 2) 打开切换视图菜单
+  await evalJs(ws, `(() => {
+    const el = Array.from(document.querySelectorAll('*')).find(e =>
+      (e.innerText || '').trim() === '切换视图' && e.children.length === 0 && e.offsetParent !== null
+    );
+    if (el) el.click();
+    return true;
+  })()`);
+  await sleep(1000);
+
+  // 3) 点击「表格视图」
+  const switched = await evalJs(ws, `(() => {
+    const els = Array.from(document.querySelectorAll('*')).filter(e =>
+      (e.innerText || '').trim() === '表格视图' && e.offsetParent !== null
+    );
+    const el = els[els.length - 1];
+    if (!el) return false;
+    el.click(); return true;
+  })()`);
+  if (!switched) return { ok: false, reason: '未找到「表格视图」菜单项', columns: [], rows: [] };
+  await sleep(3500);
+
+  // 4) 读取表头列
+  const columns = await evalJs(ws, `(() => {
+    const cells = Array.from(document.querySelectorAll('.virtual-list-header .virtual-list-header-cell'));
+    return cells.map(c => {
+      const t = c.querySelector('.column-header-cell-title');
+      return (t ? t.innerText : c.innerText || '').trim();
+    }).filter(Boolean);
+  })()`);
+  if (!columns.length) return { ok: false, reason: '表格视图未渲染出表头', columns: [], rows: [] };
+
+  // 5) 滚动收集数据行（虚拟列表：滚动到底加载更多，最多 40 轮）
+  const rows = [];
+  const seenKeys = new Set();
+  const collect = () => evalJs(ws, `(() => {
+    const out = [];
+    const items = Array.from(document.querySelectorAll('.virtual-list-main-item.filled-table-item, .virtual-list-main .virtual-list-main-item'));
+    for (const it of items) {
+      const cells = Array.from(it.querySelectorAll('.virtual-list-cell')).map(c => (c.innerText || '').trim());
+      const imgs = Array.from(it.querySelectorAll('.virtual-list-cell img')).map(i => i.src).filter(s => s && !s.startsWith('data:'));
+      if (cells.length) out.push({ cells, imgs });
     }
-    if (matched) {
-      cur = matched[0];
-      out[cur] = matched[1];
-    } else if (cur && out[cur]) {
-      out[cur] += '\n' + line; // 续行（如多行描述）
-    } else if (cur) {
-      out[cur] = line;
+    return out;
+  })()`);
+  const scroll = () => evalJs(ws, `(() => {
+    const el = document.querySelector('.virtual-list-main') || document.querySelector('.virtual-list-container.filled-table-container');
+    if (!el) return false;
+    const before = el.scrollTop;
+    el.scrollTop = el.scrollHeight + 2000;
+    return el.scrollTop > before;
+  })()`);
+
+  for (let i = 0; i < 40; i++) {
+    const batch = await collect();
+    for (const r of batch) {
+      const k = r.cells.join('\u0001');
+      if (!seenKeys.has(k)) { seenKeys.add(k); rows.push(r); }
     }
+    if (!(await scroll())) break;
+    await sleep(600);
   }
-  for (const k of Object.keys(out)) out[k] = out[k].replace(/\n{2,}/g, '\n').trim();
-  return out;
+  return { ok: true, columns, rows };
 }
 
-/** DOM 提取的页面内脚本：找出包含时间戳的候选条目块 */
-const EXTRACT_JS = `(() => {
-  const TS = /20\\d{2}[-/.年]\\d{1,2}[-/月.]\\d{1,2}[日]?([ T]\\d{1,2}:\\d{2}(:\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[日]?\\s+\\d{1,2}:\\d{2}/;
-  const seen = new Set();
-  const blocks = [];
-  const all = Array.from(document.querySelectorAll('div,li,tr,section,article'));
-  for (const el of all) {
-    const t = (el.innerText || '').replace(/\\s+/g, '\\n').trim();
-    if (!t || t.length < 20 || t.length > 6000 || !TS.test(t)) continue;
-    // 只要最深的匹配块
-    let p = el.parentElement;
-    while (p && p !== document.body) {
-      const pt = (p.innerText || '').replace(/\\s+/g, '\\n').trim();
-      if (pt === t || (pt.length < 20 || pt.length > 6000)) break;
-      if (TS.test(pt)) { t = pt; el = p; }
-      p = p.parentElement;
-    }
-    const key = t.slice(0, 120);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const imgs = Array.from(el.querySelectorAll('img')).map(i => i.src).filter(s => s && !s.startsWith('data:'));
-    blocks.push({ text: t, imgs });
-  }
-  blocks.sort((a, b) => a.text.length - b.text.length);
-  return blocks.slice(0, 200);
-})()`;
-
-// ---------- DOM 模式提取 ----------
-async function extractDom(ws, config) {
+/** 列名 → 字段映射 */
+function mapColumns(columns, config) {
   const labels = config.fieldMap || {};
-  const rows = await evalJs(ws, EXTRACT_JS);
-  const out = [];
-  for (const r of rows) {
-    const tsM = /(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?|\d{1,2}[-/]\d{1,2}[日]?\s+\d{1,2}:\d{2})/.exec(r.text);
-    const ts = tsM ? tsM[1] : null;
-    if (!ts) continue;
-    const fields = parseBlock(r.text, labels);
-    out.push({ ts, fields, imgs: r.imgs, raw: r.text.slice(0, 2000) });
-  }
-  return out;
+  const map = { ts: null, reporter: null, page: null, title: null, description: null, expected: null, reproduce: null, attachments: null };
+  const colByName = {};
+  columns.forEach((c, i) => { colByName[c] = i; });
+  const find = (...names) => {
+    for (const n of names) if (colByName[n] !== undefined) return colByName[n];
+    return null;
+  };
+  map.ts = find('提交时间', '填写时间');
+  map.reporter = find('昵称', labels.reporter);
+  map.page = find('页面/功能', labels.page);
+  map.title = find('问题标题', labels.title);
+  map.description = find('问题描述', labels.description);
+  map.expected = find('期望行为', labels.expected);
+  map.reproduce = find('复现步骤', labels.reproduce);
+  map.attachments = find('截图', labels.attachments);
+  return map;
 }
 
 // ---------- 导出 xlsx 模式（兜底） ----------
@@ -141,17 +190,16 @@ async function extractExport(ws, config) {
   const dlDir = path.join(BRIDGE, '_dl');
   fs.mkdirSync(dlDir, { recursive: true });
   await send(ws, 'Page.setDownloadBehavior', { behavior: 'allow', downloadPath: dlDir });
-  // 找「导出」按钮（文案匹配）
   const clicked = await evalJs(ws, `(() => {
     const btns = Array.from(document.querySelectorAll('button,span,a,div'));
     const b = btns.find(el => {
       const t = (el.innerText || '').trim();
       return /^(导出|导出为|导出数据|下载)/.test(t) && t.length <= 8 && el.offsetParent !== null;
     });
-    if (!b) return false;
-    b.click(); return true;
+    if (!b) return [];
+    b.click(); return [true];
   })()`);
-  if (!clicked) { console.warn('[export] 未找到导出按钮'); return []; }
+  if (!clicked.length) { console.warn('[export] 未找到导出按钮'); return []; }
   await sleep(4000);
   const files = fs.readdirSync(dlDir).filter((f) => /\.(xlsx|xls|csv)$/i.test(f));
   if (!files.length) { console.warn('[export] 导出目录为空'); return []; }
@@ -163,7 +211,6 @@ async function extractExport(ws, config) {
   } else {
     rows = readXlsxRows(fp);
   }
-  // 表头映射
   const labels = config.fieldMap || {};
   const headerIdx = rows.findIndex((r) => Object.values(labels).some((l) => r.includes(l)));
   if (headerIdx < 0) { console.warn('[export] 未找到表头行'); return []; }
@@ -179,11 +226,8 @@ async function extractExport(ws, config) {
     const fields = {};
     for (const [key, i] of Object.entries(colForKey)) fields[key] = String(r[i] ?? '').trim();
     const tsCell = r.find((c) => /20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}/.test(String(c)));
-    const ts = tsCell ? String(tsCell) : null;
-    if (!ts) continue;
-    out.push({ ts, fields, imgs: [], raw: r.join(' | ').slice(0, 2000) });
+    out.push({ ts: tsCell ? String(tsCell) : null, fields, imgs: [], raw: r.join(' | ').slice(0, 2000) });
   }
-  // 清理下载
   try { fs.rmSync(fp, { force: true }); } catch { /* ignore */ }
   return out;
 }
@@ -191,13 +235,11 @@ async function extractExport(ws, config) {
 // ---------- 写入 inbox ----------
 function isDuplicate(row, state) {
   const key = hash(row.ts + '|' + (row.fields.title || '') + '|' + (row.fields.description || ''));
-  if (state.seen.includes(key)) return true;
-  return false;
+  return state.seen.includes(key);
 }
 
 function writeInbox(row, state, config, source) {
   if (isDuplicate(row, state)) return false;
-  const labels = config.fieldMap || {};
   const id = issueId(row.ts);
   const fields = row.fields || {};
   const issue = {
@@ -218,7 +260,6 @@ function writeInbox(row, state, config, source) {
     doneAt: null,
     raw: row.raw || '',
   };
-  // 图片附件（同源 blob 抓取）
   if (row.imgs && row.imgs.length) {
     const dir = path.join(ATTACH, id);
     fs.mkdirSync(dir, { recursive: true });
@@ -241,69 +282,6 @@ function writeInbox(row, state, config, source) {
 }
 
 // ---------- 校准探测 ----------
-async function probe(ws, config) {
-  const info = await evalJs(ws, `(() => {
-    const tables = Array.from(document.querySelectorAll('table')).slice(0, 3).map(t => ({
-      rows: t.querySelectorAll('tr').length,
-      cells: Array.from(t.querySelectorAll('tr')).slice(0, 3).map(tr => Array.from(tr.querySelectorAll('th,td')).map(c => (c.innerText || '').trim().slice(0, 30))),
-    }));
-    const buttons = Array.from(document.querySelectorAll('button,span,a,[role="button"]'))
-      .map(el => (el.innerText || '').trim()).filter(t => t && t.length <= 10);
-    const body = document.body.innerText.replace(/\\s+/g, ' ').slice(0, 600);
-    return { title: document.title, url: location.href, tables, buttons: [...new Set(buttons)].slice(0, 30), bodyPreview: body };
-  })()`);
-  const blocks = await evalJs(ws, EXTRACT_JS);
-  const candidates = blocks.slice(0, 20).map((b) => ({ text: b.text.slice(0, 300), imgs: b.imgs.length }));
-  return { ...info, candidateCount: blocks.length, candidates };
-}
-
-// ---------- 各模式 ----------
-async function runOnce() {
-  const config = loadConfig();
-  const state = loadState();
-  if (!config.formResultUrl || !/^https?:\/\//.test(config.formResultUrl)) {
-    console.error('[配置错误] config.json 中 formResultUrl 无效。');
-    process.exit(2);
-  }
-  const edge = await launchEdge({ profileDir: PROFILE });
-  let ws;
-  try {
-    const target = await getPageTarget(edge.port);
-    ws = await connect(target.webSocketDebuggerUrl);
-    await send(ws, 'Page.enable');
-    await send(ws, 'Runtime.enable');
-    console.log('[nav]', config.formResultUrl);
-    await nav(ws, config.formResultUrl, `document.body && document.body.innerText.length > 300`, 45000);
-    // 等待可能的登录/加载完成
-    await sleep(1500);
-
-    let rows = [];
-    const mode = (config.extractMode || 'auto').toLowerCase();
-    if (mode === 'export') {
-      rows = await extractExport(ws, config);
-    } else {
-      rows = await extractDom(ws, config);
-      if (mode === 'auto' && rows.length === 0) {
-        console.log('[auto] DOM 无候选，尝试导出兜底…');
-        rows = await extractExport(ws, config);
-      }
-    }
-    let added = 0;
-    for (const r of rows) if (writeInbox(r, state, config, 'tencent-docs-form')) added++;
-    console.log(`[done] 候选 ${rows.length}，新增 ${added}`);
-    if (added === 0 && rows.length === 0) {
-      alert('读取桥未从收集表解析到任何提交（可能页面结构变化或未登录）。请运行 --probe 校准，或重跑 login-docs.bat 登录。');
-    }
-    saveState(state);
-  } catch (e) {
-    alert(`读取桥失败：${e.message.slice(0, 300)}`);
-    throw e;
-  } finally {
-    if (ws) { try { await send(ws, 'Browser.close'); } catch { /* ignore */ } }
-    await edge.close();
-  }
-}
-
 async function runProbe() {
   const config = loadConfig();
   const state = loadState();
@@ -314,15 +292,25 @@ async function runProbe() {
     ws = await connect(target.webSocketDebuggerUrl);
     await send(ws, 'Page.enable');
     await send(ws, 'Runtime.enable');
-    await nav(ws, config.formResultUrl, `document.body && document.body.innerText.length > 300`, 45000);
-    await sleep(2000);
-    const info = await probe(ws, config);
-    state.lastProbe = { at: iso(), ...info };
+    await nav(ws, config.formResultUrl, `document.body && document.body.innerText.length > 200`, 45000);
+    await sleep(1500);
+    const wall = await evalJs(ws, `/登录后才能填写|请登录|扫码登录/.test(document.body.innerText)`);
+    const res = await extractTable(ws, config);
+    const probe = {
+      at: iso(),
+      loginWall: wall,
+      ok: res.ok,
+      reason: res.reason || '',
+      columns: res.columns,
+      sampleRows: res.rows.slice(0, 3).map((r) => r.cells),
+      rowCount: res.rows.length,
+    };
+    state.lastProbe = probe;
     saveState(state);
-    console.log(JSON.stringify(info, null, 2));
-    console.log('\n[probe] 结果已存 feedback-state.json，供校准 extractor 用。');
+    console.log(JSON.stringify(probe, null, 2));
+    if (wall) console.log('\n[probe] 检测到登录墙：请运行 login-docs.bat 重新登录。');
   } finally {
-    if (ws) { try { await send(ws, 'Browser.close'); } catch { /* ignore */ } }
+    if (ws) { try { await send(ws, 'Browser.close'); } catch {} }
     await edge.close();
   }
 }
@@ -352,7 +340,7 @@ function runManual() {
     const fp = path.join(MANUAL, f);
     let rows;
     try {
-      if (/\.csv$/i.test(f)) {
+      if (/\.csv$/i.test(fp)) {
         rows = fs.readFileSync(fp, 'utf8').split(/\r?\n/).filter((l) => l.trim()).map((l) => l.split(',').map((c) => c.replace(/^"|"$/g, '').trim()));
       } else {
         rows = readXlsxRows(fp);
@@ -370,13 +358,81 @@ function runManual() {
       const fields = {};
       for (const [key, i] of Object.entries(colForKey)) fields[key] = String(r[i] ?? '').trim();
       const tsCell = r.find((c) => /20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}/.test(String(c)));
-      const row = { ts: tsCell ? String(tsCell) : iso(), fields, imgs: [], raw: r.join(' | ').slice(0, 2000) };
+      const row = { ts: tsCell ? String(tsCell) : null, fields, imgs: [], raw: r.join(' | ').slice(0, 2000) };
       if (writeInbox(row, state, config, 'manual-csv')) added++;
     }
     try { fs.renameSync(fp, path.join(MANUAL_DONE, f)); } catch { /* ignore */ }
   }
   console.log(`[manual] 新增 ${added} 条`);
   saveState(state);
+}
+
+// ---------- 单次读取 ----------
+async function runOnce() {
+  const config = loadConfig();
+  const state = loadState();
+  if (!config.formResultUrl || !/^https?:\/\//.test(config.formResultUrl)) {
+    console.error('[配置错误] config.json 中 formResultUrl 无效。');
+    process.exit(2);
+  }
+  const edge = await launchEdge({ profileDir: PROFILE });
+  let ws;
+  try {
+    const target = await getPageTarget(edge.port);
+    ws = await connect(target.webSocketDebuggerUrl);
+    await send(ws, 'Page.enable');
+    await send(ws, 'Runtime.enable');
+    console.log('[nav]', config.formResultUrl.slice(0, 80));
+    await nav(ws, config.formResultUrl, `document.body && document.body.innerText.length > 200`, 45000);
+    await sleep(1500);
+
+    let added = 0;
+    const mode = (config.extractMode || 'auto').toLowerCase();
+    if (mode === 'export') {
+      const rows = await extractExport(ws, config);
+      for (const r of rows) if (writeInbox(r, state, config, 'tencent-docs-form')) added++;
+    } else {
+      const res = await extractTable(ws, config);
+      if (res.ok) {
+        const colMap = mapColumns(res.columns, config);
+        for (const r of res.rows) {
+          const fields = {
+            reporter: colMap.reporter !== null ? r.cells[colMap.reporter] : '',
+            page: colMap.page !== null ? r.cells[colMap.page] : '',
+            title: colMap.title !== null ? r.cells[colMap.title] : '',
+            description: colMap.description !== null ? r.cells[colMap.description] : '',
+            expected: colMap.expected !== null ? r.cells[colMap.expected] : '',
+            reproduce: colMap.reproduce !== null ? r.cells[colMap.reproduce] : '',
+          };
+          const row = {
+            ts: colMap.ts !== null ? (normTs(r.cells[colMap.ts]) || iso()) : iso(),
+            fields,
+            imgs: r.imgs || [],
+            raw: r.cells.join(' | ').slice(0, 2000),
+          };
+          if (writeInbox(row, state, config, 'tencent-docs-form')) added++;
+        }
+        if (res.rows.length === 0 && added === 0) {
+          const wall = await evalJs(ws, `/登录后才能填写|请登录|扫码登录/.test(document.body.innerText)`);
+          if (wall) alert('收集表显示需登录：请运行 login-docs.bat 重新登录。');
+        }
+      } else {
+        // 表格视图失败 → 尝试导出兜底
+        console.log('[auto]', res.reason, '→ 尝试导出兜底…');
+        const rows = await extractExport(ws, config);
+        for (const r of rows) if (writeInbox(r, state, config, 'tencent-docs-form')) added++;
+        if (rows.length === 0) alert(`读取桥失败：${res.reason}`);
+      }
+    }
+    console.log(`[done] 新增 ${added}`);
+    saveState(state);
+  } catch (e) {
+    alert(`读取桥失败：${e.message.slice(0, 300)}`);
+    throw e;
+  } finally {
+    if (ws) { try { await send(ws, 'Browser.close'); } catch {} }
+    await edge.close();
+  }
 }
 
 async function runServe() {

@@ -22,6 +22,8 @@ incoming/
 5z_build/_export-*.xlsx
 5z_build/_*.log
 5z_build/feedback-bridge/_test-*.mjs
+5z_build/feedback-bridge/_dbg-*.mjs
+5z_build/feedback-bridge/_shots/
 
 # 问题收集工作区（群友反馈内容，绝不能进公开仓库）
 问题收集/
