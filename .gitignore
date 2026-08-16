@@ -20,6 +20,7 @@ incoming/
 5z_build/_dbg-*.mjs
 5z_build/_chk-*.mjs
 5z_build/_export-*.xlsx
+5z_build/_*.log
 
 # 系统文件
 .DS_Store
