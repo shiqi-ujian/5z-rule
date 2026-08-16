@@ -1,6 +1,6 @@
 // ============================================================
 // 5z 车卡数据解析器：从 5z_src/（CHM 反编译产物）提取角色创建数据
-// 输出: 5z_web/assets/card-data/{rules,races,classes,feats}.json
+// 输出: 5z_web/assets/card-data/{rules,races,classes,feats,spells,class-spells,maneuvers,programs,magic-items}.json
 // 由 build.mjs 在构建流程末尾调用；也可独立运行：
 //   node 5z_build/parse-card-data.mjs [输出目录，默认 5z_web]
 // ============================================================
@@ -641,6 +641,84 @@ function parsePrograms() {
   return out;
 }
 
+// ---------- 5c. 魔法物品（装备/魔法物品/**） ----------
+// 物品条目 = 14pt 棕色加粗段（parsePage 判为 h2）；套装页特殊：h2 = 套装条目, h1（≠“套装”）= 套装成员物品
+// 类型行（attr）两种形式：① 与物品名同段（<br> 分隔，如 卷轴页）；② 名字后独立 p/h3（可能前插“武器加值：+N。”等 h3）
+function parseMagicItems() {
+  const out = [];
+  const dir = path.join(SRC, '装备', '魔法物品');
+  if (!fs.existsSync(dir)) return out;
+  // 说明/工艺/推荐 页是规则讲解页或清单，不含物品条目
+  const skipFile = (name) => /说明\.htm$/i.test(name) || /魔法物品工艺\.htm$/i.test(name) || /常见物品推荐\.htm$/i.test(name);
+  // 类型行：主正则（封闭类型集）+ 兜底（短前缀 + 价格/同调标记），实测全量 100% 检出
+  const attrRe = /^(神器，)?(卷轴|魔药|武器|法器|奇物|服饰|盔甲|盾牌|套装|弹药)[^，\n]*，/;
+  const attrRe2 = /^[^，\n]{1,14}，.*(?:gp|价格|同调|非卖品|耗材)/;
+  const enRe = /\s*[A-Za-z][A-Za-z0-9\s'’\-]*$/;
+  const hit = (t) => t && (attrRe.test(t) || attrRe2.test(t));
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) { if (!/\.files$/i.test(e.name)) walk(full); continue; }
+      if (!/\.htm$/i.test(e.name) || skipFile(e.name)) continue;
+      const isSetPage = e.name === '套装.htm';
+      const rel = relUrl(full);
+      const label = e.name.replace(/\.htm$/i, '');
+      const category = isSetPage ? '套装'
+        : (label === '卷轴' || label === '魔药') ? label
+        : path.basename(path.dirname(full)); // 武器/防具/法器/服饰/奇物
+      const flow = parsePage(readText(full));
+      let seq = 0;
+      for (let i = 0; i < flow.length; i++) {
+        const x = flow[i];
+        const isName = isSetPage ? (x.type === 'h2' || (x.type === 'h1' && x.text !== '套装')) : x.type === 'h2';
+        if (!isName) continue;
+        // 条目正文：到下一个条目名为止；套装页的 h1 即条目名（不进正文）
+        const body = [];
+        for (let j = i + 1; j < flow.length; j++) {
+          const y = flow[j];
+          const isNext = isSetPage ? (y.type === 'h2' || (y.type === 'h1' && y.text !== '套装')) : y.type === 'h2';
+          if (isNext) break;
+          if (y.type !== 'h1') body.push(y);
+        }
+        // 名称：首行；末尾英文拆出 en
+        const lines = x.text.split('\n').map(s => s.trim()).filter(Boolean);
+        let name = lines[0] || '';
+        let en = '';
+        const em = name.match(enRe);
+        if (em) { en = em[0].trim(); name = name.slice(0, em.index).trim(); }
+        if (!name) name = en; // 纯英文名（如 “MP5”）
+        // 类型行：先看名字块第 2+ 行，再看正文前 6 块的 p/h3
+        let attr = '';
+        for (const ln of lines.slice(1)) if (hit(ln)) { attr = ln; break; }
+        if (!attr) {
+          for (const b of body.slice(0, 6)) {
+            if ((b.type === 'p' || b.type === 'h3') && hit(b.text)) { attr = b.text; break; }
+          }
+        }
+        // 结构化字段
+        const am = attr.match(/需[^，\n]{0,14}?同调/);
+        const priceMatch = attr.match(/(至少[\d,，]+gp|\d[\d,，]*\s*gp)/);
+        const price = priceMatch ? priceMatch[1].replace(/\s+/g, '')
+          : /价格见下?表/.test(attr) ? '价格见下表'
+          : /非卖品/.test(attr) ? '非卖品' : '';
+        const text = body.filter(b => (b.type === 'p' || b.type === 'h3') && !/^\/\//.test(b.text))
+          .map(b => b.text).join('\n');
+        const tables = body.filter(b => b.type === 'table').map(b => b.rows);
+        seq++;
+        out.push({
+          id: rel + '#' + seq,
+          name, en, category, sub: label,
+          attr, attune: !!am, attuneText: am ? am[0] : '',
+          price, artifact: /神器/.test(attr),
+          text, tables, url: rel,
+        });
+      }
+    }
+  };
+  walk(dir);
+  return out;
+}
+
 // ---------- 5b. 核心规则表（来自 1.59 规则书正文） ----------
 function buildRules(version) {
   return {
@@ -712,6 +790,7 @@ const spells = parseSpells();
 const classSpells = parseClassSpells();
 const maneuvers = parseManeuvers();
 const programs = parsePrograms();
+const magicItems = parseMagicItems();
 // 把种族页内的"种族专长"合并进专长列表
 for (const r of races) {
   for (const f of r.raceFeats || []) {
@@ -730,6 +809,7 @@ write('spells.json', spells);
 write('class-spells.json', classSpells);
 write('maneuvers.json', maneuvers);
 write('programs.json', programs);
+write('magic-items.json', magicItems);
 
-console.log(`[parse-card-data] 规则 v${version || '?'}: 种族 ${races.length} | 职业 ${classes.length} | 专长 ${feats.length} | 法术 ${spells.length} | 职业法表 ${classSpells.length} | 战技 ${maneuvers.length} | 程序 ${programs.length}`);
+console.log(`[parse-card-data] 规则 v${version || '?'}: 种族 ${races.length} | 职业 ${classes.length} | 专长 ${feats.length} | 法术 ${spells.length} | 职业法表 ${classSpells.length} | 战技 ${maneuvers.length} | 程序 ${programs.length} | 魔法物品 ${magicItems.length}`);
 console.log(`[parse-card-data] 输出: ${outDir}`);

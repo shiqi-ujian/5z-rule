@@ -1,4 +1,4 @@
-/* 5z 词典前端：法术 / 战技 / 程序 浏览、搜索、筛选、详情 */
+/* 5z 词典前端：法术 / 战技 / 程序 / 魔法物品 浏览、搜索、筛选、详情 */
 (function () {
 'use strict';
 const DATA = window.__CAR_DATA__;
@@ -42,12 +42,34 @@ const MLEVELS = [...new Set(DATA.maneuvers.map(m => m.level))].sort((a, b) => a.
 const MTYPES = [...new Set(DATA.maneuvers.map(m => m.type))].sort((a, b) => a.localeCompare(b));
 const PROTOCOLS = ['阿尔法', '贝塔', '伽马', '德尔塔', '伊普西隆', '泽塔', '欧米伽'];
 const MODULES = [...new Set(DATA.programs.map(p => p.module).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+// 魔法物品：预计算搜索串；分类顺序按规则书章节（固定序，未知分类兜底按拼音）
+const MI = DATA.magicItems || [];
+const MI_SUB_ORDER = ['卷轴', '魔药',
+  '武器（近战）', '武器（远程）', '武器（通用）',
+  '盔甲（轻甲）', '盔甲（中甲）', '盔甲（重甲）', '盔甲（通用）', '盾牌',
+  '法器（乐器）', '法器（书本）', '法器（圣徽）', '法器（法杖）', '法器（法球）', '法器（魔杖）',
+  '法器（碎晶）', '法器（职业基础）', '法器（未分类）',
+  '服饰（基础）', '服饰（帽子）', '服饰（头饰）', '服饰（戒指）', '服饰（手套）', '服饰（护符）',
+  '服饰（护腿）', '服饰（斗篷）', '服饰（腰带）', '服饰（外套）', '服饰（鞋子）',
+  '奇物（书本）', '奇物（交通用品）', '奇物（刺青）', '奇物（召唤媒介）', '奇物（宝石）',
+  '奇物（容器）', '奇物（拘束用品）', '奇物（旗帜）', '奇物（替身DISC）', '奇物（火器）',
+  '奇物（照明用品）', '奇物（电器）', '奇物（移植体）', '奇物（未分类）', '套装'];
+const MI_SUBS = [...new Set(MI.map(i => i.sub))]
+  .sort((a, b) => {
+    const ia = MI_SUB_ORDER.indexOf(a), ib = MI_SUB_ORDER.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+MI.forEach(i => {
+  i.hay = [i.name, i.en || '', i.attr || '', i.text || '', (i.tables || []).map(t => t.flat().join(' ')).join(' ')]
+    .join(' ').toLowerCase();
+});
 
 const state = {
   tab: 'spells',
   spell: { kw: '', level: '', school: '', cls: '', ritual: '', focus: '', page: 1, sel: null },
   mv: { kw: '', style: '', level: '', type: '', sel: null },
   pg: { kw: '', protocol: '', module: '', focus: '', sel: null },
+  mi: { kw: '', sub: '', attune: '', artifact: '', page: 1, sel: null },
 };
 const PAGE_SIZE = 100;
 
@@ -287,6 +309,110 @@ function pgToolbar() {
   }
 }
 
+/* ---------- 魔法物品 Tab ---------- */
+function miFiltered() {
+  const f = state.mi;
+  const kw = f.kw.trim().toLowerCase();
+  return MI.filter(i => {
+    if (f.sub && i.sub !== f.sub) return false;
+    if (f.attune === '1' && !i.attune) return false;
+    if (f.attune === '0' && i.attune) return false;
+    if (f.artifact === '1' && !i.artifact) return false;
+    if (f.artifact === '0' && i.artifact) return false;
+    if (kw && !i.hay.includes(kw)) return false;
+    return true;
+  });
+}
+function renderMiTables(rowsArr) {
+  return (rowsArr || []).map(rows => {
+    if (!rows || !rows.length) return '';
+    const hasHead = rows.length > 1 && rows[0].some(Boolean);
+    const thead = hasHead
+      ? `<thead><tr>${rows[0].map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>` : '';
+    const dataRows = hasHead ? rows.slice(1) : rows;
+    const tbody = `<tbody>${dataRows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    return `<div class="dd-table"><table>${thead}${tbody}</table></div>`;
+  }).join('');
+}
+function renderMiList(scrollTop) {
+  const f = state.mi;
+  const all = miFiltered();
+  const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  if (f.page > pages) f.page = pages;
+  const slice = all.slice((f.page - 1) * PAGE_SIZE, f.page * PAGE_SIZE);
+  const list = $('#list');
+  list.innerHTML = '';
+  for (const i of slice) {
+    const brief = (i.text || '').split('\n')[0].slice(0, 60);
+    const item = el('button', 'ditem' + (f.sel === i.id ? ' sel' : ''));
+    item.type = 'button';
+    item.innerHTML = `<div class="di-name">${esc(i.name)}${i.artifact ? ' <span class="tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="tag-attune">同调</span>' : ''}</div>
+      <div class="di-sub">${esc(i.sub)} · ${esc(i.attr || '未收录类型行')}</div>
+      ${brief ? `<div class="di-brief">${esc(brief)}</div>` : ''}`;
+    item.onclick = () => { f.sel = i.id; renderMiList(); renderMiDetail(i); };
+    list.appendChild(item);
+  }
+  if (!slice.length) list.innerHTML = '<p style="padding:16px;color:var(--sub)">没有匹配的魔法物品。</p>';
+  if (scrollTop) {
+    list.scrollTop = 0;
+    if (window.innerWidth <= 860) list.scrollIntoView({ block: 'start' });
+  }
+  const count = $('#mi-count');
+  if (count) count.innerHTML = `共 <b>${all.length}</b> 个`;
+  const pager = $('#pager');
+  if (pages > 1) {
+    pager.hidden = false;
+    pager.innerHTML = `<button type="button" id="pg-prev" ${f.page <= 1 ? 'disabled' : ''}>← 上一页</button>
+      <span class="pg-info">${f.page} / ${pages}</span>
+      <button type="button" id="pg-next" ${f.page >= pages ? 'disabled' : ''}>下一页 →</button>`;
+    $('#pg-prev').onclick = () => { f.page--; renderMiList(true); };
+    $('#pg-next').onclick = () => { f.page++; renderMiList(true); };
+  } else {
+    pager.hidden = true;
+  }
+}
+function renderMiDetail(i) {
+  const d = $('#detail');
+  const fields = [
+    ['分类', i.sub], ['类型行', i.attr || '—'],
+    ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
+    ['价格', i.price || (i.attr && /价格见下?表/.test(i.attr) ? '价格见下表' : '—')],
+  ];
+  d.innerHTML = `<h2 class="dd-name">${esc(i.name)}${i.artifact ? ' <span class="tag-artifact">神器</span>' : ''}</h2>
+    <div class="dd-sub">${esc(i.sub)}${i.en ? ` · ${esc(i.en)}` : ''}</div>
+    <div class="dd-fields">${fields.map(([k, v]) =>
+      `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
+    ${renderMiTables(i.tables)}
+    ${i.text ? `<div class="dd-text">${esc(i.text)}</div>` : '<p class="muted">规则书未收录该物品的独立详述。</p>'}
+    <a class="dd-link" href="${esc(i.url)}" target="_blank">📖 规则书原文（${esc(i.sub)}）→</a>`;
+}
+function miToolbar() {
+  const f = state.mi;
+  const tb = $('#toolbar');
+  tb.innerHTML = `<input type="search" id="mi-kw" placeholder="搜索物品名、类型、效果…" value="${esc(f.kw)}">
+    <select id="mi-sub"><option value="">全分类</option>
+      ${MI_SUBS.map(s => `<option value="${esc(s)}"${f.sub === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
+    <select id="mi-attune"><option value="">同调：全部</option>
+      <option value="1"${f.attune === '1' ? ' selected' : ''}>需同调</option>
+      <option value="0"${f.attune === '0' ? ' selected' : ''}>不需同调</option></select>
+    <select id="mi-artifact"><option value="">神器：全部</option>
+      <option value="1"${f.artifact === '1' ? ' selected' : ''}>仅神器</option>
+      <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>
+    <span class="count" id="mi-count"></span>`;
+  const onInput = () => { f.kw = $('#mi-kw').value; f.page = 1; renderMiList(true); };
+  $('#mi-kw').addEventListener('input', onInput);
+  $('#mi-sub').addEventListener('change', (e) => { f.sub = e.target.value; f.page = 1; renderMiList(true); });
+  $('#mi-attune').addEventListener('change', (e) => { f.attune = e.target.value; f.page = 1; renderMiList(true); });
+  $('#mi-artifact').addEventListener('change', (e) => { f.artifact = e.target.value; f.page = 1; renderMiList(true); });
+  renderMiList(true);
+  if (f.sel) {
+    const i = MI.find(x => x.id === f.sel);
+    if (i) renderMiDetail(i);
+  } else if (MI.length) {
+    renderMiDetail(MI[0]);
+  }
+}
+
 /* ---------- Tab 切换 ---------- */
 function switchTab(tab) {
   state.tab = tab;
@@ -297,6 +423,8 @@ function switchTab(tab) {
   $('#pager').hidden = true;
   if (tab === 'spells') spellToolbar();
   else if (tab === 'maneuvers') mvToolbar();
+  else if (tab === 'programs') pgToolbar();
+  else if (tab === 'magic-items') miToolbar();
   else pgToolbar();
 }
 

@@ -528,8 +528,9 @@ for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car
   }
   // 合并为 script 可加载的单文件（file:// 直开时 fetch 被浏览器禁止，script 标签不受限）
   const cardData = {};
-  for (const f of ['rules', 'races', 'classes', 'feats', 'spells', 'class-spells', 'maneuvers', 'programs']) {
-    cardData[f] = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data', f + '.json'), 'utf8'));
+  for (const f of ['rules', 'races', 'classes', 'feats', 'spells', 'class-spells', 'maneuvers', 'programs', 'magic-items']) {
+    const key = f === 'magic-items' ? 'magicItems' : f;
+    cardData[key] = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data', f + '.json'), 'utf8'));
   }
   const dataJs = 'window.__CAR_DATA__ = ' + JSON.stringify(cardData).replace(/</g, '\\u003c') + ';\n';
   fs.writeFileSync(path.join(OUT, 'assets', 'card-data.js'), dataJs, 'utf8');

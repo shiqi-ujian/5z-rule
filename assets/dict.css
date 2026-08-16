@@ -95,6 +95,16 @@ input, select { font: inherit; color: inherit; }
   background: #dbeafe; border: 1px solid #93c5fd; border-radius: 5px;
   padding: 0 6px; margin-left: 4px; vertical-align: 1px;
 }
+.tag-artifact {
+  display: inline-block; font-size: 11px; font-weight: 700; color: #7c2d12;
+  background: #ffedd5; border: 1px solid #fdba74; border-radius: 5px;
+  padding: 0 6px; margin-left: 4px; vertical-align: 1px;
+}
+.tag-attune {
+  display: inline-block; font-size: 11px; font-weight: 700; color: #065f46;
+  background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 5px;
+  padding: 0 6px; margin-left: 4px; vertical-align: 1px;
+}
 .ditem .di-sub { color: var(--sub); font-size: 12px; margin-top: 2px; }
 .ditem .di-brief { color: var(--sub); font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -109,6 +119,18 @@ input, select { font: inherit; color: inherit; }
 .ddetail .dd-fields .f .k { color: var(--sub); flex: 0 0 auto; }
 .ddetail .dd-fields .f .v { font-weight: 600; text-align: right; }
 .ddetail .dd-text { white-space: pre-wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-top: 4px; line-height: 1.7; }
+/* 物品内嵌价格表 */
+.ddetail .dd-table { margin-top: 10px; }
+.ddetail .dd-table table {
+  width: 100%; border-collapse: collapse; font-size: 13.5px;
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+}
+.ddetail .dd-table th, .ddetail .dd-table td {
+  border: 1px solid var(--line); padding: 6px 10px; text-align: left;
+  white-space: pre-wrap; vertical-align: top;
+}
+.ddetail .dd-table th { background: var(--acc-soft); font-weight: 700; }
+.ddetail .dd-table tbody tr:nth-child(even) { background: var(--bg); }
 .ddetail .dd-jobs { margin-top: 10px; font-size: 13px; color: var(--sub); }
 .ddetail .dd-jobs b { color: var(--ink); }
 .ddetail .dd-link { margin-top: 12px; display: inline-block; }
