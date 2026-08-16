@@ -67,7 +67,7 @@ function spellFiltered() {
     return true;
   });
 }
-function renderSpellList() {
+function renderSpellList(scrollTop) {
   const f = state.spell;
   const all = spellFiltered();
   const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
@@ -86,6 +86,11 @@ function renderSpellList() {
     list.appendChild(item);
   }
   if (!slice.length) list.innerHTML = '<p style="padding:16px;color:var(--sub)">没有匹配的法术。</p>';
+  // 翻页/筛选后回到列表顶部（选中条目时传入空值，不打断浏览位置）
+  if (scrollTop) {
+    list.scrollTop = 0;
+    if (window.innerWidth <= 860) list.scrollIntoView({ block: 'start' });
+  }
   const count = $('#spell-count');
   if (count) count.innerHTML = `共 <b>${all.length}</b> 个`;
   const pager = $('#pager');
@@ -94,8 +99,8 @@ function renderSpellList() {
     pager.innerHTML = `<button type="button" id="pg-prev" ${f.page <= 1 ? 'disabled' : ''}>← 上一页</button>
       <span class="pg-info">${f.page} / ${pages}</span>
       <button type="button" id="pg-next" ${f.page >= pages ? 'disabled' : ''}>下一页 →</button>`;
-    $('#pg-prev').onclick = () => { f.page--; renderSpellList(); };
-    $('#pg-next').onclick = () => { f.page++; renderSpellList(); };
+    $('#pg-prev').onclick = () => { f.page--; renderSpellList(true); };
+    $('#pg-next').onclick = () => { f.page++; renderSpellList(true); };
   } else {
     pager.hidden = true;
   }
@@ -135,14 +140,14 @@ function spellToolbar() {
       <option value="1"${f.focus === '1' ? ' selected' : ''}>需要专注</option>
       <option value="0"${f.focus === '0' ? ' selected' : ''}>不需专注</option></select>
     <span class="count" id="spell-count"></span>`;
-  const onInput = () => { f.kw = $('#sp-kw').value; f.page = 1; renderSpellList(); };
+  const onInput = () => { f.kw = $('#sp-kw').value; f.page = 1; renderSpellList(true); };
   $('#sp-kw').addEventListener('input', onInput);
-  $('#sp-level').addEventListener('change', (e) => { f.level = e.target.value; f.page = 1; renderSpellList(); });
-  $('#sp-school').addEventListener('change', (e) => { f.school = e.target.value; f.page = 1; renderSpellList(); });
-  $('#sp-cls').addEventListener('change', (e) => { f.cls = e.target.value; f.page = 1; renderSpellList(); });
-  $('#sp-ritual').addEventListener('change', (e) => { f.ritual = e.target.value; f.page = 1; renderSpellList(); });
-  $('#sp-focus').addEventListener('change', (e) => { f.focus = e.target.value; f.page = 1; renderSpellList(); });
-  renderSpellList();
+  $('#sp-level').addEventListener('change', (e) => { f.level = e.target.value; f.page = 1; renderSpellList(true); });
+  $('#sp-school').addEventListener('change', (e) => { f.school = e.target.value; f.page = 1; renderSpellList(true); });
+  $('#sp-cls').addEventListener('change', (e) => { f.cls = e.target.value; f.page = 1; renderSpellList(true); });
+  $('#sp-ritual').addEventListener('change', (e) => { f.ritual = e.target.value; f.page = 1; renderSpellList(true); });
+  $('#sp-focus').addEventListener('change', (e) => { f.focus = e.target.value; f.page = 1; renderSpellList(true); });
+  renderSpellList(true);
   // 恢复上次选中的详情
   if (f.sel) {
     const s = DATA.spells.find(x => x.name === f.sel);

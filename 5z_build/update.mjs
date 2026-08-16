@@ -116,7 +116,16 @@ console.log('========== 5z 规则 自动更新 ==========');
 
 const chm = findChm();
 if (!opts.noExtract && !chm) {
-  fail('未找到 CHM 文件。请把新 CHM 放进 incoming/ 文件夹，或直接把 CHM 拖到 一键更新.bat 上。');
+  // 没有新 CHM：若 5z_src 可用则降级为“用现有源重新构建并发布”，否则才中止
+  const srcUsable = fs.existsSync(SRC) &&
+    fs.readdirSync(SRC).some(f => /\.hhc$/i.test(f));
+  if (srcUsable) {
+    console.log('\n未找到新 CHM，将使用现有 5z_src 重新构建并发布（等效 --no-extract）。');
+    console.log('如需导入新规则版本，请把新 CHM 放进 incoming/ 文件夹，或直接把 CHM 拖到 一键更新.bat 上。');
+    opts.noExtract = true;
+  } else {
+    fail('未找到 CHM 文件。请把新 CHM 放进 incoming/ 文件夹，或直接把 CHM 拖到 一键更新.bat 上。');
+  }
 }
 if (chm) console.log(`源 CHM: ${chm}`);
 

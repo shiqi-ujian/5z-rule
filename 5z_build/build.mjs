@@ -200,6 +200,8 @@ log(`目录树节点: ${countNodes(tree)} | 唯一页面: ${pages.length} | 聚�
 // 注入正文页的页内搜索脚本（照抄 5echm 方案：高亮全部命中 + 浮动导航器 + Alt+↑↓）
 const HL_SCRIPT = `<script>
 (function () {
+  // 在壳 iframe 内时隐藏页内面包屑（壳顶栏已显示路径），独立打开页面时保留
+  if (window.self !== window.top) document.documentElement.classList.add('wz-in-frame');
   var state = { marks: [], index: -1, terms: [] };
   var NAV_CSS = '#wz-hl-nav{position:fixed;bottom:14px;right:14px;z-index:2147483647;display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid rgba(148,163,184,.55);border-radius:10px;background:rgba(255,255,255,.97);color:#1e293b;box-shadow:0 4px 14px rgba(15,23,42,.2);font:13px/1.3 system-ui,"Microsoft YaHei","PingFang SC",sans-serif}' +
     '#wz-hl-nav button{border:0;border-radius:6px;padding:7px 10px;cursor:pointer;background:#e0e7ff;color:#1e3a8a;font:inherit;font-size:13px;touch-action:manipulation}' +
@@ -343,11 +345,14 @@ const pageByUrl = new Map(pages.map((p, i) => [p.url, { ...p, idx: i }]));
 
 function processHtml(html, siteRel, page) {
   let out = html;
+  const depth = siteRel.split('/').length - 1;
   if (page) {
-    const depth = siteRel.split('/').length - 1;
     const nav = navHtml(page, depth, path.posix.dirname(siteRel));
     out = out.replace(/(<body[^>]*>)/i, (m) => `${m}\n${nav}\n`);
   }
+  // 注入壳样式（导航条 wz-* 样式）：此前 body.css 从未被链接，页面内导航条完全无样式
+  const cssHref = '../'.repeat(depth) + 'assets/body.css';
+  out = out.replace(/(<head[^>]*>)/i, (m) => `${m}\n<link rel="stylesheet" href="${cssHref}">`);
   out = out.replace(/charset\s*=\s*["']?gb2312["']?/i, 'charset=utf-8')
     .replace(/charset\s*=\s*["']?gbk["']?/i, 'charset=utf-8');
   // 清理 Word 导出的 File-List 残留（指向未复制的 filelist.xml）

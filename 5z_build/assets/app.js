@@ -51,12 +51,30 @@
     if (n.c) tw.textContent = openSet.has(n.i) ? '▾' : '▸';
     row.appendChild(tw);
     if (n.c) {
-      const label = document.createElement('span');
-      label.className = 'tlabel';
-      label.textContent = n.n;
-      label.title = n.n;
-      row.appendChild(label);
-      row.addEventListener('click', () => toggle(n.i));
+      // 分支：箭头/行内空白点击收展；带正文页（n.u）的文字可点击打开页面
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return;
+        toggle(n.i);
+      });
+      if (n.u) {
+        const a = document.createElement('a');
+        a.className = 'tlabel';
+        a.textContent = n.n;
+        a.title = n.n;
+        a.href = n.u;
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          openPage(n.u);
+        });
+        row.classList.add('has-page');
+        row.appendChild(a);
+      } else {
+        const label = document.createElement('span');
+        label.className = 'tlabel';
+        label.textContent = n.n;
+        label.title = n.n;
+        row.appendChild(label);
+      }
     } else {
       row.style.cursor = 'pointer';
       row.addEventListener('click', (e) => {
@@ -115,12 +133,14 @@
       localStorage.setItem('wz-open', JSON.stringify([...openSet]));
       renderTree();
     }
-    const row = tocEl.querySelector(`.toc-row[data-id="${hit.node.i}"]`);
+    const row = tocEl.querySelector(`.toc-node[data-id="${hit.node.i}"] > .toc-row`);
     if (row) {
       row.classList.add('active');
       row.scrollIntoView({ block: 'nearest' });
     }
+    // hit.path 已包含当前节点自身，最后一段不重复渲染（否则面包屑出现两次"掷骰"）
     crumbEl.innerHTML = hit.path
+      .slice(0, -1)
       .map((p) => `<span>${escapeHtml(p.n)}</span> <b>›</b> `).join('') +
       `<b>${escapeHtml(hit.node.n)}</b>`;
   }

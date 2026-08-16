@@ -103,11 +103,14 @@ input, select { font: inherit; color: inherit; }
 .ddetail a { color: var(--acc); }
 .ddetail .muted { color: var(--sub); font-size: 13px; }
 
-/* 分页 */
+/* 分页：位于网格内列表正下方（移动端单列时紧贴列表，不跑到详情下面） */
 .pager {
-  max-width: 1280px; margin: 0 auto; padding: 0 18px 30px;
+  grid-column: 1;
   display: flex; gap: 8px; align-items: center; justify-content: center;
+  padding: 6px 0 0;
 }
+/* 显式声明，避免 .pager 的 display:flex 覆盖 hidden 属性 */
+#pager[hidden] { display: none; }
 .pager button {
   border: 1px solid var(--line); background: var(--panel); padding: 6px 16px;
   border-radius: 8px; font-size: 13px; font-weight: 600;

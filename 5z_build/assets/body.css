@@ -1,4 +1,6 @@
 /* 注入到正文页的导航条样式（类名 wz- 前缀避免与正文冲突） */
+/* 在壳 iframe 内时隐藏页内面包屑（壳顶栏已显示路径），独立打开页面时保留 */
+html.wz-in-frame .wz-crumbs { display: none; }
 .wz-nav {
   display: flex;
   align-items: center;

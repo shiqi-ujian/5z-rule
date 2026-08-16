@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><title>异怪</title></head>
+<head>
+<link rel="stylesheet" href="../../assets/body.css"><meta charset="utf-8"><title>异怪</title></head>
 <body>
 <div class="wz-nav"><span class="wz-crumbs"><span>怪物</span><i>›</i><span>生物类型</span><i>›</i><b>异怪</b></span><span class="wz-btns"><a class="wz-btn" href="../../index.html" target="_top">☰ 目录</a><a class="wz-btn" href="../../怪物/怪兽/弗米蚁.htm">← 弗米蚁</a><a class="wz-btn" href="../../怪物/异怪/异怪（CR0-7）.htm">异怪（CR0-7） →</a></span></div>
 
@@ -18,6 +19,8 @@
 </ul>
 <script>
 (function () {
+  // 在壳 iframe 内时隐藏页内面包屑（壳顶栏已显示路径），独立打开页面时保留
+  if (window.self !== window.top) document.documentElement.classList.add('wz-in-frame');
   var state = { marks: [], index: -1, terms: [] };
   var NAV_CSS = '#wz-hl-nav{position:fixed;bottom:14px;right:14px;z-index:2147483647;display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid rgba(148,163,184,.55);border-radius:10px;background:rgba(255,255,255,.97);color:#1e293b;box-shadow:0 4px 14px rgba(15,23,42,.2);font:13px/1.3 system-ui,"Microsoft YaHei","PingFang SC",sans-serif}' +
     '#wz-hl-nav button{border:0;border-radius:6px;padding:7px 10px;cursor:pointer;background:#e0e7ff;color:#1e3a8a;font:inherit;font-size:13px;touch-action:manipulation}' +
