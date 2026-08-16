@@ -21,6 +21,16 @@ incoming/
 5z_build/_chk-*.mjs
 5z_build/_export-*.xlsx
 5z_build/_*.log
+5z_build/feedback-bridge/_test-*.mjs
+
+# 问题收集工作区（群友反馈内容，绝不能进公开仓库）
+问题收集/
+
+# 腾讯文档收集表读取桥：本地配置（含表单链接/状态）、登录 profile、运行状态
+5z_build/feedback-bridge/config.json
+5z_build/feedback-bridge/docs-profile/
+5z_build/feedback-bridge/feedback-state.json
+5z_build/feedback-bridge/*.log
 
 # 系统文件
 .DS_Store

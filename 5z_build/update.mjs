@@ -19,12 +19,14 @@ const INCOMING = path.join(ROOT, 'incoming');
 const ARCHIVE = path.join(B, 'archive');
 
 const args = process.argv.slice(2);
+const msgIdx = args.findIndex(a => a === '--message');
 const opts = {
   chm: args.find(a => !a.startsWith('--')) || null,
   noExtract: args.includes('--no-extract'),
   noPush: args.includes('--no-push'),
   dryRun: args.includes('--dry-run'),
   skipDeploy: args.includes('--skip-deploy'),
+  message: msgIdx >= 0 && args[msgIdx + 1] ? args[msgIdx + 1] : (args.find(a => a.startsWith('--message=')) || '').slice(10) || null,
 };
 
 // ---------- 工具 ----------
@@ -183,7 +185,7 @@ if (!status) {
   console.log('   ' + status.split('\n').slice(0, 20).join('\n   '));
 } else {
   run('git', ['add', '-A']);
-  run('git', ['commit', '-m', `5z 规则 ${VERSION} 版 自动更新`]);
+  run('git', ['commit', '-m', opts.message || `5z 规则 ${VERSION} 版 自动更新`]);
 }
 
 // 6/6 git 推送
