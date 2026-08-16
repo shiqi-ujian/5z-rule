@@ -40,6 +40,17 @@ function cleanText(html) {
 }
 const relUrl = (p) => path.relative(SRC, p).split(path.sep).join('/');
 
+// 反复剥离不含文本的包裹标签（Word 导出的空 <b>/<span>/<o:p> 残留，
+// 尤其「color:rgb(128,0,0) + font-weight:bold」的空标记会污染段落样式判定）
+function stripEmptyTags(s) {
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/<(b|span|font|i|em|strong|u|o:p|p)[^>]*>((?:&nbsp;|\s)*)<\/\1>/gi, '$2');
+  } while (s !== prev);
+  return s;
+}
+
 // ---------- 1. 把页面解析为"段落流" ----------
 // 返回 [{ type: 'h1'|'h2'|'h3'|'p'|'table', text, rows?, size }]
 // 纯样式判定（Word/WPS 导出页面混用 <h4> 标签与 <p>+bold，标签名不可靠）：
@@ -62,13 +73,15 @@ function parsePage(html) {
       continue;
     }
     const inner = m[1] || m[2] || '';
+    // 样式判定用剥离空标签后的副本（空加粗/红色残留不得影响类型判定）；文本仍取原文
+    const styleSrc = stripEmptyTags(inner);
     // 判断字号/加粗/颜色
     let size = 12;
-    const sm = /font-size:(\d+(?:\.\d+)?)\.0000pt/i.exec(inner);
+    const sm = /font-size:(\d+(?:\.\d+)?)\.0000pt/i.exec(styleSrc);
     if (sm) size = parseFloat(sm[1]);
-    const bold = /font-weight:\s*bold/i.test(inner);
-    const color118 = /color:rgb\(118,45,0\)/i.test(inner);
-    const red = /color:rgb\(128,0,0\)/i.test(inner);
+    const bold = /font-weight:\s*bold/i.test(styleSrc);
+    const color118 = /color:rgb\(118,45,0\)/i.test(styleSrc);
+    const red = /color:rgb\(128,0,0\)/i.test(styleSrc);
     const text = cleanText(inner);
     if (!text) continue;
     let type = 'p';
