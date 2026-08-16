@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5z 车卡 - 创建角色</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/car.css">
+</head>
+<body>
+<header class="car-top">
+  <div class="car-top-inner">
+    <a class="car-home" href="index.html" title="返回规则书">☰ 5z 规则</a>
+    <h1>5z 角色创建器 <span class="beta-badge">⚠ 测试版（半成品）</span></h1>
+    <span class="dict-ver" id="car-ver"></span>
+    <div class="car-top-actions">
+      <button id="btn-export" type="button" title="导出角色为 JSON 文件">⬇ JSON</button>
+      <button id="btn-export-xlsx" type="button" title="导出为 Excel 角色卡（基于官方模板）">⬇ Excel</button>
+      <button id="btn-import" type="button" title="从 JSON 文件导入角色">⬆ 导入</button>
+      <button id="btn-new" type="button" title="清空并重新车卡">✚ 新建</button>
+    </div>
+  </div>
+</header>
+
+<div class="beta-banner">⚠ 当前为<b>测试版</b>：规则数据来自规则书自动解析，数值计算与交互细节仍在打磨中，可能存在 bug 或遗漏，请以规则书原文为准。</div>
+
+<nav id="steps" class="steps" aria-label="车卡步骤">
+  <button data-step="1" class="step done">1 种族</button>
+  <button data-step="2" class="step">2 职业</button>
+  <button data-step="3" class="step">3 属性</button>
+  <button data-step="4" class="step">4 背景</button>
+  <button data-step="5" class="step">5 技能</button>
+  <button data-step="6" class="step">6 专长</button>
+  <button data-step="7" class="step">7 法术</button>
+  <button data-step="8" class="step">8 战技</button>
+  <button data-step="9" class="step">9 程序</button>
+  <button data-step="10" class="step">10 角色卡</button>
+</nav>
+
+<div id="app" class="car-app">
+  <main id="stage" class="stage"></main>
+  <aside id="live" class="live" aria-label="角色卡实时预览"></aside>
+</div>
+
+<footer class="car-foot">
+  <button id="btn-prev" type="button" class="nav-btn" disabled>← 上一步</button>
+  <button id="btn-next" type="button" class="nav-btn primary">下一步 →</button>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+<script>
+// 构建模板防误开：本文件是构建源，数据文件不在同目录；误打开时给出指引
+(function () {
+  var p = (location.pathname || '').replace(/\\/g, '/');
+  if (/\/5z_build\/car\.html$/.test(p) || /\/5z_web\/car\.html$/.test(p)) {
+    document.addEventListener('DOMContentLoaded', function () {
+      var s = document.getElementById('stage');
+      if (s) s.innerHTML = '<h2>这是构建模板</h2>' +
+        '<p class="hint">请打开网站根目录的 <b>car.html</b>，' +
+        '或从规则书主页（index.html）左侧的"🧙 创建角色"入口进入。</p>';
+    });
+  }
+})();
+</script>
+<script src="assets/card-data.js"></script>
+<script src="assets/car-tpl.js"></script>
+<script src="assets/fflate.min.js"></script>
+<script src="assets/car.js"></script>
+</body>
+</html>

@@ -287,3 +287,11 @@ body {
   #menu-btn { display: block; }
   #results { max-height: 50vh; }
 }
+
+/* 车卡入口 */
+.car-link {
+  display: block; margin: 8px 0 10px; padding: 8px 12px;
+  background: var(--accent); color: #fff; text-decoration: none;
+  border-radius: 8px; font-weight: 600; font-size: 13.5px; text-align: center;
+}
+.car-link:hover { filter: brightness(1.12); }

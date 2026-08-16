@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { spawnSync as _spawnSync } from 'node:child_process';
 
 const SRC = path.resolve('5z_src');
 const OUT = path.resolve('5z_web');
@@ -486,17 +487,55 @@ const tocJson = JSON.stringify(tree.map(minifyNode));
 const defaultPage = pages.length ? encodeURI(pages[0].url) : '';
 
 let shell = fs.readFileSync(new URL('./shell.html', import.meta.url), 'utf8');
+const buildTs = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 shell = shell.replace('__TITLE__', VERSION ? `5z 规则 ${VERSION} 版` : '5z 规则网页版')
   .replace('__VERSION__', VERSION)
   .replace('__PAGE_COUNT__', String(pages.length))
   .replace('__DEFAULT_PAGE__', defaultPage)
-  .replace('__TOC_JSON__', tocJson);
+  .replace('__TOC_JSON__', tocJson)
+  .replace('__BUILD_TS__', buildTs);
 fs.writeFileSync(path.join(OUT, 'index.html'), shell, 'utf8');
 
 // ---------- 7. 复制壳资源 ----------
-for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg']) {
+for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car.css', 'fflate.min.js', 'dict.js', 'dict.css']) {
   fs.copyFileSync(new URL('./assets/' + f, import.meta.url), path.join(OUT, 'assets', f));
 }
+
+// ---------- 7.5 车卡数据（解析规则书 → assets/card-data/*.json + 合并 js） ----------
+{
+  const r = _spawnSync(process.execPath,
+    [path.resolve('5z_build/parse-card-data.mjs'), OUT],
+    { encoding: 'utf8', timeout: 5 * 60 * 1000 });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stdout.write(r.stderr);
+  if (r.status !== 0) {
+    console.error('[build] 车卡数据解析失败，中止构建');
+    process.exit(1);
+  }
+  // 合并为 script 可加载的单文件（file:// 直开时 fetch 被浏览器禁止，script 标签不受限）
+  const cardData = {};
+  for (const f of ['rules', 'races', 'classes', 'feats', 'spells', 'class-spells', 'maneuvers', 'programs']) {
+    cardData[f] = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data', f + '.json'), 'utf8'));
+  }
+  const dataJs = 'window.__CAR_DATA__ = ' + JSON.stringify(cardData).replace(/</g, '\\u003c') + ';\n';
+  fs.writeFileSync(path.join(OUT, 'assets', 'card-data.js'), dataJs, 'utf8');
+
+  // Excel 导出模板（dnd5z人物卡模板改.xlsx）内联为 js（file:// 直开可用）
+  const tplFile = path.resolve('dnd5z人物卡模板改.xlsx');
+  if (!fs.existsSync(tplFile)) {
+    console.error('[build] 未找到 Excel 导出模板: dnd5z人物卡模板改.xlsx');
+    process.exit(1);
+  }
+  const tplB64 = fs.readFileSync(tplFile).toString('base64');
+  fs.writeFileSync(path.join(OUT, 'assets', 'car-tpl.js'),
+    'window.__TPL_XLSX_B64__ = "' + tplB64 + '";\n', 'utf8');
+}
+
+// ---------- 7.6 车卡页面（小页面，数据走独立 script） ----------
+fs.copyFileSync(new URL('./car.html', import.meta.url), path.join(OUT, 'car.html'));
+
+// ---------- 7.7 词典页面（法术/战技/程序） ----------
+fs.copyFileSync(new URL('./dict.html', import.meta.url), path.join(OUT, 'dict.html'));
 
 // ---------- 8. 部署辅助文件 ----------
 fs.writeFileSync(path.join(OUT, '404.html'), `<!DOCTYPE html>

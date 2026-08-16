@@ -1,0 +1,141 @@
+/* 5z 词典样式（法术/战技/程序） */
+:root {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --line: #e2e8f0;
+  --ink: #1e293b;
+  --sub: #64748b;
+  --acc: #7c3aed;
+  --acc-soft: #f3eefc;
+  --good: #16a34a;
+  --radius: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 system-ui, "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+button { font: inherit; cursor: pointer; }
+input, select { font: inherit; color: inherit; }
+
+/* 顶栏 */
+.dict-top { background: var(--acc); color: #fff; }
+.dict-top-inner {
+  max-width: 1280px; margin: 0 auto; padding: 12px 18px;
+  display: flex; align-items: center; gap: 14px;
+}
+.dict-top h1 { font-size: 19px; margin: 0; font-weight: 700; flex: 1; }
+.dict-home {
+  color: #fff; text-decoration: none; font-weight: 700;
+  background: rgba(255,255,255,.16); padding: 6px 12px; border-radius: 8px;
+}
+.dict-ver { font-size: 12.5px; opacity: .85; }
+
+/* Tab */
+.tabs {
+  max-width: 1280px; margin: 0 auto; padding: 12px 18px 0;
+  display: flex; gap: 6px;
+}
+.tab {
+  border: 1px solid var(--line); background: var(--panel); color: var(--sub);
+  padding: 8px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
+}
+.tab.sel { background: var(--acc); border-color: var(--acc); color: #fff; }
+
+/* 工具栏 */
+.toolbar {
+  max-width: 1280px; margin: 0 auto; padding: 12px 18px 0;
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.toolbar input[type=search] {
+  flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--line);
+  border-radius: 8px; background: #fff;
+}
+.toolbar select {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+}
+.toolbar .count { color: var(--sub); font-size: 13px; margin-left: auto; }
+.toolbar .count b { color: var(--acc); }
+
+/* 主体：列表 + 详情 */
+.dict-body {
+  max-width: 1280px; margin: 0 auto; padding: 12px 18px 40px;
+  display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 14px;
+}
+.dlist { max-height: calc(100vh - 200px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.ditem {
+  display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
+  background: #fff; padding: 9px 14px; font-size: 14px; color: var(--ink);
+}
+.ditem:last-child { border-bottom: 0; }
+.ditem:hover { background: var(--acc-soft); }
+.ditem.sel { background: var(--acc-soft); box-shadow: inset 3px 0 0 var(--acc); }
+.ditem .di-name { font-weight: 700; }
+.tag-ritual {
+  display: inline-block; font-size: 11px; font-weight: 700; color: #92400e;
+  background: #fef3c7; border: 1px solid #fcd34d; border-radius: 5px;
+  padding: 0 6px; margin-left: 4px; vertical-align: 1px;
+}
+.tag-focus {
+  display: inline-block; font-size: 11px; font-weight: 700; color: #1e40af;
+  background: #dbeafe; border: 1px solid #93c5fd; border-radius: 5px;
+  padding: 0 6px; margin-left: 4px; vertical-align: 1px;
+}
+.ditem .di-sub { color: var(--sub); font-size: 12px; margin-top: 2px; }
+.ditem .di-brief { color: var(--sub); font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ddetail {
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+  padding: 18px 22px; min-height: 300px; font-size: 14px;
+}
+.ddetail .dd-name { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+.ddetail .dd-sub { color: var(--acc); font-weight: 600; margin-bottom: 12px; }
+.ddetail .dd-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 18px; margin-bottom: 12px; }
+.ddetail .dd-fields .f { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dotted var(--line); }
+.ddetail .dd-fields .f .k { color: var(--sub); flex: 0 0 auto; }
+.ddetail .dd-fields .f .v { font-weight: 600; text-align: right; }
+.ddetail .dd-text { white-space: pre-wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-top: 4px; line-height: 1.7; }
+.ddetail .dd-jobs { margin-top: 10px; font-size: 13px; color: var(--sub); }
+.ddetail .dd-jobs b { color: var(--ink); }
+.ddetail .dd-link { margin-top: 12px; display: inline-block; }
+.ddetail a { color: var(--acc); }
+.ddetail .muted { color: var(--sub); font-size: 13px; }
+
+/* 分页 */
+.pager {
+  max-width: 1280px; margin: 0 auto; padding: 0 18px 30px;
+  display: flex; gap: 8px; align-items: center; justify-content: center;
+}
+.pager button {
+  border: 1px solid var(--line); background: var(--panel); padding: 6px 16px;
+  border-radius: 8px; font-size: 13px; font-weight: 600;
+}
+.pager button:disabled { opacity: .4; cursor: default; }
+.pager .pg-info { color: var(--sub); font-size: 13px; }
+
+.toast {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 99;
+  background: #1e293b; color: #fff; padding: 9px 18px; border-radius: 10px;
+  font-size: 13px; box-shadow: 0 6px 20px rgba(15,23,42,.25);
+}
+
+@media (max-width: 860px) {
+  .dict-body { grid-template-columns: 1fr; }
+  .dlist { max-height: 40vh; }
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --line: #334155; --ink: #e2e8f0;
+    --sub: #94a3b8; --acc: #a78bfa; --acc-soft: #312e81;
+  }
+  .ditem { background: #1e293b; }
+  .ddetail .dd-text { background: #111c2e; }
+  .toolbar input, .toolbar select, .pager button, .tab {
+    background: #1e293b; color: #e2e8f0; border-color: #334155;
+  }
+  /* 下拉选项：显式配色，避免系统默认黑字黑底 */
+  .toolbar select option, .pager select option { color: #e2e8f0; background: #1e293b; }
+  input::placeholder { color: #64748b; }
+}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5z 规则 · 法术/战技/程序词典</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/dict.css">
+</head>
+<body>
+<header class="dict-top">
+  <div class="dict-top-inner">
+    <a class="dict-home" href="index.html" title="返回规则书">☰ 5z 规则</a>
+    <h1>法术 · 战技 · 程序 词典</h1>
+    <span class="dict-ver" id="ver"></span>
+  </div>
+</header>
+
+<nav id="tabs" class="tabs" aria-label="词典分类">
+  <button type="button" data-tab="spells" class="tab sel">法术</button>
+  <button type="button" data-tab="maneuvers" class="tab">战技</button>
+  <button type="button" data-tab="programs" class="tab">程序</button>
+</nav>
+
+<div id="toolbar" class="toolbar"></div>
+<div id="body" class="dict-body">
+  <div id="list" class="dlist" aria-label="条目列表"></div>
+  <div id="detail" class="ddetail" aria-label="详情"></div>
+</div>
+<div id="pager" class="pager" hidden></div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="assets/card-data.js"></script>
+<script src="assets/dict.js"></script>
+</body>
+</html>
