@@ -1,6 +1,8 @@
 // ============================================================
-// 更新日志页生成器：由 5z_build/changelog.json 渲染 更新日志.html（仓库根目录，发布源）。
-//   node 5z_build/gen-changelog.mjs
+// 更新日志页生成器：由 5z_build/changelog.json 渲染 更新日志.html。
+//   默认输出到 5z_web（构建暂存区），由 sync-web 同步到仓库根目录发布源；
+//   build.mjs 每次构建会自动调用本脚本。也可手动指定输出目录：
+//   node 5z_build/gen-changelog.mjs [输出目录]
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = path.join(ROOT, '5z_build', 'changelog.json');
-const OUT = path.join(ROOT, '更新日志.html');
+const OUT_DIR = path.resolve(process.argv[2] || path.join(ROOT, '5z_web'));
+fs.mkdirSync(OUT_DIR, { recursive: true });
+const OUT = path.join(OUT_DIR, '更新日志.html');
 
 const data = JSON.parse(fs.readFileSync(DATA, 'utf8'));
 const entries = [...(data.entries || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -73,6 +77,7 @@ const html = `<!DOCTYPE html>
 <body>
 <h1>🔧 5z 规则 更新日志</h1>
 <p>本页由系统在每次修复发布后自动更新。来源：QQ 群收集表提交的问题。历史修复见下（最新在上）。</p>
+<p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
 ${entries.map(renderEntry).join('\n')}
 <a class="back" href="index.html">← 返回目录</a>
 </body>

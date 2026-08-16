@@ -576,6 +576,19 @@ a{color:#7c3aed;font-weight:600;text-decoration:none;padding:10px 22px;border:1p
 `);
 fs.writeFileSync(path.join(OUT, 'robots.txt'), 'User-agent: *\nAllow: /\n');
 
+// ---------- 8.5 更新日志页（由 5z_build/changelog.json 渲染，随构建发布） ----------
+{
+  const r = _spawnSync(process.execPath,
+    [path.resolve('5z_build/gen-changelog.mjs'), OUT],
+    { encoding: 'utf8', timeout: 60 * 1000 });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stdout.write(r.stderr);
+  if (r.status !== 0) {
+    console.error('[build] 更新日志页生成失败，中止构建');
+    process.exit(1);
+  }
+}
+
 log('--- 构建完成 ---');
 log(`输出: ${OUT}`);
 if (warnings.length) {

@@ -20,13 +20,14 @@ const ARCHIVE = path.join(B, 'archive');
 
 const args = process.argv.slice(2);
 const msgIdx = args.findIndex(a => a === '--message');
+const msgValue = msgIdx >= 0 && args[msgIdx + 1] ? args[msgIdx + 1] : ((args.find(a => a.startsWith('--message=')) || '').slice(10) || null);
 const opts = {
-  chm: args.find(a => !a.startsWith('--')) || null,
+  chm: args.find(a => !a.startsWith('--') && a !== msgValue) || null,
   noExtract: args.includes('--no-extract'),
   noPush: args.includes('--no-push'),
   dryRun: args.includes('--dry-run'),
   skipDeploy: args.includes('--skip-deploy'),
-  message: msgIdx >= 0 && args[msgIdx + 1] ? args[msgIdx + 1] : (args.find(a => a.startsWith('--message=')) || '').slice(10) || null,
+  message: msgValue,
 };
 
 // ---------- 工具 ----------
