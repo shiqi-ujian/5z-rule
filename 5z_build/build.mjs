@@ -7,7 +7,15 @@ import zlib from 'node:zlib';
 
 const SRC = path.resolve('5z_src');
 const OUT = path.resolve('5z_web');
-const HHC = path.join(SRC, '5z规则1.59版.hhc');
+// 自动发现 5z_src 下的 .hhc 目录文件（CHM 每版文件名不同，如 5z规则1.60版.hhc）
+const hhcFiles = fs.readdirSync(SRC).filter(f => /\.hhc$/i.test(f));
+if (!hhcFiles.length) {
+  console.error('[build] 5z_src 下未找到 .hhc 目录文件，请先反编译 CHM');
+  process.exit(1);
+}
+const HHC = path.join(SRC, hhcFiles[0]);
+// 从 hhc 文件名提取版本号（如 "5z规则1.59版.hhc" → "1.59"），用于页面标题
+const VERSION = /(\d+(?:\.\d+)+)/.exec(hhcFiles[0])?.[1] || '';
 const GB18030 = new TextDecoder('gb18030'); // 参考 5echm_web 项目：gb18030 兜底解码，覆盖更全的中文编码
 
 const warnings = [];
@@ -478,7 +486,8 @@ const tocJson = JSON.stringify(tree.map(minifyNode));
 const defaultPage = pages.length ? encodeURI(pages[0].url) : '';
 
 let shell = fs.readFileSync(new URL('./shell.html', import.meta.url), 'utf8');
-shell = shell.replace('__TITLE__', '5z 规则 1.59 版')
+shell = shell.replace('__TITLE__', VERSION ? `5z 规则 ${VERSION} 版` : '5z 规则网页版')
+  .replace('__VERSION__', VERSION)
   .replace('__PAGE_COUNT__', String(pages.length))
   .replace('__DEFAULT_PAGE__', defaultPage)
   .replace('__TOC_JSON__', tocJson);

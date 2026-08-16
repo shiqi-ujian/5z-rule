@@ -17,8 +17,13 @@ const disk = [];
 })(SRC);
 const diskHtm = new Set(disk.filter(f => /\.(htm|html)$/i.test(f)));
 
-// 2. hhc 树 Local
-const hhc = enc.decode(fs.readFileSync(path.join(SRC, '5z规则1.59版.hhc')));
+// 2. hhc 树 Local（自动发现 5z_src 下的 .hhc，兼容版本号变化）
+const hhcFile = fs.readdirSync(SRC).find(f => /\.hhc$/i.test(f));
+if (!hhcFile) {
+  console.error('5z_src 下未找到 .hhc 目录文件');
+  process.exit(1);
+}
+const hhc = enc.decode(fs.readFileSync(path.join(SRC, hhcFile)));
 const hhcLocals = [...hhc.matchAll(/param name="Local" value="([^"]*)"/gi)]
   .map(m => m[1].replace(/&amp;/g, '&').replace(/\\/g, '/'))
   .filter(Boolean);

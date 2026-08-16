@@ -53,3 +53,5 @@ for (const asset of ['assets/site.css', 'assets/app.js', 'assets/body.css', 'ass
 console.log(`扫描 HTML 文件: ${files.filter(f => /\.(htm|html)$/i.test(f)).length}`);
 console.log(issues.length ? `坏链接 ${issues.length} 个:` : '✓ 所有链接完整，无坏链');
 issues.slice(0, 40).forEach(i => console.log('  ! ' + i));
+// 流水线门禁：有坏链则以失败退出
+if (issues.length) process.exitCode = 1;

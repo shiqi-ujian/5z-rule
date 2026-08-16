@@ -1,5 +1,12 @@
-# 中间产物，不入库（可从 CHM 用 hh.exe 重新生成）
+# 中间产物（可由 CHM 重新生成）
 5z_src/
+5z_web/
+5z_build/.site-manifest.json
+5z_build/watch.log
+
+# 待更新的 CHM 输入目录与已处理存档
+incoming/
+5z_build/archive/
 
 # 发布包
 *.zip
