@@ -704,12 +704,37 @@ function parseMagicItems() {
         const text = body.filter(b => (b.type === 'p' || b.type === 'h3') && !/^\/\//.test(b.text))
           .map(b => b.text).join('\n');
         const tables = body.filter(b => b.type === 'table').map(b => b.rows);
+        // 价格区间：pmin/pmax（gp 数值；pmax=null 表示“至少 N”，上不封顶）
+        let pmin = null, pmax = null, nonsell = false;
+        if (/非卖品/.test(attr)) nonsell = true;
+        else {
+          const pm = attr.match(/(至少)?([\d][\d,，]*)\s*gp/);
+          if (pm) {
+            pmin = pmax = +pm[2].replace(/[，,]/g, '');
+            if (pm[1]) pmax = null; // 至少 N gp
+          } else {
+            // “价格见下表”：从物品价格表的价格列提取数值（如 卷轴环阶→价格、磨刀石加值→价格）
+            const nums = [];
+            for (const t of tables) {
+              if (!t.length) continue;
+              let pi = -1;
+              t[0].forEach((c, idx) => { if (/价格|售价|成本/.test(c)) pi = idx; });
+              if (pi < 0) continue;
+              for (const r of t.slice(1)) {
+                const cell = r[pi] || '';
+                const cm = cell.match(/([\d][\d,，]*)/);
+                if (cm && !/…/.test(cell)) nums.push(+cm[1].replace(/[，,]/g, ''));
+              }
+            }
+            if (nums.length) { pmin = Math.min(...nums); pmax = Math.max(...nums); }
+          }
+        }
         seq++;
         out.push({
           id: rel + '#' + seq,
           name, en, category, sub: label,
           attr, attune: !!am, attuneText: am ? am[0] : '',
-          price, artifact: /神器/.test(attr),
+          price, pmin, pmax, nonsell, artifact: /神器/.test(attr),
           text, tables, url: rel,
         });
       }

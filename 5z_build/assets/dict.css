@@ -105,7 +105,7 @@ input, select { font: inherit; color: inherit; }
   background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 5px;
   padding: 0 6px; margin-left: 4px; vertical-align: 1px;
 }
-.ditem .di-sub { color: var(--sub); font-size: 12px; margin-top: 2px; }
+.ditem .di-sub { color: var(--sub); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ditem .di-brief { color: var(--sub); font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .ddetail {

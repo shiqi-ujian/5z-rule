@@ -59,9 +59,28 @@ const MI_SUBS = [...new Set(MI.map(i => i.sub))]
     const ia = MI_SUB_ORDER.indexOf(a), ib = MI_SUB_ORDER.indexOf(b);
     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
   });
+// 价格分级：按价格区间（pmin–pmax）有交集即命中（一件物品可能跨多个档位）
+const MI_TIERS = [
+  { k: '0', label: '≤100gp', lo: 0, hi: 100 },
+  { k: '1', label: '101–500gp', lo: 101, hi: 500 },
+  { k: '2', label: '501–2000gp', lo: 501, hi: 2000 },
+  { k: '3', label: '2001–1万gp', lo: 2001, hi: 10000 },
+  { k: '4', label: '1万–5万gp', lo: 10001, hi: 50000 },
+  { k: '5', label: '>5万gp', lo: 50001, hi: Infinity },
+];
 MI.forEach(i => {
   i.hay = [i.name, i.en || '', i.attr || '', i.text || '', (i.tables || []).map(t => t.flat().join(' ')).join(' ')]
     .join(' ').toLowerCase();
+  const lo = i.pmin, hi = i.pmax == null ? Infinity : i.pmax;
+  i.tiers = [];
+  if (!i.nonsell && lo != null) {
+    for (const t of MI_TIERS) if (lo <= t.hi && hi >= t.lo) i.tiers.push(t.k);
+  }
+  i.span = i.nonsell ? '非卖品'
+    : lo == null ? ''
+    : i.pmax == null ? `≥${lo}gp`
+    : lo === i.pmax ? `${lo}gp`
+    : `${lo}–${i.pmax}gp`;
 });
 
 const state = {
@@ -69,7 +88,7 @@ const state = {
   spell: { kw: '', level: '', school: '', cls: '', ritual: '', focus: '', page: 1, sel: null },
   mv: { kw: '', style: '', level: '', type: '', sel: null },
   pg: { kw: '', protocol: '', module: '', focus: '', sel: null },
-  mi: { kw: '', sub: '', attune: '', artifact: '', page: 1, sel: null },
+  mi: { kw: '', sub: '', attune: '', artifact: '', pr: '', page: 1, sel: null },
 };
 const PAGE_SIZE = 100;
 
@@ -319,6 +338,9 @@ function miFiltered() {
     if (f.attune === '0' && i.attune) return false;
     if (f.artifact === '1' && !i.artifact) return false;
     if (f.artifact === '0' && i.artifact) return false;
+    if (f.pr === 'nonsell' && !i.nonsell) return false;
+    if (f.pr === 'none' && (i.nonsell || i.pmin != null)) return false;
+    if (f.pr && f.pr !== 'nonsell' && f.pr !== 'none' && !(i.tiers || []).includes(f.pr)) return false;
     if (kw && !i.hay.includes(kw)) return false;
     return true;
   });
@@ -347,7 +369,7 @@ function renderMiList(scrollTop) {
     const item = el('button', 'ditem' + (f.sel === i.id ? ' sel' : ''));
     item.type = 'button';
     item.innerHTML = `<div class="di-name">${esc(i.name)}${i.artifact ? ' <span class="tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="tag-attune">同调</span>' : ''}</div>
-      <div class="di-sub">${esc(i.sub)} · ${esc(i.attr || '未收录类型行')}</div>
+      <div class="di-sub">${esc(i.sub)} · ${esc(i.attr || '未收录类型行')}${i.span ? ` · ${esc(i.span)}` : ''}</div>
       ${brief ? `<div class="di-brief">${esc(brief)}</div>` : ''}`;
     item.onclick = () => { f.sel = i.id; renderMiList(); renderMiDetail(i); };
     list.appendChild(item);
@@ -377,6 +399,7 @@ function renderMiDetail(i) {
     ['分类', i.sub], ['类型行', i.attr || '—'],
     ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
     ['价格', i.price || (i.attr && /价格见下?表/.test(i.attr) ? '价格见下表' : '—')],
+    ['价格区间', i.span || (i.price === '非卖品' ? '非卖品' : '—')],
   ];
   d.innerHTML = `<h2 class="dd-name">${esc(i.name)}${i.artifact ? ' <span class="tag-artifact">神器</span>' : ''}</h2>
     <div class="dd-sub">${esc(i.sub)}${i.en ? ` · ${esc(i.en)}` : ''}</div>
@@ -398,12 +421,17 @@ function miToolbar() {
     <select id="mi-artifact"><option value="">神器：全部</option>
       <option value="1"${f.artifact === '1' ? ' selected' : ''}>仅神器</option>
       <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>
+    <select id="mi-pr"><option value="">价格：全部</option>
+      ${MI_TIERS.map(t => `<option value="${t.k}"${f.pr === t.k ? ' selected' : ''}>${t.label}</option>`).join('')}
+      <option value="nonsell"${f.pr === 'nonsell' ? ' selected' : ''}>非卖品</option>
+      <option value="none"${f.pr === 'none' ? ' selected' : ''}>无价格信息</option></select>
     <span class="count" id="mi-count"></span>`;
   const onInput = () => { f.kw = $('#mi-kw').value; f.page = 1; renderMiList(true); };
   $('#mi-kw').addEventListener('input', onInput);
   $('#mi-sub').addEventListener('change', (e) => { f.sub = e.target.value; f.page = 1; renderMiList(true); });
   $('#mi-attune').addEventListener('change', (e) => { f.attune = e.target.value; f.page = 1; renderMiList(true); });
   $('#mi-artifact').addEventListener('change', (e) => { f.artifact = e.target.value; f.page = 1; renderMiList(true); });
+  $('#mi-pr').addEventListener('change', (e) => { f.pr = e.target.value; f.page = 1; renderMiList(true); });
   renderMiList(true);
   if (f.sel) {
     const i = MI.find(x => x.id === f.sel);
