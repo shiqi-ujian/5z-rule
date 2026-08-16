@@ -29,7 +29,8 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-#app { display: flex; height: 100vh; overflow: hidden; }
+/* 100dvh 渐进增强：地址栏遮挡视口时精确贴合可见区（旧内核自动回退 100vh） */
+#app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
 
 /* ---------- 侧栏 ---------- */
 #sidebar {
@@ -207,14 +208,14 @@ body {
 }
 
 /* ---------- 目录树 ---------- */
-/* min-height:0 必不可少：否则 #toc 内容超高时不会被压缩、溢出被 #app 裁掉而无法滚动 */
+/* 桌面端：内层 #toc 独立滚动。min-height:0 必不可少：否则内容超高时不会被压缩、
+   溢出被 #app 裁掉而无法滚动。touch-action: pan-y 显式允许纵向手势（WebView 兼容） */
 #toc {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 8px;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .toc-node { user-select: none; }
 .toc-row {
@@ -281,24 +282,52 @@ body {
 
 /* ---------- 移动端 ---------- */
 @media (max-width: 860px) {
+  /* 抽屉：侧栏整体作为滚动容器（sticky 头部/底部），不依赖内层 #toc 滚动，
+     兼容 Via 等 WebView 内核在 fixed/嵌套滚动上的怪异行为。
+     用 top/left/bottom 和 width+max-width，避开旧内核不支持的 inset/min()。 */
   #sidebar {
     position: fixed;
-    inset: 0 auto 0 0;
-    width: min(85vw, 340px);
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 85vw;
+    max-width: 340px;
+    min-width: 0;
     transform: translateX(-100%);
     transition: transform .22s ease;
     box-shadow: 4px 0 24px rgba(0,0,0,.25);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+  .side-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel);
+  }
+  .side-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--panel);
   }
   body.nav-open #sidebar { transform: translateX(0); }
   body.nav-open #mask {
     display: block;
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: rgba(15, 23, 42, .45);
     z-index: 20;
   }
   #menu-btn { display: block; }
   #results { max-height: 50vh; }
+  /* 移动端由侧栏整体滚动，目录树不再自己滚（flex 不压缩，内容多高就多高） */
+  #toc { flex: 1 0 auto; overflow: visible; }
 }
 
 /* 车卡入口 */
