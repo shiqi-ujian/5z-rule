@@ -64,6 +64,18 @@ input, select { font: inherit; color: inherit; }
   max-width: 1280px; margin: 0 auto; padding: 12px 18px 40px;
   display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 14px;
 }
+/* 显式网格定位（不能依赖自动放置：pager 夹在中间会把 detail 挤到第二行）：
+   桌面端 列表|详情 并排（第 1 行），分页横跨两列居中在第 2 行 */
+#list { grid-column: 1; grid-row: 1; }
+#detail { grid-column: 2; grid-row: 1; }
+#pager {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex; gap: 8px; align-items: center; justify-content: center;
+  padding: 6px 0 0;
+}
+/* 显式声明，避免 .pager 的 display:flex 覆盖 hidden 属性 */
+#pager[hidden] { display: none; }
 .dlist { max-height: calc(100vh - 200px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
 .ditem {
   display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
@@ -103,14 +115,7 @@ input, select { font: inherit; color: inherit; }
 .ddetail a { color: var(--acc); }
 .ddetail .muted { color: var(--sub); font-size: 13px; }
 
-/* 分页：位于网格内列表正下方（移动端单列时紧贴列表，不跑到详情下面） */
-.pager {
-  grid-column: 1;
-  display: flex; gap: 8px; align-items: center; justify-content: center;
-  padding: 6px 0 0;
-}
-/* 显式声明，避免 .pager 的 display:flex 覆盖 hidden 属性 */
-#pager[hidden] { display: none; }
+/* 分页按钮样式（网格位置见 .dict-body 上方 #pager 规则） */
 .pager button {
   border: 1px solid var(--line); background: var(--panel); padding: 6px 16px;
   border-radius: 8px; font-size: 13px; font-weight: 600;
@@ -127,6 +132,8 @@ input, select { font: inherit; color: inherit; }
 @media (max-width: 860px) {
   .dict-body { grid-template-columns: 1fr; }
   .dlist { max-height: 40vh; }
+  /* 单列堆叠按文档顺序：列表 → 分页 → 详情（分页与列表在一起） */
+  #list, #detail, #pager { grid-column: auto; grid-row: auto; }
 }
 @media (prefers-color-scheme: dark) {
   :root {
