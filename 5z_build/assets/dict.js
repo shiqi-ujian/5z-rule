@@ -423,8 +423,8 @@ function miToolbar() {
       <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>
     <select id="mi-pr"><option value="">价格：全部</option>
       ${MI_TIERS.map(t => `<option value="${t.k}"${f.pr === t.k ? ' selected' : ''}>${t.label}</option>`).join('')}
-      <option value="nonsell"${f.pr === 'nonsell' ? ' selected' : ''}>非卖品</option>
-      <option value="none"${f.pr === 'none' ? ' selected' : ''}>无价格信息</option></select>
+      <option value="nonsell"${f.pr === 'nonsell' ? ' selected' : ''}>价格：非卖品</option>
+      <option value="none"${f.pr === 'none' ? ' selected' : ''}>价格：特别</option></select>
     <span class="count" id="mi-count"></span>`;
   const onInput = () => { f.kw = $('#mi-kw').value; f.page = 1; renderMiList(true); };
   $('#mi-kw').addEventListener('input', onInput);
