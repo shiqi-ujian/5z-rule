@@ -353,6 +353,11 @@ function processHtml(html, siteRel, page) {
   // 注入壳样式（导航条 wz-* 样式）：此前 body.css 从未被链接，页面内导航条完全无样式
   const cssHref = '../'.repeat(depth) + 'assets/body.css';
   out = out.replace(/(<head[^>]*>)/i, (m) => `${m}\n<link rel="stylesheet" href="${cssHref}">`);
+  // 修复 WinCHM/Word 导出的残缺 Content-Type meta（属性值缺闭合引号）：
+  // 解析器会把后续整段 HTML 吞进该属性值，导致 <style>、<body>、注入的导航条 div
+  // 全部消失、字符集声明失效（WinCHM 页尤甚——下一对引号远在正文里）。
+  out = out.replace(/<meta[^>]*?http-equiv\s*=\s*["']?\s*content-type["']?[^>]*>/gi,
+    '<meta charset="utf-8">');
   out = out.replace(/charset\s*=\s*["']?gb2312["']?/i, 'charset=utf-8')
     .replace(/charset\s*=\s*["']?gbk["']?/i, 'charset=utf-8');
   // 清理 Word 导出的 File-List 残留（指向未复制的 filelist.xml）
