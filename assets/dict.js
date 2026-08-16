@@ -46,8 +46,8 @@ const MODULES = [...new Set(DATA.programs.map(p => p.module).filter(Boolean))].s
 const state = {
   tab: 'spells',
   spell: { kw: '', level: '', school: '', cls: '', ritual: '', focus: '', page: 1, sel: null },
-  mv: { style: '', level: '', type: '', sel: null },
-  pg: { protocol: '', module: '', focus: '', sel: null },
+  mv: { kw: '', style: '', level: '', type: '', sel: null },
+  pg: { kw: '', protocol: '', module: '', focus: '', sel: null },
 };
 const PAGE_SIZE = 100;
 
@@ -155,10 +155,12 @@ function spellToolbar() {
 /* ---------- 战技 Tab ---------- */
 function mvFiltered() {
   const f = state.mv;
+  const kw = f.kw.trim();
   return DATA.maneuvers.filter(m => {
     if (f.style && m.style !== f.style) return false;
     if (f.level && m.level !== f.level) return false;
     if (f.type && m.type !== f.type) return false;
+    if (kw && !(m.name.includes(kw) || (m.text || '').includes(kw))) return false;
     return true;
   });
 }
@@ -190,13 +192,15 @@ function renderMvDetail(m) {
 function mvToolbar() {
   const f = state.mv;
   const tb = $('#toolbar');
-  tb.innerHTML = `<select id="mv-style"><option value="">全流派</option>
+  tb.innerHTML = `<input type="search" id="mv-kw" placeholder="搜索战技名或描述…" value="${esc(f.kw)}">
+    <select id="mv-style"><option value="">全流派</option>
       ${STYLES.map(s => `<option value="${s}"${f.style === s ? ' selected' : ''}>${s}</option>`).join('')}</select>
     <select id="mv-level"><option value="">全级别</option>
       ${MLEVELS.map(l => `<option value="${l}"${f.level === l ? ' selected' : ''}>${l}</option>`).join('')}</select>
     <select id="mv-type"><option value="">全类型</option>
       ${MTYPES.map(t => `<option value="${t}"${f.type === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
     <span class="count" id="mv-count"></span>`;
+  $('#mv-kw').addEventListener('input', (e) => { f.kw = e.target.value; renderMvList(); });
   $('#mv-style').addEventListener('change', (e) => { f.style = e.target.value; renderMvList(); });
   $('#mv-level').addEventListener('change', (e) => { f.level = e.target.value; renderMvList(); });
   $('#mv-type').addEventListener('change', (e) => { f.type = e.target.value; renderMvList(); });
@@ -212,11 +216,13 @@ function mvToolbar() {
 /* ---------- 程序 Tab ---------- */
 function pgFiltered() {
   const f = state.pg;
+  const kw = f.kw.trim();
   return DATA.programs.filter(p => {
     if (f.protocol && p.protocol !== f.protocol) return false;
     if (f.module && p.module !== f.module) return false;
     if (f.focus === '1' && !p.focus) return false;
     if (f.focus === '0' && p.focus) return false;
+    if (kw && !(p.name.includes(kw) || (p.text || '').includes(kw))) return false;
     return true;
   });
 }
@@ -254,7 +260,8 @@ function renderPgDetail(p) {
 function pgToolbar() {
   const f = state.pg;
   const tb = $('#toolbar');
-  tb.innerHTML = `<select id="pg-protocol"><option value="">全协议层级</option>
+  tb.innerHTML = `<input type="search" id="pg-kw" placeholder="搜索程序名或效果…" value="${esc(f.kw)}">
+    <select id="pg-protocol"><option value="">全协议层级</option>
       ${PROTOCOLS.map(p => `<option value="${p}"${f.protocol === p ? ' selected' : ''}>${p}</option>`).join('')}</select>
     <select id="pg-module"><option value="">全模块</option>
       ${MODULES.map(m => `<option value="${esc(m)}"${f.module === m ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select>
@@ -262,6 +269,7 @@ function pgToolbar() {
       <option value="1"${f.focus === '1' ? ' selected' : ''}>需要专注</option>
       <option value="0"${f.focus === '0' ? ' selected' : ''}>不需专注</option></select>
     <span class="count" id="pg-count"></span>`;
+  $('#pg-kw').addEventListener('input', (e) => { f.kw = e.target.value; renderPgList(); });
   $('#pg-protocol').addEventListener('change', (e) => { f.protocol = e.target.value; renderPgList(); });
   $('#pg-module').addEventListener('change', (e) => { f.module = e.target.value; renderPgList(); });
   $('#pg-focus').addEventListener('change', (e) => { f.focus = e.target.value; renderPgList(); });
