@@ -85,7 +85,7 @@ MI.forEach(i => {
 
 const state = {
   tab: 'spells',
-  spell: { kw: '', level: '', school: '', cls: '', ritual: '', focus: '', page: 1, sel: null },
+  spell: { kw: '', level: '', tags: '', tagsMode: 'and', cls: '', ritual: '', focus: '', page: 1, sel: null },
   mv: { kw: '', style: '', level: '', type: '', sel: null },
   pg: { kw: '', protocol: '', module: '', focus: '', sel: null },
   mi: { kw: '', sub: '', attune: '', artifact: '', pr: '', page: 1, sel: null },
@@ -93,12 +93,20 @@ const state = {
 const PAGE_SIZE = 100;
 
 /* ---------- 法术 Tab ---------- */
+// 标签匹配：标签 = 学派 或 名称/正文关键词（塑能 → 学派；火焰 → 正文关键词）
+function tagMatches(s, tag) {
+  return (s.school && s.school === tag) || s.name.includes(tag) || s.text.includes(tag);
+}
 function spellFiltered() {
   const f = state.spell;
   const kw = f.kw.trim();
+  const tags = f.tags.trim().split(/[\s,，、;；]+/).map(t => t.trim()).filter(Boolean);
   return DATA.spells.filter(s => {
     if (f.level && String(s.level) !== f.level) return false;
-    if (f.school && s.school !== f.school) return false;
+    if (tags.length) {
+      const ok = tags.map(t => tagMatches(s, t));
+      if (f.tagsMode === 'or' ? !ok.some(Boolean) : !ok.every(Boolean)) return false;
+    }
     if (f.cls && !(SPELL_JOBS[s.name] || []).includes(f.cls)) return false;
     if (f.ritual === '1' && !s.ritual) return false;
     if (f.ritual === '0' && s.ritual) return false;
@@ -170,8 +178,11 @@ function spellToolbar() {
   tb.innerHTML = `<input type="search" id="sp-kw" placeholder="搜索法术名或描述…" value="${esc(f.kw)}">
     <select id="sp-level"><option value="">全环位</option>
       ${LEVELS.map(l => `<option value="${l}"${f.level === l ? ' selected' : ''}>${lvLabel(l)}</option>`).join('')}</select>
-    <select id="sp-school"><option value="">全学派</option>
-      ${SCHOOLS.map(s => `<option value="${esc(s)}"${f.school === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
+    <input type="search" id="sp-tags" placeholder="标签：如 塑能 火焰（空格分隔）" value="${esc(f.tags)}" title="标签式搜索：输入学派或关键词，多个标签按下方方式匹配">
+    <select id="sp-tags-mode" title="多个标签的匹配方式">
+      <option value="and"${f.tagsMode === 'and' ? ' selected' : ''}>交集（同时满足）</option>
+      <option value="or"${f.tagsMode === 'or' ? ' selected' : ''}>并集（任一满足）</option>
+    </select>
     <select id="sp-cls"><option value="">全部职业</option>
       ${CLASSES.map(c => `<option value="${esc(c)}"${f.cls === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
     <select id="sp-ritual"><option value="">仪式：全部</option>
@@ -184,7 +195,9 @@ function spellToolbar() {
   const onInput = () => { f.kw = $('#sp-kw').value; f.page = 1; renderSpellList(true); };
   $('#sp-kw').addEventListener('input', onInput);
   $('#sp-level').addEventListener('change', (e) => { f.level = e.target.value; f.page = 1; renderSpellList(true); });
-  $('#sp-school').addEventListener('change', (e) => { f.school = e.target.value; f.page = 1; renderSpellList(true); });
+  const onTags = () => { f.tags = $('#sp-tags').value; f.page = 1; renderSpellList(true); };
+  $('#sp-tags').addEventListener('input', onTags);
+  $('#sp-tags-mode').addEventListener('change', (e) => { f.tagsMode = e.target.value; f.page = 1; renderSpellList(true); });
   $('#sp-cls').addEventListener('change', (e) => { f.cls = e.target.value; f.page = 1; renderSpellList(true); });
   $('#sp-ritual').addEventListener('change', (e) => { f.ritual = e.target.value; f.page = 1; renderSpellList(true); });
   $('#sp-focus').addEventListener('change', (e) => { f.focus = e.target.value; f.page = 1; renderSpellList(true); });
