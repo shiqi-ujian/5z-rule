@@ -2,8 +2,11 @@
  * 类名前缀 pk-，避免与页面自身样式冲突。
  */
 .pk-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.pk-toolbar input[type=search] { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: #fff; }
-.pk-toolbar select { padding: 8px 10px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: #fff; }
+.pk-toolbar input[type=search].pk-kw, .pk-toolbar .pk-kw {
+  flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px; background: #fff; color: inherit;
+}
+.pk-toolbar select { padding: 8px 10px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: #fff; color: inherit; }
 .pk-toolbar .count { color: var(--sub, #64748b); font-size: 13px; margin-left: auto; }
 .pk-toolbar .count b { color: var(--acc, #7c3aed); }
 .pk-chips { display: flex; flex-direction: column; gap: 6px; }
@@ -75,10 +78,39 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .pk-item { background: #1e293b; }
-  .pk-detail .pk-d-text { background: #111c2e; }
-  .pk-toolbar-inner .pk-kw, .pk-pager button, .pk-chip { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-  .pk-toolbar-inner select { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-  .pk-toolbar-inner select option { color: #e2e8f0; background: #1e293b; }
+  .pk-list { background: var(--panel, #1e293b); }
+  .pk-item { background: var(--panel, #1e293b); }
+  .pk-item:hover { background: #24324a; }
+  .pk-item.sel { background: var(--acc-soft, #312e81); }
+  .pk-detail { background: var(--panel, #1e293b); }
+  .pk-detail .pk-d-name { color: var(--ink, #e2e8f0); }
+  .pk-detail .pk-d-sub { color: var(--acc, #a78bfa); }
+  .pk-detail .pk-d-text { background: #111c2e; color: #dbe4f3; }
+  .pk-detail .pk-d-fields .f { border-color: var(--line, #334155); }
+  .pk-detail .pk-d-fields .f .k { color: var(--sub, #94a3b8); }
+  .pk-detail .pk-d-fields .f .v { color: var(--ink, #e2e8f0); }
+  .pk-detail .pk-table th { background: var(--acc-soft, #312e81); }
+  .pk-detail .pk-table td { color: var(--ink, #e2e8f0); }
+  /* 搜索框/标签框/下拉/分页/ chips：必须比页面的 input[type=search] 规则更高特异性 */
+  .pk-toolbar input[type=search].pk-kw, .pk-toolbar .pk-kw, .pk-toolbar-inner .pk-kw,
+  .toolbar input[type=search].pk-kw, .toolbar .pk-kw, #toolbar input[type=search].pk-kw,
+  .pk-toolbar input[type=search].pk-tags, .pk-toolbar .pk-tags, .pk-toolbar-inner .pk-tags,
+  .toolbar input[type=search].pk-tags, .toolbar .pk-tags, #toolbar input[type=search].pk-tags {
+    background: var(--panel, #1e293b); color: var(--ink, #e2e8f0); border-color: var(--line, #334155);
+  }
+  .pk-toolbar .pk-kw:focus, .pk-toolbar-inner .pk-kw:focus,
+  .pk-toolbar .pk-tags:focus, .pk-toolbar-inner .pk-tags:focus { border-color: var(--acc, #a78bfa); }
+  .pk-toolbar select, .pk-toolbar-inner select, .toolbar select, #toolbar select {
+    background: var(--panel, #1e293b); color: var(--ink, #e2e8f0); border-color: var(--line, #334155);
+  }
+  .pk-toolbar select option, .pk-toolbar-inner select option, .toolbar select option {
+    color: var(--ink, #e2e8f0); background: var(--panel, #1e293b);
+  }
+  .pk-pager button { background: var(--panel, #1e293b); color: var(--ink, #e2e8f0); border-color: var(--line, #334155); }
+  .pk-chip { background: var(--panel, #1e293b); color: var(--ink, #e2e8f0); border-color: var(--line, #334155); }
+  .pk-chip:hover { border-color: var(--acc, #a78bfa); }
+  .pk-chip.on { background: var(--acc, #a78bfa); color: #fff; }
+  .pk-i-brief, .pk-i-sub, .pk-empty { color: var(--sub, #94a3b8); }
+  .pk-count, .pk-pg-info { color: var(--sub, #94a3b8); }
   input::placeholder { color: #64748b; }
 }

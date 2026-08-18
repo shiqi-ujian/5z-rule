@@ -246,6 +246,43 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   .live { position: static; max-height: none; order: 2; }
   .car-top-inner { flex-wrap: wrap; }
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --line: #334155; --ink: #e2e8f0;
+    --sub: #94a3b8; --acc: #a78bfa; --acc-soft: #312e81;
+    --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  }
+  body { background: var(--bg); color: var(--ink); }
+  .beta-banner { background: #3a2a12; color: #fbbf24; border-color: #78350f; }
+  .beta-banner b { color: #fcd34d; }
+  .stage, .live { background: var(--panel); border-color: var(--line); }
+  .card-item { background: var(--panel); }
+  .card-item .ci-desc { color: var(--sub); }
+  .search-bar input[type=search], .search-bar select,
+  .field input[type=text], .field input[type=number], .field textarea, .field select,
+  .info-grid input[type=text], .sub-input input, .attr-card input[type=number] {
+    background: var(--panel); color: var(--ink); border-color: var(--line);
+  }
+  .detail-box { background: #1a2637; }
+  .attr-card { background: #1a2637; }
+  .attr-notes { background: #1a2637; color: var(--sub); }
+  .seg button { background: var(--panel); color: var(--ink); }
+  .seg button.sel { background: var(--acc); color: #fff; }
+  .skill-row .s-toggle button { background: var(--panel); color: var(--sub); }
+  .feat-item { background: var(--panel); }
+  .feat-item .fi-cat { background: #26334a; color: var(--sub); }
+  .feat-item .fi-text { color: var(--sub); }
+  .feat-item.prep { background: #10301f; border-color: var(--good); }
+  .feat-item.prep .fi-cat { background: #10301f; color: var(--good); }
+  .nav-btn { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .car-foot { background: rgba(15,23,42,.92); border-color: var(--line); }
+  .sheet table th { background: var(--acc-soft); }
+  .sheet .trait .t-text { color: var(--ink); }
+  .step { background: var(--panel); }
+  .pk-i-acts .nav-btn { background: var(--panel); }
+  .pk-tag-prep { color: var(--good); background: #10301f; border-color: #166534; }
+  .toast { background: #0b1220; }
+}
 @media print {
   body { background: #fff; }
   .car-top, .steps, .car-foot, .car-top-actions, .car-home, .car-app { padding: 0; }
@@ -301,23 +338,28 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
 .info-btns { display: inline-flex; gap: 6px; align-items: center; }
 @media (prefers-color-scheme: dark) {
   .guide-box { background: #16233a; border-color: #2c4a7a; color: #a8c3ea; }
-  .train-opt { background: #1e293b; }
+  .guide-box table.data th { background: #1e2a44; }
+  .guide-box table.data td { color: #c9d9f2; }
+  .guide-box .table-wrap span { color: #8fa8cc; }
+  .train-opt { background: var(--panel); }
   .train-opt.sel { border-color: var(--acc); background: #1a2f4d; }
-  .info-grid input[type=text] { background: #1e293b; color: #e2e8f0; }
+  .info-grid input[type=text] { background: var(--panel); color: var(--ink); }
   .sel-box { background: #16233a; border-color: #2c4a7a; }
-  .sel-chip { background: #1e293b; }
-  .sel-chip.prep { background: #10301f; color: #6ee7b7; border-color: #166534; }
+  .sel-box-title { color: var(--ink); }
+  .sel-chip { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .sel-chip.prep { background: #10301f; color: var(--good); border-color: #166534; }
+  .sel-chip.prep:hover { background: #fee2e2; color: var(--bad); }
 }
 .sub-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .chip {
   padding: 6px 14px; border: 1px solid var(--line); border-radius: 20px; cursor: pointer;
-  background: #fff; font-size: 13.5px;
+  background: var(--panel); font-size: 13.5px;
 }
 .chip.sel { border-color: var(--acc); background: #eef6ff; color: var(--acc); font-weight: 600; }
 .sub-input { margin-top: 6px; }
 .sub-input input { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
 @media (prefers-color-scheme: dark) {
-  .chip { background: #1e293b; }
+  .chip { background: var(--panel); color: var(--ink); }
   .chip.sel { background: #1a2f4d; }
-  .sub-input input { background: #1e293b; color: #e2e8f0; }
+  .sub-input input { background: var(--panel); color: var(--ink); }
 }
