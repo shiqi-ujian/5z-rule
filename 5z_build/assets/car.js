@@ -38,8 +38,8 @@ let rollBuf = null; // 随机骰临时数组
 
 function newChar() {
   return {
-    name: '', player: '', level: 1,
-    raceId: null, classId: null, subclass: '',
+    name: '', player: '', level: 1, portrait: '',
+    raceId: null, classId: null, subclass: '', raceTraining: '',
     majorAttr: '力量',
     buyMethod: 'points',
     base: { 力量: 8, 敏捷: 8, 体质: 8, 智力: 8, 感知: 8 },
@@ -285,6 +285,41 @@ function renderRace() {
   cats.forEach(c => catSel.insertAdjacentHTML('beforeend', `<option>${esc(c)}</option>`));
   const grid = el('div', 'grid');
   wrap.appendChild(grid);
+  const detailHost = el('div');
+  wrap.appendChild(detailHost);
+  const paintDetail = () => {
+    detailHost.innerHTML = '';
+    const r = race();
+    if (!r) return;
+    const d = el('div', 'detail-box');
+    d.innerHTML = `<h3>${esc(r.name)}</h3>` +
+      r.traits.filter(t => t.name).map(t =>
+        `<div class="dl-row"><span class="k">${esc(t.name)}</span><span>${esc(t.text)}</span></div>`).join('') +
+      `<p class="muted">完整页面：<a href="${esc(r.url)}" target="_blank">${esc(r.name)}（规则书）</a></p>`;
+    detailHost.appendChild(d);
+    // 种族「训练/选项」类选择（如人类的资本/社交/知识/斥候/民兵/法术训练）
+    const opts = r.traits.filter(t => /^·/.test(t.name));
+    const hasChoice = r.traits.some(t => /^训练/.test(t.name)) && opts.length;
+    if (hasChoice) {
+      const pick = el('div', 'field');
+      pick.innerHTML = `<label>训练选择（种族特性「训练」，选一项）</label>
+        <div class="train-opts">${opts.map(t =>
+          `<label class="train-opt${state.char.raceTraining === t.name ? ' sel' : ''}">
+            <input type="radio" name="race-train" value="${esc(t.name)}"${state.char.raceTraining === t.name ? ' checked' : ''}>
+            <b>${esc(t.name.replace(/^·/, ''))}</b>
+            <span>${esc(t.text.length > 90 ? t.text.slice(0, 90) + '…' : t.text)}</span>
+          </label>`).join('')}</div>`;
+      pick.querySelectorAll('input[name="race-train"]').forEach(inp => {
+        inp.addEventListener('change', () => {
+          state.char.raceTraining = inp.value;
+          save();
+          pick.querySelectorAll('.train-opt').forEach(o => o.classList.toggle('sel', o.querySelector('input').checked));
+          renderLive();
+        });
+      });
+      detailHost.appendChild(pick);
+    }
+  };
   const paint = () => {
     const kw = ($('#race-q', q) || {}).value || '';
     const cat = ($('#race-cat', q) || {}).value || '';
@@ -301,19 +336,11 @@ function renderRace() {
       card.onclick = () => { state.char.raceId = r.id; save(); paint(); renderLive(); };
       grid.appendChild(card);
     }
+    paintDetail();
   };
   q.addEventListener('input', paint);
   q.addEventListener('change', paint);
   paint();
-  const r = race();
-  if (r) {
-    const d = el('div', 'detail-box');
-    d.innerHTML = `<h3>${esc(r.name)}</h3>` +
-      r.traits.filter(t => t.name).map(t =>
-        `<div class="dl-row"><span class="k">${esc(t.name)}</span><span>${esc(t.text)}</span></div>`).join('') +
-      `<p class="muted">完整页面：<a href="${esc(r.url)}" target="_blank">${esc(r.name)}（规则书）</a></p>`;
-    stage().appendChild(d);
-  }
   stage().appendChild(wrap);
 }
 
@@ -536,6 +563,15 @@ function renderBg() {
 function renderSkills() {
   const c = state.char;
   const k = klass();
+  // 职业可选技能指引（从 core.skills 文本中识别技能名）
+  let classOpts = [];
+  if (k && k.core.skills) {
+    classOpts = DATA.rules.skills.filter(s => k.core.skills.includes(s.name)).map(s => s.name);
+    const g = el('div', 'guide-box');
+    g.innerHTML = `<b>本职业技能熟练：</b>${esc(k.core.skills)}
+      ${classOpts.length ? `<span style="color:var(--sub)">（下表中 ✓ 标记的为本职业可选技能）</span>` : ''}`;
+    stage().appendChild(g);
+  }
   const count = el('div', 'skill-count');
   stage().appendChild(count);
   const list = el('div');
@@ -549,8 +585,9 @@ function renderSkills() {
     for (const s of DATA.rules.skills) {
       const lv = c.skills[s.name] || 0;
       const fixed = k && k.core.skillsFixed && k.core.skillsFixed.includes(s.name);
+      const classOpt = classOpts.includes(s.name);
       const row = el('div', 'skill-row');
-      row.innerHTML = `<span class="s-name">${esc(s.name)}${fixed ? ' <span title="职业固定">★</span>' : ''}</span>
+      row.innerHTML = `<span class="s-name">${esc(s.name)}${fixed ? ' <span title="职业固定">★</span>' : classOpt ? ' <span title="本职业可选" style="color:var(--acc)">✓</span>' : ''}</span>
         <span class="s-attr">${s.attr}</span>
         <span class="s-mod">${skillMod(s.name) >= 0 ? '+' : ''}${skillMod(s.name)}
           ${lv === 1 ? '<span style="color:var(--good)">（熟练）</span>' : lv === 2 ? '<span style="color:var(--acc)">（专精）</span>' : ''}</span>
@@ -662,6 +699,34 @@ function renderSpells() {
     return;
   }
   const total = Object.values(cs.lists).reduce((s, l) => s + l.length, 0);
+  // 施法指引：职业表当前等级行的法术位/已知法术 + 施法特性说明
+  const g = el('div', 'guide-box');
+  let gHtml = `<b>${esc(k.name)} 施法指引：</b>`;
+  const castFeat = k.features.find(f => /^施法/.test(f.name));
+  if (castFeat) gHtml += `${esc(castFeat.text.split('\n')[0].slice(0, 90))}…`;
+  const lvRow = k.table.find(r => r[0] === String(c.level));
+  const headRow = k.table[0];
+  const lv2Row = k.table[1] || [];
+  if (lvRow) {
+    const start = headRow.findIndex(h => /法术位|已知法术|已知戏法/.test(h));
+    if (start >= 0) {
+      const slotIdx = headRow.findIndex(h => /法术位/.test(h));
+      const pairs = headRow.slice(start).map((h, i) => {
+        const col = start + i;
+        if (col === slotIdx && lv2Row.length) {
+          const slots = lvRow.slice(slotIdx).map((v, j) => (v && v !== '—') ? `${lv2Row[j] || (j + 1) + '环'} ${v}` : null).filter(Boolean);
+          return [h, slots.length ? slots.join('；') : '—'];
+        }
+        return [h, lvRow[col] || '—'];
+      });
+      gHtml += `<div class="table-wrap" style="margin-top:6px"><table class="data">
+        <tr>${pairs.map(([h]) => `<th>${esc(h)}</th>`).join('')}</tr>
+        <tr>${pairs.map(([, v]) => `<td>${esc(v)}</td>`).join('')}</tr></table></div>
+        <span style="color:var(--sub)">当前等级（${c.level} 级）数据如上；已知/准备法术数量按职业规则（如法师=等级+智力调整值），详见职业步骤的职业表。</span>`;
+    }
+  }
+  g.innerHTML = gHtml;
+  stage().appendChild(g);
   const q = el('div', 'search-bar');
   q.innerHTML = `<input type="search" id="spell-q" placeholder="搜索法术…">
     <select id="spell-level"><option value="">全环位</option>
@@ -822,7 +887,8 @@ function renderSheet() {
   const r = race();
   const k = klass();
   sheet.innerHTML = `<h2>${esc(c.name || '未命名角色')}</h2>
-    <p class="muted">${esc(c.player ? '玩家：' + c.player : '')}${c.level ? ' · ' + c.level + ' 级' : ''}${k ? ' · ' + esc(k.name) : ''}${c.subclass ? '（' + esc(c.subclass) + '）' : ''}${r ? ' · ' + esc(r.name) : ''}</p>`;
+    <p class="muted">${esc(c.player ? '玩家：' + c.player : '')}${c.level ? ' · ' + c.level + ' 级' : ''}${k ? ' · ' + esc(k.name) : ''}${c.subclass ? '（' + esc(c.subclass) + '）' : ''}${r ? ' · ' + esc(r.name) : ''}</p>
+    ${c.portrait ? `<img class="portrait" src="${esc(c.portrait)}" alt="立绘" onerror="this.style.display='none'">` : ''}`;
 
   // —— 属性 ——
   const saveRows = ATTRS.map(a => {
@@ -874,7 +940,9 @@ function renderSheet() {
     sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>种族特性（${esc(r.name)}）</h3>
       <table><tr><th style="width:110px">特性</th><th>效果</th></tr>
       ${r.traits.filter(t => t.name).map(t => `<tr><td>${esc(t.name)}</td><td class="t-text">${esc(t.text)}</td></tr>`).join('')}
-      </table></div>`);
+      </table>
+      ${c.raceTraining ? `<p class="muted" style="margin-top:6px">训练选择：<b>${esc(c.raceTraining.replace(/^·/, ''))}</b></p>` : ''}
+      </div>`);
   }
 
   // —— 技能 ——
@@ -971,6 +1039,66 @@ function renderSheet() {
   </div>`);
 
   s.appendChild(sheet);
+  // —— 基本信息编辑（姓名/玩家/立绘） ——
+  const info = el('div', 'field');
+  info.innerHTML = `<label>基本信息</label>
+    <div class="info-grid">
+      <input type="text" id="info-name" placeholder="角色姓名" value="${esc(c.name)}" maxlength="40">
+      <input type="text" id="info-player" placeholder="玩家" value="${esc(c.player)}" maxlength="40">
+      <input type="text" id="info-portrait" placeholder="立绘图片 URL" value="${esc(c.portrait)}">
+      <span class="info-btns">
+        <button type="button" id="info-upload" class="nav-btn">上传立绘</button>
+        <button type="button" id="info-clear-p" class="nav-btn" style="color:var(--warn)">清除</button>
+      </span>
+    </div>
+    <div class="f-hint">立绘支持图片 URL 或本地文件（自动压缩后存入浏览器本地存档，仅本机可见）。</div>`;
+  s.appendChild(info);
+  const $name = $('#info-name', info);
+  const $player = $('#info-player', info);
+  const $portrait = $('#info-portrait', info);
+  const setH2 = () => {
+    const h = sheet.querySelector('h2');
+    if (h) h.textContent = c.name || '未命名角色';
+  };
+  $name.addEventListener('input', () => { c.name = $name.value; save(); setH2(); });
+  $player.addEventListener('input', () => { c.player = $player.value; save(); });
+  const applyPortrait = (v) => {
+    c.portrait = v;
+    $portrait.value = v;
+    save();
+    let img = sheet.querySelector('.portrait');
+    if (v) {
+      if (!img) {
+        img = document.createElement('img');
+        img.className = 'portrait';
+        img.onerror = () => { img.style.display = 'none'; };
+        sheet.querySelector('h2').insertAdjacentElement('afterend', img);
+      }
+      img.src = v;
+      img.style.display = '';
+    } else if (img) {
+      img.remove();
+    }
+  };
+  $portrait.addEventListener('change', () => applyPortrait($portrait.value.trim()));
+  $('#info-upload', info).addEventListener('click', () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.onchange = () => {
+      const file = inp.files && inp.files[0];
+      if (!file) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        const b64 = String(rd.result);
+        if (b64.length > 2 * 1024 * 1024) { toast('图片过大（>2MB），请换一张或压缩后重试'); return; }
+        applyPortrait(b64);
+      };
+      rd.readAsDataURL(file);
+    };
+    inp.click();
+  });
+  $('#info-clear-p', info).addEventListener('click', () => applyPortrait(''));
   s.appendChild(el('div', 'field', `
     <label>备注 / 法术 / 战技 / 程序（可粘贴规则书文本）</label>
     <textarea id="sheet-notes" placeholder="记录你携带的法术描述、战技、程序、物品效果等…">${esc(c.traitsNote)}</textarea>`));

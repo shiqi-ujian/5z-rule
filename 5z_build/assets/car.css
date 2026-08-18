@@ -236,3 +236,30 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   .car-top h1 { color: var(--ink); }
   .car-home { display: none; }
 }
+
+/* —— 反馈功能新增：技能/法术指引、训练选择、立绘 —— */
+.guide-box {
+  background: #f0f5ff; border: 1px solid #c9daf5; border-radius: 10px;
+  padding: 10px 14px; margin: 0 0 12px; font-size: 13.5px; line-height: 1.7; color: #2b4a7a;
+}
+.train-opts { display: grid; gap: 8px; margin-top: 8px; }
+.train-opt {
+  display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: #fff;
+}
+.train-opt.sel { border-color: var(--acc); background: #eef6ff; }
+.train-opt b { white-space: nowrap; }
+.train-opt span { color: var(--sub); font-size: 13px; line-height: 1.6; }
+.portrait {
+  display: block; max-width: 220px; max-height: 300px; margin: 10px 0;
+  border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(15,23,42,.12);
+}
+.info-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.info-grid input[type=text] { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.info-btns { display: inline-flex; gap: 6px; align-items: center; }
+@media (prefers-color-scheme: dark) {
+  .guide-box { background: #16233a; border-color: #2c4a7a; color: #a8c3ea; }
+  .train-opt { background: #1e293b; }
+  .train-opt.sel { border-color: var(--acc); background: #1a2f4d; }
+  .info-grid input[type=text] { background: #1e293b; color: #e2e8f0; }
+}
