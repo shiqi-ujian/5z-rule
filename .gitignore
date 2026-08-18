@@ -39,3 +39,6 @@ incoming/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 视觉工具运行时产物（临时粘贴图片/裁剪/标注）
+.dsh-vision-toolkit/
