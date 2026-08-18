@@ -168,6 +168,13 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
 .feat-quota { font-size: 13px; color: var(--sub); margin-bottom: 10px; }
 .feat-quota b { color: var(--acc); }
 
+/* æ³•æœ¯æ­¥éª¤ï¼šå·²å‡†å¤‡æ ‡è®° */
+.feat-item .fi-btns { display: inline-flex; gap: 6px; flex-shrink: 0; }
+.feat-item.prep { border-color: var(--good); background: #f0fdf4; }
+.feat-item .prep-btn { border-color: var(--good); color: var(--good); }
+.feat-item.prep .prep-btn { background: var(--good); border-color: var(--good); color: #fff; }
+.feat-item.prep .fi-cat { background: #dcfce7; color: #166534; }
+
 /* è¾“å…¥è¡Œ */
 .field { margin-bottom: 14px; }
 .field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
@@ -237,7 +244,7 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   .car-home { display: none; }
 }
 
-/* ¡ª¡ª ·´À¡¹¦ÄÜĞÂÔö£º¼¼ÄÜ/·¨ÊõÖ¸Òı¡¢ÑµÁ·Ñ¡Ôñ¡¢Á¢»æ ¡ª¡ª */
+/* â€”â€” åé¦ˆåŠŸèƒ½æ–°å¢ï¼šæŠ€èƒ½/æ³•æœ¯æŒ‡å¼•ã€è®­ç»ƒé€‰æ‹©ã€ç«‹ç»˜ â€”â€” */
 .guide-box {
   background: #f0f5ff; border: 1px solid #c9daf5; border-radius: 10px;
   padding: 10px 14px; margin: 0 0 12px; font-size: 13.5px; line-height: 1.7; color: #2b4a7a;

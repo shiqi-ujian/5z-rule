@@ -55,6 +55,7 @@ function newChar() {
     maneuverStyle: '',
     maneuvers: [],
     spells: [],
+    prepared: [],
     programProtocol: '阿尔法',
     programs: [],
     notes: '', items: '', traitsNote: '',
@@ -184,6 +185,68 @@ function keyAttrHint() {
   return state.char.classId ? (hint[state.char.classId] || '感知') : '感知';
 }
 
+/* ---------- 准备施法者（法术书 / 已准备法术） ---------- */
+// 准备施法者：法术从职业列表选择后，还需标记"已准备"才可施放（数量受职业规则限制）。
+// 各职业准备数量公式（来自职业"施法"特性文本）：
+//   法师    = 智力调整值 + 法师等级
+//   牧师    = 感知调整值 + 牧师等级
+//   德鲁伊  = 感知调整值 + 德鲁伊等级
+//   圣武士  = 感知调整值 + 圣武士等级的一半
+//   灵能武士= 智力调整值 + 灵能武士等级的一半
+//   奇械师  = 压缩球制（每个准备法术对应一枚机械压缩球，消耗法术位与材料，无固定数量）
+const PREPARED_CASTERS = {
+  法师: { attr: '智力', half: false, balls: false },
+  牧师: { attr: '感知', half: false, balls: false },
+  德鲁伊: { attr: '感知', half: false, balls: false },
+  圣武士: { attr: '感知', half: true, balls: false },
+  灵能武士: { attr: '智力', half: true, balls: false },
+  奇械师: { attr: '智力', half: false, balls: true },
+};
+// 是否为准备施法者（返回规则对象或 null）
+function preparedRule() {
+  const k = klass();
+  if (!k) return null;
+  return PREPARED_CASTERS[k.name] || null;
+}
+// 当前可准备的最高法术数量（null 表示无固定上限，如奇械师）
+function preparedLimit() {
+  const rule = preparedRule();
+  if (!rule) return null;
+  if (rule.balls) return null;
+  const mod = finalMod(rule.attr);
+  const n = rule.half ? mod + Math.floor(state.char.level / 2) : mod + state.char.level;
+  return Math.max(1, n);
+}
+// 准备数量公式的说明文本
+function preparedLimitText() {
+  const k = klass();
+  const rule = preparedRule();
+  if (!rule || !k) return '';
+  if (rule.balls) return '压缩球制：每个准备法术对应一枚机械压缩球，消耗法术位与材料成分';
+  const attr = rule.attr;
+  const half = rule.half ? '等级的一半' : '等级';
+  return `${attr}调整值 + ${k.name}${half}（当前 ${preparedLimit()} 个，最少 1 个）`;
+}
+// 当前等级拥有的最高法术位环阶（0 = 无法术位）
+function maxSlotLevel() {
+  const k = klass();
+  if (!k) return 0;
+  const lvRow = k.table.find(r => r[0] === String(state.char.level));
+  const headRow = k.table[0];
+  if (!lvRow) return 0;
+  const slotIdx = headRow.findIndex(h => /法术位/.test(h));
+  if (slotIdx < 0) return 0;
+  let max = 0;
+  for (let i = slotIdx; i < lvRow.length; i++) {
+    const v = lvRow[i];
+    if (v && v !== '—' && !isNaN(+v) && +v > 0) {
+      const lv = i - slotIdx + 1;
+      if (lv > max) max = lv;
+    }
+  }
+  return max;
+}
+
 /* ---------- 数据加载 ---------- */
 // 加载顺序：car.html 已通过 <script> 引入 card-data.js（file:// 直开可用）。
 // 若数据缺失（如浏览器缓存了旧版 car.html），动态注入数据脚本兜底；
@@ -236,7 +299,7 @@ const STEP_HINTS = {
   4: '背景给予 2 项技能熟练、1 门额外语言与一段身份特性。5z 背景为开放式自定义。',
   5: '技能熟练来源：职业（自动按职业文本）、背景 2 项、智力 14/18/22/26/30 各 +1 项。',
   6: '1 级获得 2 个专长（其一代表背景训练），此后每 3 级再获得 1 个。',
-  7: '按职业法术列表选择已知/准备法术（可搜索、按环位筛选）。数量由你的职业规则决定。',
+  7: '按职业法术列表选择已知/准备法术（可搜索、按环位筛选）。准备施法者（法师等）需从已选法术中标记「已准备」，数量按职业规则（如法师=等级+智力调整值）。',
   8: '选择战技流派（及门弟子）与战技。流派入门专长见专长步骤。',
   9: '赛博格专属：按协议层级选择准备程序。其他职业可跳过。',
   10: '完成！可打印、导出 JSON 存档、导出 Excel 角色卡。',
@@ -731,6 +794,7 @@ function renderSpells() {
     return;
   }
   const total = Object.values(cs.lists).reduce((s, l) => s + l.length, 0);
+  const prepRule = preparedRule(); // null=非准备施法者
   // 施法指引：职业表当前等级行的法术位/已知法术 + 施法特性说明
   const g = el('div', 'guide-box');
   let gHtml = `<b>${esc(k.name)} 施法指引：</b>`;
@@ -754,8 +818,13 @@ function renderSpells() {
       gHtml += `<div class="table-wrap" style="margin-top:6px"><table class="data">
         <tr>${pairs.map(([h]) => `<th>${esc(h)}</th>`).join('')}</tr>
         <tr>${pairs.map(([, v]) => `<td>${esc(v)}</td>`).join('')}</tr></table></div>
-        <span style="color:var(--sub)">当前等级（${c.level} 级）数据如上；已知/准备法术数量按职业规则（如法师=等级+智力调整值），详见职业步骤的职业表。</span>`;
+        <span style="color:var(--sub)">当前等级（${c.level} 级）数据如上；已知/准备法术数量按职业规则，详见职业步骤的职业表。</span>`;
     }
+  }
+  if (prepRule) {
+    gHtml += `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #c9daf5">
+      <b>准备施法者：</b>本职业需从已选法术中标记「已准备」才能当日施放。
+      可准备上限 = <b>${esc(preparedLimitText())}</b>；只能准备已获得法术位的法术（当前最高 <b>${maxSlotLevel()} 环</b>）。</div>`;
   }
   g.innerHTML = gHtml;
   stage().appendChild(g);
@@ -770,7 +839,8 @@ function renderSpells() {
   stage().appendChild(list);
 
   const paint = () => {
-    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${total} 个可选）。已知/准备数量按职业规则（如职业表"已知法术/准备法术"栏）。`;
+    const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
+    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${total} 个可选）${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
     const kw = ($('#spell-q', q) || {}).value || '';
     const lv = ($('#spell-level', q) || {}).value || '';
     list.innerHTML = '';
@@ -786,16 +856,37 @@ function renderSpells() {
       for (const n of rows) {
         const spell = DATA.spells.find(s => s.name === n);
         const sel = c.spells.includes(n);
-        const item = el('div', 'feat-item' + (sel ? ' sel' : ''));
+        const isPrep = prepRule && (c.prepared || []).includes(n);
+        // 准备按钮条件：准备施法者 + 非戏法 + 该环阶已有法术位（且准备数量未达上限时可用）
+        const canPrep = prepRule && spell && spell.level >= 1 && spell.level <= maxSlotLevel();
+        const item = el('div', 'feat-item' + (sel ? ' sel' : '') + (isPrep ? ' prep' : ''));
         item.innerHTML = `<div class="fi-head">
             <span class="fi-name">${esc(n)}</span>
             <span class="fi-cat">${spell ? (spell.level === 0 ? '戏法' : spell.level + '环') + ' · ' + esc(spell.school || '') : ''}</span>
-            <button type="button" class="nav-btn" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
+            <span class="fi-btns">
+              <button type="button" class="nav-btn" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
+              ${canPrep ? `<button type="button" class="nav-btn prep-btn" style="padding:3px 12px;font-size:12px" ${isPrep ? 'disabled' : ''}>${isPrep ? '✓ 已准备' : '准备'}</button>` : ''}
+            </span>
           </div>
           ${spell && spell.text ? `<div class="fi-text">${esc(spell.text.split('\n').slice(1).join('\n').slice(0, 140))}${spell.text.length > 140 ? '…' : ''}</div>` : ''}`;
-        item.querySelector('button').addEventListener('click', () => {
-          if (sel) c.spells = c.spells.filter(x => x !== n);
-          else c.spells.push(n);
+        item.querySelector('.fi-btns .nav-btn').addEventListener('click', () => {
+          if (sel) {
+            c.spells = c.spells.filter(x => x !== n);
+            c.prepared = (c.prepared || []).filter(x => x !== n);
+          } else {
+            c.spells.push(n);
+          }
+          save(); paint();
+        });
+        const prepBtn = item.querySelector('.prep-btn');
+        if (prepBtn) prepBtn.addEventListener('click', () => {
+          const lim = preparedLimit();
+          if (!prepRule.balls && lim != null && (c.prepared || []).filter(x => c.spells.includes(x)).length >= lim) {
+            toast(`已准备法术已达上限（${lim} 个）；请先取消准备其它法术。`);
+            return;
+          }
+          if (!sel) c.spells.push(n);
+          c.prepared = (c.prepared || []).concat(n);
           save(); paint();
         });
         sec.appendChild(item);
@@ -1026,10 +1117,14 @@ function renderSheet() {
       const lv = sp ? sp.level : -1;
       (byLv[lv] = byLv[lv] || []).push(sp || { name: n, text: '' });
     }
-    sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>法术（${c.spells.length}）</h3>
-      <table><tr><th>环阶</th><th>名称</th><th>学派</th><th>简介</th></tr>
+    const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
+    const prepTitle = preparedRule()
+      ? ` · 已准备 ${prepN}${preparedRule().balls ? '' : ' / ' + preparedLimit()}` : '';
+    sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>法术（${c.spells.length}${prepTitle}）</h3>
+      <table><tr><th>环阶</th><th>名称</th><th>已准备</th><th>学派</th><th>简介</th></tr>
       ${Object.keys(byLv).sort((a, b) => a - b).map(lv =>
-        byLv[lv].map(sp => `<tr><td>${lv === 0 ? '戏法' : lv < 0 ? '?' : lv + '环'}</td><td><b>${esc(sp.name)}</b></td><td>${esc(sp.school || '')}</td>
+        byLv[lv].map(sp => `<tr><td>${lv === 0 ? '戏法' : lv < 0 ? '?' : lv + '环'}</td><td><b>${esc(sp.name)}</b></td>
+          <td>${(c.prepared || []).includes(sp.name) ? '✓ 是' : '—'}</td><td>${esc(sp.school || '')}</td>
           <td class="t-text">${esc((sp.text || '').split('\n').slice(1).join('\n').slice(0, 80))}</td></tr>`).join('')).join('')}
       </table></div>`);
   }
@@ -1168,7 +1263,7 @@ function renderLive() {
   h += `<div class="live-row"><span>豁免</span><b>${ATTRS.map(a => a + (saveMod(a) >= 0 ? '+' : '') + saveMod(a)).join(' ')}</b></div>`;
   h += `<div class="live-row"><span>技能熟练</span><b>${skillChosen()} / ${skillQuota()}</b></div>`;
   h += `<div class="live-row"><span>专长</span><b>${c.feats.length} / ${featQuota()}</b></div>`;
-  h += `<div class="live-row"><span>法术</span><b>${c.spells.length}</b></div>`;
+  h += `<div class="live-row"><span>法术</span><b>${c.spells.length}${preparedRule() ? '（已准备 ' + (c.prepared || []).filter(x => c.spells.includes(x)).length + '）' : ''}</b></div>`;
   h += `<div class="live-row"><span>战技</span><b>${c.maneuvers.length}${c.maneuverStyle ? '（' + esc(c.maneuverStyle) + '）' : ''}</b></div>`;
   h += `<div class="live-row"><span>程序</span><b>${c.programs.length}</b></div>`;
   h += `</div>`;
@@ -1369,6 +1464,11 @@ function buildXlsx() {
     }
     if (k) { newTexts.push(k.name); values.sheet5['AL' + row] = k.name; }
   });
+  // 已准备法术数量（模板 sheet5「准备法术」输入格 X2，W2 为标签）
+  if (preparedRule()) {
+    const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
+    if (prepN > 0) values.sheet5['X2'] = prepN;
+  }
   // 战技表（sheet6）：A=名称 E=级别 G=详述（数据行从第 4 行起）
   c.maneuvers.forEach((n, i) => {
     const m = DATA.maneuvers.find(x => x.name === n);
