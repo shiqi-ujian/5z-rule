@@ -122,7 +122,8 @@ function parseRaces() {
         if (/说明|定制血统|混血儿|模板/.test(name)) continue;
         const flow = parsePage(readText(full));
         let title = (flow.find(x => x.type === 'h1') || {}).text || name;
-        title = title.replace(/\s*[A-Za-z][A-Za-z\s]*$/, '').trim() || name;
+        // 标题清理：只取第一行（狐妖类页面 h1 混入了整段介绍），并去掉行尾英文名
+        title = title.split('\n')[0].replace(/\s*[A-Za-z][A-Za-z\s]*$/, '').trim() || name;
         // 特质段起点：找"XX特质"标题（如"人类特质"），找不到则从第一个标题之后开始
         let start = 0;
         const traitH = flow.findIndex(x => (x.type === 'h1' || x.type === 'h2') && /特质/.test(x.text));

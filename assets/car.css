@@ -263,3 +263,16 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   .train-opt.sel { border-color: var(--acc); background: #1a2f4d; }
   .info-grid input[type=text] { background: #1e293b; color: #e2e8f0; }
 }
+.sub-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.chip {
+  padding: 6px 14px; border: 1px solid var(--line); border-radius: 20px; cursor: pointer;
+  background: #fff; font-size: 13.5px;
+}
+.chip.sel { border-color: var(--acc); background: #eef6ff; color: var(--acc); font-weight: 600; }
+.sub-input { margin-top: 6px; }
+.sub-input input { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+@media (prefers-color-scheme: dark) {
+  .chip { background: #1e293b; }
+  .chip.sel { background: #1a2f4d; }
+  .sub-input input { background: #1e293b; color: #e2e8f0; }
+}

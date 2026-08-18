@@ -39,7 +39,7 @@ let rollBuf = null; // 随机骰临时数组
 function newChar() {
   return {
     name: '', player: '', level: 1, portrait: '',
-    raceId: null, classId: null, subclass: '', raceTraining: '',
+    raceId: null, classId: null, subclass: '', raceTraining: '', subrace: '',
     majorAttr: '力量',
     buyMethod: 'points',
     base: { 力量: 8, 敏捷: 8, 体质: 8, 智力: 8, 感知: 8 },
@@ -317,6 +317,38 @@ function renderRace() {
           renderLive();
         });
       });
+      detailHost.appendChild(pick);
+    }
+    // 种族「亚种」选择（如精灵三类、矮人两类）：按文本中的英文亚种名匹配精校词典 + 自由输入兜底
+    const SUBRACE_CAND = {
+      'high elves': '高等精灵', 'wood elves': '木精灵', 'dark elves': '黑暗精灵', 'drow': '卓尔',
+      'sun elves': '日精灵', 'moon elves': '月精灵',
+      'hill dwarves': '丘陵矮人', 'mountain dwarves': '山地矮人',
+      'lightfoot': '轻足半身人', 'stout': '壮健半身人',
+      'forest gnomes': '森林侏儒', 'rock gnomes': '岩石侏儒',
+    };
+    const subTrait = r.traits.find(t => t.name === '亚种');
+    if (subTrait) {
+      const chips = [...new Set(Object.entries(SUBRACE_CAND)
+        .filter(([en]) => subTrait.text.includes(en)).map(([, cn]) => cn))];
+      const pick = el('div', 'field');
+      pick.innerHTML = `<label>亚种选择（种族特性「亚种」）</label>
+        <div class="sub-chips">${chips.map(s =>
+          `<button type="button" class="chip${state.char.subrace === s ? ' sel' : ''}" data-sub="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+        <div class="sub-input"><input type="text" id="race-sub" placeholder="${chips.length ? '或手动输入其它亚种名（如 日精灵）' : '输入亚种名（如 丘陵矮人）'}" value="${esc(state.char.subrace)}" maxlength="20"></div>
+        <div class="f-hint">${esc(subTrait.text.slice(0, 120))}${subTrait.text.length > 120 ? '…' : ''}</div>`;
+      const setSub = (v, fromInput) => {
+        state.char.subrace = v;
+        save();
+        pick.querySelectorAll('.chip').forEach(c => c.classList.toggle('sel', c.dataset.sub === v));
+        if (!fromInput) {
+          const inp = pick.querySelector('#race-sub');
+          if (inp) inp.value = v;
+        }
+        renderLive();
+      };
+      pick.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => setSub(c.dataset.sub)));
+      pick.querySelector('#race-sub').addEventListener('input', (e) => setSub(e.target.value.trim(), true));
       detailHost.appendChild(pick);
     }
   };
@@ -942,6 +974,7 @@ function renderSheet() {
       ${r.traits.filter(t => t.name).map(t => `<tr><td>${esc(t.name)}</td><td class="t-text">${esc(t.text)}</td></tr>`).join('')}
       </table>
       ${c.raceTraining ? `<p class="muted" style="margin-top:6px">训练选择：<b>${esc(c.raceTraining.replace(/^·/, ''))}</b></p>` : ''}
+      ${c.subrace ? `<p class="muted">亚种：<b>${esc(c.subrace)}</b></p>` : ''}
       </div>`);
   }
 
