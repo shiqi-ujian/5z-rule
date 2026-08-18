@@ -511,7 +511,7 @@ for (const [ph, val] of shellRepl) shell = shell.split(ph).join(val);
 fs.writeFileSync(path.join(OUT, 'index.html'), shell, 'utf8');
 
 // ---------- 7. 复制壳资源 ----------
-for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car.css', 'fflate.min.js', 'dict.js', 'dict.css']) {
+for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car.css', 'picker.js', 'picker.css', 'fflate.min.js', 'dict.js', 'dict.css']) {
   fs.copyFileSync(new URL('./assets/' + f, import.meta.url), path.join(OUT, 'assets', f));
 }
 

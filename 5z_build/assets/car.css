@@ -175,6 +175,20 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
 .feat-item.prep .prep-btn { background: var(--good); border-color: var(--good); color: #fff; }
 .feat-item.prep .fi-cat { background: #dcfce7; color: #166534; }
 
+/* 车卡内嵌 Picker 布局：搜索/筛选 + 列表/详情两栏 */
+.pk-car { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.pk-car .pk-toolbar, .pk-car .pk-chips { grid-column: 1 / -1; }
+.pk-car .pk-list { max-height: 52vh; }
+.pk-car .pk-detail { min-height: 260px; }
+.pk-car .pk-pager { grid-column: 1 / -1; }
+.pk-i-acts { display: inline-flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.pk-act.on { background: var(--good); border-color: var(--good); color: #fff; }
+.pk-tag-prep { color: #065f46; background: #d1fae5; border: 1px solid #6ee7b7; }
+@media (max-width: 960px) {
+  .pk-car { grid-template-columns: 1fr; }
+  .pk-car .pk-list { max-height: 40vh; }
+}
+
 /* 输入行 */
 .field { margin-bottom: 14px; }
 .field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }

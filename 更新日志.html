@@ -85,6 +85,19 @@
 
   <section class="cl-entry">
     <h2>2026-08-18 · v1.59</h2>
+    <p class="cl-release">架构升级：词典页与车卡器共用 Picker 选择器组件（搜索/筛选/分页/详情统一引擎）。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260818-picker</span>
+      <b>词典与车卡器选择界面统一重构（Picker 组件）</b>
+      <span class="cl-page">（car.html / dict.html）</span>
+      <div class="cl-detail">抽取公共组件 assets/picker.js（+picker.css）：多选筛选 chips、关键词搜索、分页、列表+详情两栏由同一引擎驱动，词典页与车卡器共用。<br>· 词典页：法术/战技/程序/魔法物品四 Tab 全部改为 Picker 渲染，保留标签搜索（交集/并集）、仪式/专注/价格等原有筛选；<br>· 车卡器：法术步骤新增学派 chips 筛选 + 分页（法师法表 430 个不再一次全渲染）+ 点击查看完整详情，战技步骤新增级别/类型 chips + 搜索 + 详情，程序步骤新增模块 chips + 搜索 + 详情；已选择项面板与准备法术标记全部保留。</div>
+    </li></ul>
+    
+  </section>
+
+  <section class="cl-entry">
+    <h2>2026-08-18 · v1.59</h2>
     <p class="cl-release">车卡器反馈批处理 2（问题来源：收集表 2 条，20260818-19 批次）。</p>
     <h3>✅ 已修复（2）</h3><ul>
     <li class="cl-fix">

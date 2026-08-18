@@ -1,0 +1,84 @@
+/* 5z 通用选择器（Picker）样式：词典页与车卡器共用
+ * 类名前缀 pk-，避免与页面自身样式冲突。
+ */
+.pk-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pk-toolbar input[type=search] { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: #fff; }
+.pk-toolbar select { padding: 8px 10px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: #fff; }
+.pk-toolbar .count { color: var(--sub, #64748b); font-size: 13px; margin-left: auto; }
+.pk-toolbar .count b { color: var(--acc, #7c3aed); }
+.pk-chips { display: flex; flex-direction: column; gap: 6px; }
+.pk-toolbar-extras { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pk-toolbar-inner { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: 1 1 100%; }
+.pk-toolbar-inner .pk-kw { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: #fff; }
+.pk-toolbar-inner .pk-count { color: var(--sub, #64748b); font-size: 13px; margin-left: auto; white-space: nowrap; }
+.pk-toolbar-inner .pk-count b { color: var(--acc, #7c3aed); }
+
+/* 多选筛选 chips */
+.pk-chips { display: flex; flex-direction: column; gap: 6px; }
+.pk-chip-group { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.pk-chip-label { color: var(--sub, #64748b); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.pk-chip-clear { border: 0; background: none; color: var(--acc, #7c3aed); font-size: 12px; padding: 0 2px; cursor: pointer; text-decoration: underline; }
+.pk-chip-clear:hover { color: var(--bad, #dc2626); }
+.pk-chip-row { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pk-chip { border: 1px solid var(--line, #e2e8f0); background: #fff; color: var(--ink, #1e293b); padding: 4px 12px; border-radius: 999px; font-size: 12.5px; cursor: pointer; transition: all .12s; }
+.pk-chip:hover { border-color: var(--acc, #7c3aed); }
+.pk-chip.on { background: var(--acc, #7c3aed); border-color: var(--acc, #7c3aed); color: #fff; font-weight: 600; }
+
+/* 列表条目 */
+.pk-list { max-height: calc(100vh - 260px); overflow: auto; border: 1px solid var(--line, #e2e8f0); border-radius: var(--radius, 12px); background: var(--panel, #fff); }
+.pk-item { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line, #e2e8f0); background: #fff; padding: 9px 14px; font-size: 14px; color: var(--ink, #1e293b); cursor: pointer; }
+.pk-item:last-child { border-bottom: 0; }
+.pk-item:hover { background: var(--acc-soft, #f3eefc); }
+.pk-item.sel { background: var(--acc-soft, #f3eefc); box-shadow: inset 3px 0 0 var(--acc, #7c3aed); }
+.pk-i-name { font-weight: 700; }
+.pk-i-sub { color: var(--sub, #64748b); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-i-brief { color: var(--sub, #64748b); font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-empty { padding: 16px; color: var(--sub, #64748b); margin: 0; }
+
+/* 标签角标（仪式/专注/神器/同调） */
+.pk-tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 5px; padding: 0 6px; margin-left: 4px; vertical-align: 1px; }
+.pk-tag-ritual { color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; }
+.pk-tag-focus { color: #1e40af; background: #dbeafe; border: 1px solid #93c5fd; }
+.pk-tag-artifact { color: #7c2d12; background: #ffedd5; border: 1px solid #fdba74; }
+.pk-tag-attune { color: #065f46; background: #d1fae5; border: 1px solid #6ee7b7; }
+
+/* 详情 */
+.pk-detail { border: 1px solid var(--line, #e2e8f0); border-radius: var(--radius, 12px); background: var(--panel, #fff); padding: 18px 22px; min-height: 280px; font-size: 14px; }
+.pk-detail .pk-d-name { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+.pk-detail .pk-d-sub { color: var(--acc, #7c3aed); font-weight: 600; margin-bottom: 12px; }
+.pk-detail .pk-d-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 18px; margin-bottom: 12px; }
+.pk-detail .pk-d-fields .f { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dotted var(--line, #e2e8f0); }
+.pk-detail .pk-d-fields .f .k { color: var(--sub, #64748b); flex: 0 0 auto; }
+.pk-detail .pk-d-fields .f .v { font-weight: 600; text-align: right; }
+.pk-detail .pk-d-text { white-space: pre-wrap; background: var(--panel, #fff); border: 1px solid var(--line, #e2e8f0); border-radius: 8px; padding: 12px 14px; margin-top: 4px; line-height: 1.7; }
+.pk-detail .pk-table { margin-top: 10px; }
+.pk-detail .pk-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; overflow: hidden; }
+.pk-detail .pk-table th, .pk-detail .pk-table td { border: 1px solid var(--line, #e2e8f0); padding: 6px 10px; text-align: left; white-space: pre-wrap; vertical-align: top; }
+.pk-detail .pk-table th { background: var(--acc-soft, #f3eefc); font-weight: 700; }
+.pk-detail .pk-table tbody tr:nth-child(even) { background: var(--bg, #f6f7fb); }
+.pk-detail .pk-d-jobs { margin-top: 10px; font-size: 13px; color: var(--sub, #64748b); }
+.pk-detail .pk-d-jobs b { color: var(--ink, #1e293b); }
+.pk-detail .pk-d-link { margin-top: 12px; display: inline-block; }
+.pk-detail a { color: var(--acc, #7c3aed); }
+.pk-detail .pk-muted { color: var(--sub, #64748b); font-size: 13px; }
+
+/* 分页 */
+.pk-pager { display: flex; gap: 8px; align-items: center; justify-content: center; padding: 8px 0 0; }
+.pk-pager[hidden] { display: none; }
+.pk-pager button { border: 1px solid var(--line, #e2e8f0); background: var(--panel, #fff); padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.pk-pager button:disabled { opacity: .4; cursor: default; }
+.pk-pg-info { color: var(--sub, #64748b); font-size: 13px; }
+
+/* 响应式：窄屏单列 */
+@media (max-width: 860px) {
+  .pk-list { max-height: 42vh; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .pk-item { background: #1e293b; }
+  .pk-detail .pk-d-text { background: #111c2e; }
+  .pk-toolbar-inner .pk-kw, .pk-pager button, .pk-chip { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  .pk-toolbar-inner select { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  .pk-toolbar-inner select option { color: #e2e8f0; background: #1e293b; }
+  input::placeholder { color: #64748b; }
+}

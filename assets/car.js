@@ -819,7 +819,15 @@ function renderSpells() {
     stage().insertAdjacentHTML('beforeend', `<p class="hint">${esc(k.name)} 没有标准法术列表（或列表暂未收录）。法术可在角色卡备注中自行记录。</p>`);
     return;
   }
-  const total = Object.values(cs.lists).reduce((s, l) => s + l.length, 0);
+  // 本职业法术（带完整属性，供筛选/详情）
+  const spells = [];
+  for (const l of Object.keys(cs.lists).sort((a, b) => a - b)) {
+    for (const n of cs.lists[l]) {
+      const sp = DATA.spells.find(s => s.name === n);
+      if (sp) spells.push(sp);
+    }
+  }
+  const lvLabel = (l) => l === 0 ? '戏法' : l + ' 环';
   const prepRule = preparedRule(); // null=非准备施法者
   // 施法指引：职业表当前等级行的法术位/已知法术 + 施法特性说明
   const g = el('div', 'guide-box');
@@ -854,76 +862,74 @@ function renderSpells() {
   }
   g.innerHTML = gHtml;
   stage().appendChild(g);
-  const q = el('div', 'search-bar');
-  q.innerHTML = `<input type="search" id="spell-q" placeholder="搜索法术…">
-    <select id="spell-level"><option value="">全环位</option>
-    ${Object.keys(cs.lists).sort((a, b) => a - b).map(l => `<option value="${l}">${l === '0' ? '戏法' : l + ' 环'}</option>`).join('')}</select>`;
-  stage().appendChild(q);
+
+  // 计数行 + 已选面板 + 选择器（搜索/筛选/列表/详情）
   const cnt = el('div', 'skill-count');
   stage().appendChild(cnt);
-  const list = el('div');
-  stage().appendChild(list);
-  // 已选法术面板：按环阶分组显示所选法术，可点击 ✕ 移除
   const selBox = el('div', 'sel-box');
   stage().appendChild(selBox);
+  const pk = el('div', 'pk-car');
+  const pkToolbar = el('div', 'pk-toolbar');
+  const pkChips = el('div', 'pk-chips');
+  const pkList = el('div', 'pk-list');
+  const pkDetail = el('div', 'pk-detail');
+  const pkPager = el('div', 'pk-pager');
+  pkPager.hidden = true;
+  pk.appendChild(pkToolbar);
+  pk.appendChild(pkChips);
+  pk.appendChild(pkList);
+  pk.appendChild(pkDetail);
+  pk.appendChild(pkPager);
+  stage().appendChild(pk);
 
-  const paint = () => {
+  const LEVELS = [...new Set(spells.map(s => s.level))].sort((a, b) => a - b);
+  const SCHOOLS = [...new Set(spells.map(s => s.school).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const picker = Picker.create({
+    data: spells,
+    selKey: 'name',
+    pageSize: 80,
+    placeholder: '搜索法术名或描述…',
+    emptyText: '没有匹配的法术。',
+    chips: [
+      { key: 'level', label: '环位', items: LEVELS, labelFn: lvLabel },
+      { key: 'school', label: '学派', items: SCHOOLS },
+    ],
+    hay: (s) => s.name + ' ' + s.text,
+    containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
+    itemHtml: (s) => {
+      const sel = c.spells.includes(s.name);
+      const isPrep = prepRule && (c.prepared || []).includes(s.name);
+      const canPrep = prepRule && s.level >= 1 && s.level <= maxSlotLevel();
+      return `<div class="pk-i-name">${esc(s.name)}${isPrep ? ' <span class="pk-tag pk-tag-prep">已准备</span>' : ''}</div>
+        <div class="pk-i-sub">${lvLabel(s.level)} · ${esc(s.school || '未知学派')}</div>
+        <div class="pk-i-acts">
+          <button type="button" class="nav-btn pk-act" data-act="sel" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
+          ${canPrep ? `<button type="button" class="nav-btn pk-act${isPrep ? ' on' : ''}" data-act="prep" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px" ${isPrep ? 'disabled' : ''}>${isPrep ? '✓ 已准备' : '准备'}</button>` : ''}
+        </div>`;
+    },
+    detailHtml: (s) => {
+      const fields = [
+        ['环阶', lvLabel(s.level)], ['学派', s.school || '—'],
+        ['施法时间', s.castTime || '—'], ['施法距离', s.range || '—'],
+        ['法术目标', s.target || '—'], ['法术成分', s.components || '—'],
+        ['持续时间', s.duration || '—'], ['需要专注', s.focus ? '是' : '否'],
+        ['仪式', s.ritual ? '是（可作为仪式施展）' : '否'],
+      ];
+      return `<div class="pk-d-name">${esc(s.name)}</div>
+        <div class="pk-d-sub">${lvLabel(s.level)} · ${esc(s.school || '未知学派')}</div>
+        <div class="pk-d-fields">${fields.map(([k, v]) =>
+          `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
+        <div class="pk-d-text">${esc(s.text)}</div>
+        <a class="pk-d-link" href="${esc(s.url)}" target="_blank">📖 规则书原文 →</a>`;
+    },
+  });
+
+  // 已选法术面板 + 计数
+  const paintSel = () => {
     const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
     const lvSum = spellLevelSummary();
-    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${total} 个可选）${lvSum ? `：${lvSum}` : ''}${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
-    const kw = ($('#spell-q', q) || {}).value || '';
-    const lv = ($('#spell-level', q) || {}).value || '';
-    list.innerHTML = '';
-    const levels = Object.keys(cs.lists).sort((a, b) => a - b);
-    for (const l of levels) {
-      if (lv && lv !== l) continue;
-      const names = cs.lists[l];
-      const rows = names.filter(n => !kw || n.includes(kw));
-      if (!rows.length) continue;
-      const sec = el('div');
-      sec.style.marginBottom = '10px';
-      sec.innerHTML = `<h4 style="margin:8px 0 4px;color:var(--acc)">${l === '0' ? '0环（戏法）' : l + ' 环'}</h4>`;
-      for (const n of rows) {
-        const spell = DATA.spells.find(s => s.name === n);
-        const sel = c.spells.includes(n);
-        const isPrep = prepRule && (c.prepared || []).includes(n);
-        // 准备按钮条件：准备施法者 + 非戏法 + 该环阶已有法术位（且准备数量未达上限时可用）
-        const canPrep = prepRule && spell && spell.level >= 1 && spell.level <= maxSlotLevel();
-        const item = el('div', 'feat-item' + (sel ? ' sel' : '') + (isPrep ? ' prep' : ''));
-        item.innerHTML = `<div class="fi-head">
-            <span class="fi-name">${esc(n)}</span>
-            <span class="fi-cat">${spell ? (spell.level === 0 ? '戏法' : spell.level + '环') + ' · ' + esc(spell.school || '') : ''}</span>
-            <span class="fi-btns">
-              <button type="button" class="nav-btn" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
-              ${canPrep ? `<button type="button" class="nav-btn prep-btn" style="padding:3px 12px;font-size:12px" ${isPrep ? 'disabled' : ''}>${isPrep ? '✓ 已准备' : '准备'}</button>` : ''}
-            </span>
-          </div>
-          ${spell && spell.text ? `<div class="fi-text">${esc(spell.text.split('\n').slice(1).join('\n').slice(0, 140))}${spell.text.length > 140 ? '…' : ''}</div>` : ''}`;
-        item.querySelector('.fi-btns .nav-btn').addEventListener('click', () => {
-          if (sel) {
-            c.spells = c.spells.filter(x => x !== n);
-            c.prepared = (c.prepared || []).filter(x => x !== n);
-          } else {
-            c.spells.push(n);
-          }
-          save(); paint();
-        });
-        const prepBtn = item.querySelector('.prep-btn');
-        if (prepBtn) prepBtn.addEventListener('click', () => {
-          const lim = preparedLimit();
-          if (!prepRule.balls && lim != null && (c.prepared || []).filter(x => c.spells.includes(x)).length >= lim) {
-            toast(`已准备法术已达上限（${lim} 个）；请先取消准备其它法术。`);
-            return;
-          }
-          if (!sel) c.spells.push(n);
-          c.prepared = (c.prepared || []).concat(n);
-          save(); paint();
-        });
-        sec.appendChild(item);
-      }
-      list.appendChild(sec);
-    }
-    // 已选法术面板：按环阶分组，点击 chip 移除（同时取消准备）
+    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${spells.length} 个可选）${lvSum ? `：${lvSum}` : ''}${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
     if (c.spells.length) {
       const groups = {};
       for (const n of c.spells) {
@@ -942,15 +948,41 @@ function renderSpells() {
         const n = b.dataset.f;
         c.spells = c.spells.filter(x => x !== n);
         c.prepared = (c.prepared || []).filter(x => x !== n);
-        save(); paint();
+        save(); paintSel(); picker.paint();
       }));
     } else {
       selBox.innerHTML = `<div class="sel-box-title">已选法术：暂无</div>`;
     }
   };
-  q.addEventListener('input', paint);
-  q.addEventListener('change', paint);
-  paint();
+
+  // 列表内按钮：事件委托（选择/移除 + 准备/取消）
+  pkList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pk-act');
+    if (!btn) return;
+    const n = btn.dataset.name;
+    const act = btn.dataset.act;
+    if (act === 'sel') {
+      if (c.spells.includes(n)) {
+        c.spells = c.spells.filter(x => x !== n);
+        c.prepared = (c.prepared || []).filter(x => x !== n);
+      } else {
+        c.spells.push(n);
+      }
+    } else if (act === 'prep') {
+      const lim = preparedLimit();
+      if (!prepRule.balls && lim != null && (c.prepared || []).filter(x => c.spells.includes(x)).length >= lim) {
+        toast(`已准备法术已达上限（${lim} 个）；请先取消准备其它法术。`);
+        return;
+      }
+      if (!c.spells.includes(n)) c.spells.push(n);
+      c.prepared = (c.prepared || []).concat(n);
+    }
+    save(); paintSel(); picker.paint();
+  });
+
+  picker.paint();
+  picker.initialDetail();
+  paintSel();
 }
 
 /* ---------- 步骤8 战技 ---------- */
@@ -964,47 +996,90 @@ function renderManeuvers() {
   stage().insertAdjacentHTML('beforeend', `<p class="hint" style="margin-top:0">流派入门需要对应专长（如"游龙流及门弟子"），可在专长步骤选择。散人流为特殊流派（习得其它流派战技）。</p>`);
   const cnt = el('div', 'skill-count');
   stage().appendChild(cnt);
-  const list = el('div');
-  stage().appendChild(list);
-  const paint = () => {
+  const selBox = el('div', 'sel-box');
+  stage().appendChild(selBox);
+  const pk = el('div', 'pk-car');
+  const pkToolbar = el('div', 'pk-toolbar');
+  const pkChips = el('div', 'pk-chips');
+  const pkList = el('div', 'pk-list');
+  const pkDetail = el('div', 'pk-detail');
+  const pkPager = el('div', 'pk-pager');
+  pkPager.hidden = true;
+  pk.appendChild(pkToolbar);
+  pk.appendChild(pkChips);
+  pk.appendChild(pkList);
+  pk.appendChild(pkDetail);
+  pk.appendChild(pkPager);
+  stage().appendChild(pk);
+
+  const MLEVELS = [...new Set(DATA.maneuvers.map(m => m.level))].sort((a, b) => a.localeCompare(b));
+  const MTYPES = [...new Set(DATA.maneuvers.map(m => m.type))].sort((a, b) => a.localeCompare(b));
+
+  const picker = Picker.create({
+    data: () => c.maneuverStyle
+      ? DATA.maneuvers.filter(m => m.style === c.maneuverStyle)
+      : DATA.maneuvers,
+    selKey: 'name',
+    pageSize: 100,
+    placeholder: '搜索战技名或描述…',
+    emptyText: '没有匹配的战技。',
+    chips: [
+      { key: 'level', label: '级别', items: MLEVELS },
+      { key: 'type', label: '类型', items: MTYPES },
+    ],
+    hay: (m) => m.name + ' ' + (m.text || ''),
+    containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
+    itemHtml: (m) => {
+      const sel = c.maneuvers.includes(m.name);
+      return `<div class="pk-i-name">${esc(m.name)}</div>
+        <div class="pk-i-sub">${esc(m.style)} · ${esc(m.level)} · ${esc(m.type)}</div>
+        <div class="pk-i-acts">
+          <button type="button" class="nav-btn pk-act" data-name="${esc(m.name)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
+        </div>`;
+    },
+    detailHtml: (m) => `<div class="pk-d-name">${esc(m.name)}</div>
+      <div class="pk-d-sub">${esc(m.style)} · ${esc(m.level)} · ${esc(m.type)}</div>
+      ${m.text ? `<div class="pk-d-text">${esc(m.text)}</div>` : '<p class="pk-muted">规则书未收录该战技的独立详述。</p>'}
+      <a class="pk-d-link" href="${esc(m.url)}" target="_blank">📖 规则书原文（${esc(m.style)}）→</a>`,
+  });
+
+  const paintSel = () => {
     cnt.innerHTML = `已选战技 <b>${c.maneuvers.length}</b> 个。卓越骰数量与准备战技数按流派规则（如角色卡"战技"栏）。`;
-    list.innerHTML = '';
-    const st = c.maneuverStyle;
-    const items = st ? DATA.maneuvers.filter(m => m.style === st) : DATA.maneuvers;
-    const groups = {};
-    for (const m of items) {
-      const key = m.level + '·' + m.type;
-      (groups[key] = groups[key] || []).push(m);
-    }
-    for (const key of Object.keys(groups).sort((a, b) => a.localeCompare(b))) {
-      const sec = el('div');
-      sec.style.marginBottom = '10px';
-      sec.innerHTML = `<h4 style="margin:8px 0 4px;color:var(--acc)">${esc(key)}</h4>`;
-      for (const m of groups[key]) {
-        const sel = c.maneuvers.includes(m.name);
-        const item = el('div', 'feat-item' + (sel ? ' sel' : ''));
-        item.innerHTML = `<div class="fi-head">
-            <span class="fi-name">${esc(m.name)}</span>
-            <span class="fi-cat">${esc(m.style)}</span>
-            <button type="button" class="nav-btn" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
-          </div>`;
-        item.querySelector('button').addEventListener('click', () => {
-          if (sel) c.maneuvers = c.maneuvers.filter(x => x !== m.name);
-          else c.maneuvers.push(m.name);
-          save(); paint();
-        });
-        sec.appendChild(item);
-      }
-      list.appendChild(sec);
+    if (c.maneuvers.length) {
+      const rows = c.maneuvers.map(n => {
+        const m = DATA.maneuvers.find(x => x.name === n);
+        return `<span class="sel-chip" data-f="${esc(n)}">${esc(n)}${m ? `（${esc(m.style)} ${esc(m.level)}·${esc(m.type)}）` : ''} ✕</span>`;
+      }).join('');
+      selBox.innerHTML = `<div class="sel-box-title">已选战技（<b>${c.maneuvers.length}</b> 个）：</div>
+        <div class="sel-chips">${rows}</div>`;
+      selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
+        c.maneuvers = c.maneuvers.filter(x => x !== b.dataset.f);
+        save(); paintSel(); picker.paint();
+      }));
+    } else {
+      selBox.innerHTML = `<div class="sel-box-title">已选战技：暂无</div>`;
     }
   };
+
+  pkList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pk-act');
+    if (!btn) return;
+    const n = btn.dataset.name;
+    if (c.maneuvers.includes(n)) c.maneuvers = c.maneuvers.filter(x => x !== n);
+    else c.maneuvers.push(n);
+    save(); paintSel(); picker.paint();
+  });
+
   seg.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-s]');
     if (!b) return;
     c.maneuverStyle = b.dataset.s;
-    save(); paint();
+    save(); picker.paint(); paintSel();
   });
-  paint();
+
+  picker.paint();
+  picker.initialDetail();
+  paintSel();
 }
 
 /* ---------- 步骤9 程序（赛博格） ---------- */
@@ -1023,37 +1098,89 @@ function renderPrograms() {
   stage().insertAdjacentHTML('beforeend', `<p class="hint" style="margin-top:0">最高可掌握协议层级与准备程序数量见赛博格职业表。阿尔法为初始层级。</p>`);
   const cnt = el('div', 'skill-count');
   stage().appendChild(cnt);
-  const list = el('div');
-  stage().appendChild(list);
-  const paint = () => {
+  const selBox = el('div', 'sel-box');
+  stage().appendChild(selBox);
+  const pk = el('div', 'pk-car');
+  const pkToolbar = el('div', 'pk-toolbar');
+  const pkChips = el('div', 'pk-chips');
+  const pkList = el('div', 'pk-list');
+  const pkDetail = el('div', 'pk-detail');
+  const pkPager = el('div', 'pk-pager');
+  pkPager.hidden = true;
+  pk.appendChild(pkToolbar);
+  pk.appendChild(pkChips);
+  pk.appendChild(pkList);
+  pk.appendChild(pkDetail);
+  pk.appendChild(pkPager);
+  stage().appendChild(pk);
+
+  const MODULES = [...new Set(DATA.programs.map(x => x.module).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const picker = Picker.create({
+    data: () => DATA.programs.filter(x => x.protocol === (c.programProtocol || '阿尔法')),
+    selKey: 'name',
+    pageSize: 100,
+    placeholder: '搜索程序名或效果…',
+    emptyText: '没有匹配的程序。',
+    chips: [{ key: 'module', label: '模块', items: MODULES }],
+    hay: (p) => p.name + ' ' + (p.text || ''),
+    containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
+    itemHtml: (p) => {
+      const sel = c.programs.includes(p.name);
+      return `<div class="pk-i-name">${esc(p.name)}${p.focus ? ' <span class="pk-tag pk-tag-focus">专注</span>' : ''}</div>
+        <div class="pk-i-sub">${esc(p.protocol)} · ${esc(p.module || '无模块')} · ${esc(p.act || '')}</div>
+        <div class="pk-i-acts">
+          <button type="button" class="nav-btn pk-act" data-name="${esc(p.name)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
+        </div>`;
+    },
+    detailHtml: (p) => `<div class="pk-d-name">${esc(p.name)}</div>
+      <div class="pk-d-sub">${esc(p.protocol)}协议</div>
+      <div class="pk-d-fields">
+        <div class="f"><span class="k">所需模块</span><span class="v">${esc(p.module || '无')}</span></div>
+        <div class="f"><span class="k">激活时间</span><span class="v">${esc(p.act || '—')}</span></div>
+        <div class="f"><span class="k">需要专注</span><span class="v">${p.focus ? '是' : '否'}</span></div>
+      </div>
+      ${p.text ? `<div class="pk-d-text">${esc(p.text)}</div>` : ''}
+      <a class="pk-d-link" href="${esc(p.url)}" target="_blank">📖 规则书原文（${esc(p.protocol)}协议）→</a>`,
+  });
+
+  const paintSel = () => {
     cnt.innerHTML = `已选程序 <b>${c.programs.length}</b> 个。`;
-    list.innerHTML = '';
-    const p = c.programProtocol || '阿尔法';
-    const items = DATA.programs.filter(x => x.protocol === p);
-    for (const m of items) {
-      const sel = c.programs.includes(m.name);
-      const item = el('div', 'feat-item' + (sel ? ' sel' : ''));
-      item.innerHTML = `<div class="fi-head">
-          <span class="fi-name">${esc(m.name)}</span>
-          <span class="fi-cat">${esc(m.module || '无模块')} · ${esc(m.act || '')}</span>
-          <button type="button" class="nav-btn" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
-        </div>
-        ${m.text ? `<div class="fi-text">${esc(m.text.slice(0, 120))}</div>` : ''}`;
-      item.querySelector('button').addEventListener('click', () => {
-        if (sel) c.programs = c.programs.filter(x => x !== m.name);
-        else c.programs.push(m.name);
-        save(); paint();
-      });
-      list.appendChild(item);
+    if (c.programs.length) {
+      const rows = c.programs.map(n => {
+        const p = DATA.programs.find(x => x.name === n);
+        return `<span class="sel-chip" data-f="${esc(n)}">${esc(n)}${p ? `（${esc(p.protocol)} ${esc(p.module || '')}）` : ''} ✕</span>`;
+      }).join('');
+      selBox.innerHTML = `<div class="sel-box-title">已选程序（<b>${c.programs.length}</b> 个）：</div>
+        <div class="sel-chips">${rows}</div>`;
+      selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
+        c.programs = c.programs.filter(x => x !== b.dataset.f);
+        save(); paintSel(); picker.paint();
+      }));
+    } else {
+      selBox.innerHTML = `<div class="sel-box-title">已选程序：暂无</div>`;
     }
   };
+
+  pkList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pk-act');
+    if (!btn) return;
+    const n = btn.dataset.name;
+    if (c.programs.includes(n)) c.programs = c.programs.filter(x => x !== n);
+    else c.programs.push(n);
+    save(); paintSel(); picker.paint();
+  });
+
   seg.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-p]');
     if (!b) return;
     c.programProtocol = b.dataset.p;
-    save(); paint();
+    save(); picker.paint(); paintSel();
   });
-  paint();
+
+  picker.paint();
+  picker.initialDetail();
+  paintSel();
 }
 
 /* ---------- 步骤10 角色卡 ---------- */
