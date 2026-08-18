@@ -18,6 +18,55 @@ const el = (tag, cls, html) => {
   return e;
 };
 
+/* 多选筛选 chips：items 为候选值，labelFn 渲染标签，selected 为数组（空数组=不限）。
+   同组内为并集（命中任一即可），组间为交集（与其它筛选同时生效）。 */
+function chipGroup(items, label, labelFn, selected, onChange) {
+  const g = el('div', 'chip-group');
+  if (label) {
+    const lab = el('span', 'chip-label', esc(label) + ' ');
+    const clr = el('button', 'chip-clear', '清除');
+    clr.type = 'button';
+    clr.title = '清除该组筛选';
+    clr.onclick = () => { selected.length = 0; onChange(); };
+    lab.appendChild(clr);
+    g.appendChild(lab);
+  }
+  const row = el('div', 'chip-row');
+  for (const v of items) {
+    const b = el('button', 'chip' + (selected.includes(v) ? ' on' : ''), esc(labelFn ? labelFn(v) : String(v)));
+    b.type = 'button';
+    b.title = '可多选，再次点击取消';
+    b.onclick = () => {
+      const i = selected.indexOf(v);
+      if (i >= 0) selected.splice(i, 1); else selected.push(v);
+      onChange();
+    };
+    row.appendChild(b);
+  }
+  g.appendChild(row);
+  return g;
+}
+function renderChips() {
+  const holder = $('#chips');
+  if (!holder) return;
+  holder.innerHTML = '';
+  const f = state.spell;
+  if (state.tab === 'spells') {
+    holder.appendChild(chipGroup(LEVELS, '环位', lvLabel, f.levels, () => { f.page = 1; renderSpellList(true); }));
+    holder.appendChild(chipGroup(SCHOOLS, '学派', null, f.schools, () => { f.page = 1; renderSpellList(true); }));
+    holder.appendChild(chipGroup(CLASSES, '职业', null, f.clses, () => { f.page = 1; renderSpellList(true); }));
+  } else if (state.tab === 'maneuvers') {
+    holder.appendChild(chipGroup(STYLES, '流派', null, state.mv.styles, () => renderMvList()));
+    holder.appendChild(chipGroup(MLEVELS, '级别', null, state.mv.levels, () => renderMvList()));
+    holder.appendChild(chipGroup(MTYPES, '类型', null, state.mv.types, () => renderMvList()));
+  } else if (state.tab === 'programs') {
+    holder.appendChild(chipGroup(PROTOCOLS, '协议层级', null, state.pg.protocols, () => renderPgList()));
+    holder.appendChild(chipGroup(MODULES, '模块', null, state.pg.modules, () => renderPgList()));
+  } else if (state.tab === 'magic-items') {
+    holder.appendChild(chipGroup(MI_SUBS, '分类', null, state.mi.subs, () => { state.mi.page = 1; renderMiList(true); }));
+  }
+}
+
 const LEVELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const LEVEL_LABEL = { 0: '戏法', 10: '传奇' };
 const lvLabel = (l) => LEVEL_LABEL[l] || l + ' 环';
@@ -85,10 +134,10 @@ MI.forEach(i => {
 
 const state = {
   tab: 'spells',
-  spell: { kw: '', level: '', tags: '', tagsMode: 'and', cls: '', ritual: '', focus: '', page: 1, sel: null },
-  mv: { kw: '', style: '', level: '', type: '', sel: null },
-  pg: { kw: '', protocol: '', module: '', focus: '', sel: null },
-  mi: { kw: '', sub: '', attune: '', artifact: '', pr: '', page: 1, sel: null },
+  spell: { kw: '', levels: [], schools: [], clses: [], tags: '', tagsMode: 'and', ritual: '', focus: '', page: 1, sel: null },
+  mv: { kw: '', styles: [], levels: [], types: [], sel: null },
+  pg: { kw: '', protocols: [], modules: [], focus: '', sel: null },
+  mi: { kw: '', subs: [], attune: '', artifact: '', pr: '', page: 1, sel: null },
 };
 const PAGE_SIZE = 100;
 
@@ -102,12 +151,13 @@ function spellFiltered() {
   const kw = f.kw.trim();
   const tags = f.tags.trim().split(/[\s,，、;；]+/).map(t => t.trim()).filter(Boolean);
   return DATA.spells.filter(s => {
-    if (f.level && String(s.level) !== f.level) return false;
+    if (f.levels.length && !f.levels.includes(String(s.level))) return false;
+    if (f.schools.length && !f.schools.includes(s.school)) return false;
+    if (f.clses.length && !f.clses.some(c => (SPELL_JOBS[s.name] || []).includes(c))) return false;
     if (tags.length) {
       const ok = tags.map(t => tagMatches(s, t));
       if (f.tagsMode === 'or' ? !ok.some(Boolean) : !ok.every(Boolean)) return false;
     }
-    if (f.cls && !(SPELL_JOBS[s.name] || []).includes(f.cls)) return false;
     if (f.ritual === '1' && !s.ritual) return false;
     if (f.ritual === '0' && s.ritual) return false;
     if (f.focus === '1' && !s.focus) return false;
@@ -176,15 +226,11 @@ function spellToolbar() {
   const f = state.spell;
   const tb = $('#toolbar');
   tb.innerHTML = `<input type="search" id="sp-kw" placeholder="搜索法术名或描述…" value="${esc(f.kw)}">
-    <select id="sp-level"><option value="">全环位</option>
-      ${LEVELS.map(l => `<option value="${l}"${f.level === l ? ' selected' : ''}>${lvLabel(l)}</option>`).join('')}</select>
     <input type="search" id="sp-tags" placeholder="标签：如 塑能 火焰（空格分隔）" value="${esc(f.tags)}" title="标签式搜索：输入学派或关键词，多个标签按下方方式匹配">
     <select id="sp-tags-mode" title="多个标签的匹配方式">
       <option value="and"${f.tagsMode === 'and' ? ' selected' : ''}>交集（同时满足）</option>
       <option value="or"${f.tagsMode === 'or' ? ' selected' : ''}>并集（任一满足）</option>
     </select>
-    <select id="sp-cls"><option value="">全部职业</option>
-      ${CLASSES.map(c => `<option value="${esc(c)}"${f.cls === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
     <select id="sp-ritual"><option value="">仪式：全部</option>
       <option value="1"${f.ritual === '1' ? ' selected' : ''}>仅仪式法术</option>
       <option value="0"${f.ritual === '0' ? ' selected' : ''}>仅非仪式</option></select>
@@ -194,13 +240,12 @@ function spellToolbar() {
     <span class="count" id="spell-count"></span>`;
   const onInput = () => { f.kw = $('#sp-kw').value; f.page = 1; renderSpellList(true); };
   $('#sp-kw').addEventListener('input', onInput);
-  $('#sp-level').addEventListener('change', (e) => { f.level = e.target.value; f.page = 1; renderSpellList(true); });
   const onTags = () => { f.tags = $('#sp-tags').value; f.page = 1; renderSpellList(true); };
   $('#sp-tags').addEventListener('input', onTags);
   $('#sp-tags-mode').addEventListener('change', (e) => { f.tagsMode = e.target.value; f.page = 1; renderSpellList(true); });
-  $('#sp-cls').addEventListener('change', (e) => { f.cls = e.target.value; f.page = 1; renderSpellList(true); });
   $('#sp-ritual').addEventListener('change', (e) => { f.ritual = e.target.value; f.page = 1; renderSpellList(true); });
   $('#sp-focus').addEventListener('change', (e) => { f.focus = e.target.value; f.page = 1; renderSpellList(true); });
+  renderChips();
   renderSpellList(true);
   // 恢复上次选中的详情
   if (f.sel) {
@@ -216,9 +261,9 @@ function mvFiltered() {
   const f = state.mv;
   const kw = f.kw.trim();
   return DATA.maneuvers.filter(m => {
-    if (f.style && m.style !== f.style) return false;
-    if (f.level && m.level !== f.level) return false;
-    if (f.type && m.type !== f.type) return false;
+    if (f.styles.length && !f.styles.includes(m.style)) return false;
+    if (f.levels.length && !f.levels.includes(m.level)) return false;
+    if (f.types.length && !f.types.includes(m.type)) return false;
     if (kw && !(m.name.includes(kw) || (m.text || '').includes(kw))) return false;
     return true;
   });
@@ -252,17 +297,9 @@ function mvToolbar() {
   const f = state.mv;
   const tb = $('#toolbar');
   tb.innerHTML = `<input type="search" id="mv-kw" placeholder="搜索战技名或描述…" value="${esc(f.kw)}">
-    <select id="mv-style"><option value="">全流派</option>
-      ${STYLES.map(s => `<option value="${s}"${f.style === s ? ' selected' : ''}>${s}</option>`).join('')}</select>
-    <select id="mv-level"><option value="">全级别</option>
-      ${MLEVELS.map(l => `<option value="${l}"${f.level === l ? ' selected' : ''}>${l}</option>`).join('')}</select>
-    <select id="mv-type"><option value="">全类型</option>
-      ${MTYPES.map(t => `<option value="${t}"${f.type === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
     <span class="count" id="mv-count"></span>`;
   $('#mv-kw').addEventListener('input', (e) => { f.kw = e.target.value; renderMvList(); });
-  $('#mv-style').addEventListener('change', (e) => { f.style = e.target.value; renderMvList(); });
-  $('#mv-level').addEventListener('change', (e) => { f.level = e.target.value; renderMvList(); });
-  $('#mv-type').addEventListener('change', (e) => { f.type = e.target.value; renderMvList(); });
+  renderChips();
   renderMvList();
   if (f.sel) {
     const m = DATA.maneuvers.find(x => x.name === f.sel);
@@ -277,8 +314,8 @@ function pgFiltered() {
   const f = state.pg;
   const kw = f.kw.trim();
   return DATA.programs.filter(p => {
-    if (f.protocol && p.protocol !== f.protocol) return false;
-    if (f.module && p.module !== f.module) return false;
+    if (f.protocols.length && !f.protocols.includes(p.protocol)) return false;
+    if (f.modules.length && !f.modules.includes(p.module)) return false;
     if (f.focus === '1' && !p.focus) return false;
     if (f.focus === '0' && p.focus) return false;
     if (kw && !(p.name.includes(kw) || (p.text || '').includes(kw))) return false;
@@ -320,18 +357,13 @@ function pgToolbar() {
   const f = state.pg;
   const tb = $('#toolbar');
   tb.innerHTML = `<input type="search" id="pg-kw" placeholder="搜索程序名或效果…" value="${esc(f.kw)}">
-    <select id="pg-protocol"><option value="">全协议层级</option>
-      ${PROTOCOLS.map(p => `<option value="${p}"${f.protocol === p ? ' selected' : ''}>${p}</option>`).join('')}</select>
-    <select id="pg-module"><option value="">全模块</option>
-      ${MODULES.map(m => `<option value="${esc(m)}"${f.module === m ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select>
     <select id="pg-focus"><option value="">专注：全部</option>
       <option value="1"${f.focus === '1' ? ' selected' : ''}>需要专注</option>
       <option value="0"${f.focus === '0' ? ' selected' : ''}>不需专注</option></select>
     <span class="count" id="pg-count"></span>`;
   $('#pg-kw').addEventListener('input', (e) => { f.kw = e.target.value; renderPgList(); });
-  $('#pg-protocol').addEventListener('change', (e) => { f.protocol = e.target.value; renderPgList(); });
-  $('#pg-module').addEventListener('change', (e) => { f.module = e.target.value; renderPgList(); });
   $('#pg-focus').addEventListener('change', (e) => { f.focus = e.target.value; renderPgList(); });
+  renderChips();
   renderPgList();
   if (f.sel) {
     const p = DATA.programs.find(x => x.name === f.sel);
@@ -346,7 +378,7 @@ function miFiltered() {
   const f = state.mi;
   const kw = f.kw.trim().toLowerCase();
   return MI.filter(i => {
-    if (f.sub && i.sub !== f.sub) return false;
+    if (f.subs.length && !f.subs.includes(i.sub)) return false;
     if (f.attune === '1' && !i.attune) return false;
     if (f.attune === '0' && i.attune) return false;
     if (f.artifact === '1' && !i.artifact) return false;
@@ -426,8 +458,6 @@ function miToolbar() {
   const f = state.mi;
   const tb = $('#toolbar');
   tb.innerHTML = `<input type="search" id="mi-kw" placeholder="搜索物品名、类型、效果…" value="${esc(f.kw)}">
-    <select id="mi-sub"><option value="">全分类</option>
-      ${MI_SUBS.map(s => `<option value="${esc(s)}"${f.sub === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>
     <select id="mi-attune"><option value="">同调：全部</option>
       <option value="1"${f.attune === '1' ? ' selected' : ''}>需同调</option>
       <option value="0"${f.attune === '0' ? ' selected' : ''}>不需同调</option></select>
@@ -441,10 +471,10 @@ function miToolbar() {
     <span class="count" id="mi-count"></span>`;
   const onInput = () => { f.kw = $('#mi-kw').value; f.page = 1; renderMiList(true); };
   $('#mi-kw').addEventListener('input', onInput);
-  $('#mi-sub').addEventListener('change', (e) => { f.sub = e.target.value; f.page = 1; renderMiList(true); });
   $('#mi-attune').addEventListener('change', (e) => { f.attune = e.target.value; f.page = 1; renderMiList(true); });
   $('#mi-artifact').addEventListener('change', (e) => { f.artifact = e.target.value; f.page = 1; renderMiList(true); });
   $('#mi-pr').addEventListener('change', (e) => { f.pr = e.target.value; f.page = 1; renderMiList(true); });
+  renderChips();
   renderMiList(true);
   if (f.sel) {
     const i = MI.find(x => x.id === f.sel);

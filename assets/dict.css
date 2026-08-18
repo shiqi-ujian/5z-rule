@@ -59,6 +59,27 @@ input, select { font: inherit; color: inherit; }
 .toolbar .count { color: var(--sub); font-size: 13px; margin-left: auto; }
 .toolbar .count b { color: var(--acc); }
 
+/* 多选筛选 chips（环位/学派/职业/流派/分类等） */
+.chips {
+  max-width: 1280px; margin: 0 auto; padding: 8px 18px 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.chip-group { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.chip-label { color: var(--sub); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.chip-clear {
+  border: 0; background: none; color: var(--acc); font-size: 12px;
+  padding: 0 2px; cursor: pointer; text-decoration: underline;
+}
+.chip-clear:hover { color: var(--bad); }
+.chip-row { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  padding: 4px 12px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+  transition: all .12s;
+}
+.chip:hover { border-color: var(--acc); }
+.chip.on { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
+
 /* 主体：列表 + 详情 */
 .dict-body {
   max-width: 1280px; margin: 0 auto; padding: 12px 18px 40px;
@@ -167,6 +188,7 @@ input, select { font: inherit; color: inherit; }
   .toolbar input, .toolbar select, .pager button, .tab {
     background: #1e293b; color: #e2e8f0; border-color: #334155;
   }
+  .chip { background: #1e293b; color: #e2e8f0; }
   /* 下拉选项：显式配色，避免系统默认黑字黑底 */
   .toolbar select option, .pager select option { color: #e2e8f0; background: #1e293b; }
   input::placeholder { color: #64748b; }

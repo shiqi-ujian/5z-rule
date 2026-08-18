@@ -735,11 +735,23 @@ function renderFeats() {
   });
   const list = el('div');
   stage().appendChild(list);
+  // 已选专长面板：选择后即时可见，可点击 ✕ 移除
+  const selBox = el('div', 'sel-box');
+  stage().appendChild(selBox);
 
   const paint = () => {
     const max = featQuota();
     const base = featBaseQuota();
     quota.innerHTML = `本等级基础专长 <b>${base}</b> 个${c.extraFeats ? ` + 额外 <b>${c.extraFeats}</b>` : ''}，共 <b>${max}</b> 个，已选 <b>${c.feats.length}</b> 个。`;
+    selBox.innerHTML = c.feats.length
+      ? `<div class="sel-box-title">已选专长（<b>${c.feats.length}</b> 个）：</div>
+         <div class="sel-chips">${c.feats.map(fn =>
+           `<button type="button" class="sel-chip" data-f="${esc(fn)}">${esc(fn)} ✕</button>`).join('')}</div>`
+      : `<div class="sel-box-title">已选专长：暂无</div>`;
+    selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
+      c.feats = c.feats.filter(x => x !== b.dataset.f);
+      save(); paint();
+    }));
     const kw = ($('#feat-q', q) || {}).value || '';
     const cat = ($('#feat-cat', q) || {}).value || '';
     list.innerHTML = '';
@@ -780,6 +792,20 @@ function classSpellList() {
   const k = klass();
   if (!k) return null;
   return DATA['class-spells'].find(cs => cs.class === k.name) || null;
+}
+/* 已选法术按环阶汇总（戏法单列）：如「戏法 2、1 环 3」 */
+function spellLevelSummary() {
+  const c = state.char;
+  const lvC = {};
+  for (const n of (c.spells || [])) {
+    const sp = DATA.spells.find(s => s.name === n);
+    const lv = sp ? (sp.level === 0 ? '戏法' : sp.level + ' 环') : '未知';
+    lvC[lv] = (lvC[lv] || 0) + 1;
+  }
+  return Object.entries(lvC)
+    .sort((a, b) => a[0] === '戏法' ? -1 : b[0] === '戏法' ? 1 : parseInt(a[0], 10) - parseInt(b[0], 10))
+    .map(([l, n]) => `${l} ${n}`)
+    .join('、');
 }
 function renderSpells() {
   const c = state.char;
@@ -837,10 +863,14 @@ function renderSpells() {
   stage().appendChild(cnt);
   const list = el('div');
   stage().appendChild(list);
+  // 已选法术面板：按环阶分组显示所选法术，可点击 ✕ 移除
+  const selBox = el('div', 'sel-box');
+  stage().appendChild(selBox);
 
   const paint = () => {
     const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
-    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${total} 个可选）${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
+    const lvSum = spellLevelSummary();
+    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${total} 个可选）${lvSum ? `：${lvSum}` : ''}${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
     const kw = ($('#spell-q', q) || {}).value || '';
     const lv = ($('#spell-level', q) || {}).value || '';
     list.innerHTML = '';
@@ -892,6 +922,30 @@ function renderSpells() {
         sec.appendChild(item);
       }
       list.appendChild(sec);
+    }
+    // 已选法术面板：按环阶分组，点击 chip 移除（同时取消准备）
+    if (c.spells.length) {
+      const groups = {};
+      for (const n of c.spells) {
+        const sp = DATA.spells.find(s => s.name === n);
+        const lv = sp ? (sp.level === 0 ? '戏法' : sp.level + ' 环') : '未知';
+        (groups[lv] = groups[lv] || []).push(n);
+      }
+      const order = Object.keys(groups).sort((a, b) => a === '戏法' ? -1 : b === '戏法' ? 1 : parseInt(a, 10) - parseInt(b, 10));
+      selBox.innerHTML = `<div class="sel-box-title">已选法术（<b>${c.spells.length}</b> 个）：</div>
+        <div class="sel-groups">` + order.map(lv =>
+          `<span class="sel-grp"><b class="sel-grp-lv">${esc(lv)}</b>` +
+          groups[lv].map(n =>
+            `<button type="button" class="sel-chip${(c.prepared || []).includes(n) ? ' prep' : ''}" data-f="${esc(n)}">${esc(n)}${(c.prepared || []).includes(n) ? ' ✓' : ''} ✕</button>`).join('') +
+          `</span>`).join('') + `</div>`;
+      selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
+        const n = b.dataset.f;
+        c.spells = c.spells.filter(x => x !== n);
+        c.prepared = (c.prepared || []).filter(x => x !== n);
+        save(); paint();
+      }));
+    } else {
+      selBox.innerHTML = `<div class="sel-box-title">已选法术：暂无</div>`;
     }
   };
   q.addEventListener('input', paint);
@@ -1263,7 +1317,8 @@ function renderLive() {
   h += `<div class="live-row"><span>豁免</span><b>${ATTRS.map(a => a + (saveMod(a) >= 0 ? '+' : '') + saveMod(a)).join(' ')}</b></div>`;
   h += `<div class="live-row"><span>技能熟练</span><b>${skillChosen()} / ${skillQuota()}</b></div>`;
   h += `<div class="live-row"><span>专长</span><b>${c.feats.length} / ${featQuota()}</b></div>`;
-  h += `<div class="live-row"><span>法术</span><b>${c.spells.length}${preparedRule() ? '（已准备 ' + (c.prepared || []).filter(x => c.spells.includes(x)).length + '）' : ''}</b></div>`;
+  const spSum = spellLevelSummary();
+  h += `<div class="live-row"><span>法术</span><b>${c.spells.length}${spSum ? '（' + spSum + '）' : ''}${preparedRule() ? '（已准备 ' + (c.prepared || []).filter(x => c.spells.includes(x)).length + '）' : ''}</b></div>`;
   h += `<div class="live-row"><span>战技</span><b>${c.maneuvers.length}${c.maneuverStyle ? '（' + esc(c.maneuverStyle) + '）' : ''}</b></div>`;
   h += `<div class="live-row"><span>程序</span><b>${c.programs.length}</b></div>`;
   h += `</div>`;

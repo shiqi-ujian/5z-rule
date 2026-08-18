@@ -249,6 +249,27 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   background: #f0f5ff; border: 1px solid #c9daf5; border-radius: 10px;
   padding: 10px 14px; margin: 0 0 12px; font-size: 13.5px; line-height: 1.7; color: #2b4a7a;
 }
+
+/* 已选项目面板（专长/法术步骤）：选择后即时可见所选内容，chip 点击移除 */
+.sel-box {
+  border: 1px solid #c9daf5; background: #f0f5ff;
+  border-radius: 10px; padding: 10px 14px; margin: 0 0 14px;
+  font-size: 13px;
+}
+.sel-box-title { font-weight: 600; margin-bottom: 6px; }
+.sel-box-title b { color: var(--acc); }
+.sel-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sel-groups { display: flex; flex-direction: column; gap: 5px; }
+.sel-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.sel-grp-lv { color: var(--sub); font-size: 12px; min-width: 46px; font-weight: 600; }
+.sel-chip {
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  padding: 3px 10px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+  transition: all .12s;
+}
+.sel-chip:hover { border-color: var(--bad); color: var(--bad); }
+.sel-chip.prep { border-color: var(--good); background: #dcfce7; color: #166534; }
+.sel-chip.prep:hover { border-color: var(--bad); color: var(--bad); background: #fee2e2; }
 .train-opts { display: grid; gap: 8px; margin-top: 8px; }
 .train-opt {
   display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px;
@@ -269,6 +290,9 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   .train-opt { background: #1e293b; }
   .train-opt.sel { border-color: var(--acc); background: #1a2f4d; }
   .info-grid input[type=text] { background: #1e293b; color: #e2e8f0; }
+  .sel-box { background: #16233a; border-color: #2c4a7a; }
+  .sel-chip { background: #1e293b; }
+  .sel-chip.prep { background: #10301f; color: #6ee7b7; border-color: #166534; }
 }
 .sub-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .chip {
