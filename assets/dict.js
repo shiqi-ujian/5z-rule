@@ -154,8 +154,8 @@ const spellPicker = Picker.create({
     ${s.text ? `<div class="pk-i-brief">${esc(s.text.split('\n').slice(1).join(' ').slice(0, 60))}</div>` : ''}`,
   detailHtml: (s) => {
     const jobs = (SPELL_JOBS[s.name] || []).slice();
+    // 环阶/学派已显示在副标题（pk-d-sub），详情字段不再重复
     const fields = [
-      ['环阶', lvLabel(s.level)], ['学派', s.school || '—'],
       ['仪式', s.ritual ? '是（可作为仪式施展）' : '否'],
       ['施法时间', s.castTime || '—'], ['施法距离', s.range || '—'],
       ['法术目标', s.target || '—'], ['法术成分', s.components || '—'],
@@ -241,19 +241,26 @@ const miPicker = Picker.create({
   pageSize: 100,
   placeholder: '搜索物品名、类型、效果…',
   emptyText: '没有匹配的魔法物品。',
-  chips: [{ key: 'sub', label: '分类', items: MI_SUBS }],
+  chips: [{ key: 'sub', label: '分类', items: MI_SUBS },
+    {
+      key: 'pr', label: '价格', items: [...MI_TIERS.map(t => t.k), 'nonsell', 'none'],
+      labelFn: (k) => {
+        const t = MI_TIERS.find(x => x.k === k);
+        return t ? t.label : (k === 'nonsell' ? '非卖品' : '特别');
+      },
+      match: (i, k) => k === 'nonsell' ? !!i.nonsell
+        : k === 'none' ? !(i.nonsell || i.pmin != null)
+        : (i.tiers || []).includes(k),
+    }],
   hay: (i) => i.hay || '',
   filter: (i, f) => {
     if (f.attune === '1' && !i.attune) return false;
     if (f.attune === '0' && i.attune) return false;
     if (f.artifact === '1' && !i.artifact) return false;
     if (f.artifact === '0' && i.artifact) return false;
-    if (f.pr === 'nonsell' && !i.nonsell) return false;
-    if (f.pr === 'none' && (i.nonsell || i.pmin != null)) return false;
-    if (f.pr && f.pr !== 'nonsell' && f.pr !== 'none' && !(i.tiers || []).includes(f.pr)) return false;
     return true;
   },
-  extraState: { attune: '', artifact: '', pr: '' },
+  extraState: { attune: '', artifact: '' },
   extraToolbar(tb, f, paint) {
     const wrap = el('span', 'pk-toolbar-extras');
     wrap.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
@@ -262,25 +269,21 @@ const miPicker = Picker.create({
         <option value="0"${f.attune === '0' ? ' selected' : ''}>不需同调</option></select>
       <select class="pk-artifact"><option value="">神器：全部</option>
         <option value="1"${f.artifact === '1' ? ' selected' : ''}>仅神器</option>
-        <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>
-      <select class="pk-pr"><option value="">价格：全部</option>
-        ${MI_TIERS.map(t => `<option value="${t.k}"${f.pr === t.k ? ' selected' : ''}>${t.label}</option>`).join('')}
-        <option value="nonsell"${f.pr === 'nonsell' ? ' selected' : ''}>价格：非卖品</option>
-        <option value="none"${f.pr === 'none' ? ' selected' : ''}>价格：特别</option></select>`;
+        <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>`;
     tb.appendChild(wrap);
     const bind = (sel2, key) => {
       $(sel2, wrap).addEventListener('change', (e) => { f[key] = e.target.value; f.page = 1; paint(true); });
     };
     bind('.pk-attune', 'attune');
     bind('.pk-artifact', 'artifact');
-    bind('.pk-pr', 'pr');
   },
   itemHtml: (i) => `<div class="pk-i-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="pk-tag pk-tag-attune">同调</span>' : ''}</div>
     <div class="pk-i-sub">${esc(i.sub)} · ${esc(i.attr || '未收录类型行')}${i.span ? ` · ${esc(i.span)}` : ''}</div>
     ${i.text ? `<div class="pk-i-brief">${esc(i.text.split('\n')[0].slice(0, 60))}</div>` : ''}`,
   detailHtml: (i) => {
+    // 分类已显示在副标题（pk-d-sub），详情字段不再重复
     const fields = [
-      ['分类', i.sub], ['类型行', i.attr || '—'],
+      ['类型行', i.attr || '—'],
       ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
       ['价格', i.price || (i.attr && /价格见下?表/.test(i.attr) ? '价格见下表' : '—')],
       ['价格区间', i.span || (i.price === '非卖品' ? '非卖品' : '—')],

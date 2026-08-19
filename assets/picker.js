@@ -121,6 +121,8 @@ function create(opts) {
   }
 
   function init() {
+    // 详情容器统一补 pk-detail 类，确保 .pk-detail 样式（pre-wrap 等）生效
+    if (C.detail && !C.detail.classList.contains('pk-detail')) C.detail.classList.add('pk-detail');
     // 工具栏（仅构建一次，避免每次键入重绘导致失焦）
     if (C.toolbar && !C.toolbar._pkReady) {
       const q = el('div', 'pk-toolbar-inner');

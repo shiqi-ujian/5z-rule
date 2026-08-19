@@ -2316,6 +2316,9 @@ font-size:12.0000pt;mso-font-kerning:1.0000pt;" ><o:p></o:p></span></p></div><!-
       var m = marks[i];
       if (m.parentNode) m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
     }
+    // 合并相邻文本节点：高亮清除后原本连续的词组被拆成多个 text node（如"掷"+"骰"），
+    // 不合并会导致之后再也搜不到该词组（如搜过"掷"后搜"掷骰"永远 0 命中）。
+    document.body.normalize();
     state.marks = []; state.index = -1;
     reportCount();
   }

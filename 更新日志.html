@@ -35,6 +35,36 @@
 <p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
 
   <section class="cl-entry">
+    <h2>2026-08-19 · v1.59</h2>
+    <p class="cl-release">反馈批处理（问题来源：收集表 3 条修复 + 1 条待定，20260819 批次）。</p>
+    <h3>✅ 已修复（3）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260819-125600-ead5</span>
+      <b>修复页内搜索无法搜索二字词组</b>
+      <span class="cl-page">（页内搜索（所有规则书页面））</span>
+      <div class="cl-detail">根因：先用短词搜索（如「掷」）后，词组（如「掷骰」）中的字被高亮标记拆成独立文本节点，清除高亮时不合并，导致该词组之后永远搜不到。修复：清除高亮后合并相邻文本节点（normalize），词组恢复连续可搜。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260819-084200-119e</span>
+      <b>魔法物品价格筛选改为多选</b>
+      <span class="cl-page">（dict.html 魔法物品词典）</span>
+      <div class="cl-detail">价格筛选由单选下拉改为多选按钮组（与分类一致）：可同时勾选多个价格档位（如 &gt;5万gp + 非卖品），组内并集、组间叠加，每组带「清除」一键还原。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260819-084100-69d0</span>
+      <b>词条详情排版修复（换行 + 去重）</b>
+      <span class="cl-page">（dict.html 词典）</span>
+      <div class="cl-detail">① 详情描述恢复换行显示（词典页详情容器缺失 pre-wrap 样式类导致所有换行被折叠，已统一补上）；② 法术详情的「环阶/学派」、物品详情的「分类」在副标题已显示，不再在详情字段中重复出现。</div>
+    </li></ul>
+    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
+    <li class="cl-pend">
+      <span class="cl-id">#20260819-084500-558a</span>
+      <b>角色卡 Excel 导出模板过时</b>
+      <div class="cl-detail">⏳ 当前导出基于官方旧版 Excel 模板（职业基础血量、缺少赛博格职业、部分子职数据未同步）。更新官方模板需管理者配合或重新设计自研导出模板，属于较大改动，待确认优先级后实现。</div>
+    </li></ul>
+  </section>
+
+  <section class="cl-entry">
     <h2>2026-08-18 · v1.59</h2>
     <p class="cl-release">车卡器反馈批处理（问题来源：收集表 6 条，20260818 批次）。</p>
     <h3>✅ 已修复（4）</h3><ul>
