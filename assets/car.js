@@ -268,7 +268,6 @@ async function initData() {
   // 兜底：动态注入数据脚本（覆盖旧版 car.html 未引用数据文件的缓存场景）
   try {
     await loadScript('assets/card-data.js');
-    await loadScript('assets/car-tpl.js');
     if (window.__CAR_DATA__ && window.__CAR_DATA__.rules) {
       DATA = window.__CAR_DATA__;
       return;
@@ -1264,7 +1263,7 @@ function renderSheet() {
   sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>技能（${skillChosen()} / ${skillQuota()}）</h3>
     <table><tr><th>分类</th><th>技能</th><th>总值</th><th>状态</th></tr>${skillRows}</table>
     <p class="muted" style="margin-top:6px">注意：规则书技能为 17 项（感知系：医药/洞悉/察觉/求生/交涉）。
-    官方 Excel 模板为 19 行（含驯兽/游说/欺瞒），导出时将自动映射：求生→生存、交涉→游说，模板独有项留空。</p>
+    Excel 导出为自研模板，直接采用规则书 17 项，无需映射。</p>
   </div>`);
 
   // —— 专长 ——
@@ -1452,58 +1451,87 @@ function renderLive() {
   live.innerHTML = h;
 }
 
-/* ---------- Excel 导出（基于官方模板 dnd5z人物卡模板改.xlsx 填值） ---------- */
-// 模板中的输入格坐标（浅白/浅蓝格）；公式格（浅绿）不填，Excel 打开自动重算
-// 标签在 B/R 列，输入格在 C/S 列（sheet1 角色页）
-const TPL = {
-  sheet1: {
-    C3: () => state.char.name, C4: () => state.char.player,
-    C6: () => traitVal(/^生物类型/), C7: () => (race() || {}).name || '', C8: () => '',
-    S3: () => state.char.bgName, S4: () => state.char.alignment, S5: () => state.char.faith,
-    S6: () => '', S7: () => '', S8: () => '', S9: () => '',
-    S10: () => skillSummary(), S11: () => langSummary(), S12: () => state.char.bgText,
-  },
-  sheet2: {
-    D5: () => finalAttr('力量'), D7: () => finalAttr('敏捷'), D9: () => finalAttr('体质'),
-    D11: () => finalAttr('智力'), D13: () => finalAttr('感知'),
-    F5: () => saveCell('力量'), F7: () => saveCell('敏捷'), F9: () => saveCell('体质'),
-    F11: () => saveCell('智力'), F13: () => saveCell('感知'),
-    K7: () => (klass() || {}).name || '', R7: () => state.char.subclass, W7: () => state.char.level,
-    I20: () => ({ naked: '无盔甲', light: '镶钉皮甲', medium: '半身板甲', heavy: '板甲',
-      mage: '法师护甲', monk: '武僧无甲防御', barb: '狂战士无甲防御' }[state.char.armorType] || '无盔甲'),
-    I21: () => state.char.shield ? '有盾牌' : '无盾牌',
-    I30: () => speedValue(),
-    AH5: () => traitVal(/^生物类型/), AH6: () => traitVal(/^属性值/),
-    AH7: () => traitVal(/^体型/), AH14: () => traitVal(/^语言/),
-    // 技能行映射：模板 19 行，规则书 17 项（求生→生存、交涉→游说；驯兽/欺瞒模板独有留空）
-    D18: () => skillCell('运动'), D19: () => skillCell('威吓'),
-    D21: () => skillCell('体操'), D22: () => skillCell('巧手'), D23: () => skillCell('隐匿'),
-    D25: () => skillCell('奥秘'), D26: () => skillCell('灵能'), D27: () => skillCell('宗教'),
-    D28: () => skillCell('历史'), D29: () => skillCell('自然'), D30: () => skillCell('调查'),
-    D31: () => skillCell('表演'),
-    D33: () => skillCell('察觉'), D34: () => skillCell('洞悉'), D35: () => skillCell('医药'),
-    D36: () => skillCell('生存'), D38: () => skillCell('游说'),
-  },
+/* ---------- Excel 导出（自研模板：纯 JS 从零生成，数据全部来自规则书 card-data，永远同步） ----------
+ * 不再依赖官方模板 dnd5z人物卡模板改.xlsx：
+ *  - 职业基础血量按规则书生命骰计算（与网页角色卡 hpMax() 同源）
+ *  - 包含全部职业（含赛博格 D12）与子职数据
+ *  - 新增「程序」表（赛博格专属，官方模板没有）
+ *  - 技能直接用规则书 17 项，无需模板映射
+ * 布局：角色卡 / 法术 / 战技 / 程序 / 装备与背景
+ */
+// 单元格样式索引（对应 makeStylesXml 中 cellXfs 顺序）
+const SX = {
+  def: 0,     // 默认
+  title: 1,   // 大标题（深蓝底白字）
+  section: 2, // 区块标题（浅蓝底粗体）
+  head: 3,    // 表头（灰底粗体居中）
+  label: 4,   // 标签（浅灰底）
+  value: 5,   // 值（白底左边框）
+  num: 6,     // 数值（居中）
+  text: 7,    // 长文本（自动换行）
+  note: 8,    // 小注（灰色）
 };
-// 专长：行 18/19=1级、20=3级、21=6级、22=9级、23=12级、24=15级、25=18级
-const FEAT_ROWS = [18, 19, 20, 21, 22, 23, 24, 25];
-const SAVE_ROWS = { 力量: 'F5', 敏捷: 'F7', 体质: 'F9', 智力: 'F11', 感知: 'F13' };
+function xlsxColName(n) {
+  let s = '';
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26 | 0; }
+  return s;
+}
+// sheet 构建器：set(r,c,v,style) 后 xml() 序列化。r/c 从 1 起。
+function makeSheet(widths) {
+  const cells = {};    // 'r,c' -> {v, s, t}
+  const merges = [];   // [r, c1, c2]
+  const heights = {};  // r -> 行高
+  const api = {
+    set(r, c, v, s) {
+      if (v === '' || v == null) return;
+      const t = typeof v === 'number' ? 'n' : 's';
+      cells[r + ',' + c] = { v, s: s == null ? SX.value : s, t };
+    },
+    merge(r, c1, c2) { merges.push([r, c1, c2]); },
+    height(r, h) { heights[r] = h; },
+    xml() {
+      const colDefs = widths.map((w, i) =>
+        `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
+      const maxR = Math.max(1, ...Object.keys(cells).map(k => +k.split(',')[0]));
+      let rowsXml = '';
+      for (let r = 1; r <= maxR; r++) {
+        let rowCells = '';
+        for (let c = 1; c <= widths.length; c++) {
+          const cell = cells[r + ',' + c];
+          if (!cell) continue;
+          const ref = xlsxColName(c) + r;
+          const sAttr = cell.s ? ` s="${cell.s}"` : '';
+          if (cell.t === 'n') rowCells += `<c r="${ref}"${sAttr}><v>${cell.v}</v></c>`;
+          else rowCells += `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(cell.v)}</t></is></c>`;
+        }
+        if (!rowCells) continue;
+        const ht = heights[r] ? ` ht="${heights[r]}" customHeight="1"` : '';
+        rowsXml += `<row r="${r}"${ht}>${rowCells}</row>`;
+      }
+      const mergeXml = merges.length
+        ? '<mergeCells count="' + merges.length + '">' +
+          merges.map(([r, c1, c2]) => `<mergeCell ref="${xlsxColName(c1)}${r}:${xlsxColName(c2)}${r}"/>`).join('') +
+          '</mergeCells>'
+        : '';
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${colDefs}</cols><sheetData>${rowsXml}</sheetData>${mergeXml}</worksheet>`;
+    },
+  };
+  return api;
+}
+function makeStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="微软雅黑"/></font><font><b/><sz val="14"/><name val="微软雅黑"/></font><font><b/><sz val="11"/><name val="微软雅黑"/></font></fonts><fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2F5496"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFB0B0B0"/></left><right style="thin"><color rgb="FFB0B0B0"/></right><top style="thin"><color rgb="FFB0B0B0"/></top><bottom style="thin"><color rgb="FFB0B0B0"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="常规" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+}
 
-function traitVal(re) {
-  const r = race();
-  if (!r) return '';
-  const t = r.traits.find(x => x.name && re.test(x.name));
-  return t ? t.text : '';
+// 数值辅助：调整值带符号
+function xmlEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
 }
-function saveCell(attr) {
-  const k = klass();
-  return k && k.core.saveList.includes(attr) ? '有' : '无';
-}
-function skillCell(tplName) {
-  const ruleName = { 生存: '求生', 游说: '交涉' }[tplName] || tplName;
-  const lv = state.char.skills[ruleName] || 0;
-  return lv === 2 ? '专精' : lv === 1 ? '熟练' : '无';
-}
+function fmtMod(v) { return (v >= 0 ? '+' : '') + v; }
 function speedValue() {
   const r = race();
   if (!r) return '';
@@ -1512,77 +1540,248 @@ function speedValue() {
   const m = /(\d+)\s*尺/.exec(t.text);
   return m ? +m[1] : '';
 }
-function skillSummary() {
-  const list = [];
-  for (const sk of DATA.rules.skills) {
-    const lv = state.char.skills[sk.name] || 0;
-    if (lv >= 1) list.push(sk.name + (lv === 2 ? '（专精）' : ''));
-  }
-  return list.join('、') || '';
+function acSourceName() {
+  const c = state.char;
+  return ({ naked: '无盔甲', light: '轻甲', medium: '中甲', heavy: '重甲', mage: '法师护甲', monk: '武僧无甲防御', barb: '狂战士无甲防御' }[c.armorType] || '无盔甲') +
+    (c.shield ? ' + 盾牌' : '') + (c.armorBonus ? ' + 其它 ' + c.armorBonus : '');
 }
-function langSummary() {
-  const parts = [];
-  const l = traitVal(/^语言/);
-  if (l) parts.push(l.replace(/^语言。?/, '').split('。')[0]);
-  if (state.char.bgLanguage) parts.push(state.char.bgLanguage);
-  return parts.join('；') || '';
+function classLv1Features() {
+  const k = klass();
+  if (!k) return [];
+  const lv1 = (k.table.find(row => row[0] === '1') || [])[1] || '';
+  const names = lv1.split(/[，,、]/).filter(Boolean);
+  return k.features.filter(f => names.includes(f.name));
 }
-function xmlEsc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
-}
-function colNum(ref) {
-  const m = /^([A-Z]+)(\d+)$/.exec(ref);
-  let n = 0;
-  for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
-  return [n, +m[2]];
-}
-function setCellXml(sheetXml, ref, idxOrNum, isNum) {
-  const val = `<v>${idxOrNum}</v>`;
-  const tAttr = isNum ? '' : ' t="s"';
-  // 1) 自闭合单元格 <c r="REF" s="N" />（模板大量使用；必须先于完整格式检测，
-  //    否则完整格式正则会把"自闭合 + 其后直到下一个 </c> 的大段"误匹配并删除）
-  const selfRe = new RegExp(`<c r="${ref}"[^>]*?\\/>`);
-  if (selfRe.test(sheetXml)) {
-    return sheetXml.replace(selfRe, (open) => {
-      const sAttr = / s="[^"]*"/.exec(open);
-      return `<c r="${ref}"${sAttr ? sAttr[0] : ''}${tAttr}>${val}</c>`;
+function skillGroupRows() {
+  const groups = [['力量系', ['运动', '威吓']], ['敏捷系', ['体操', '巧手', '隐匿']],
+    ['智力系', ['奥秘', '灵能', '历史', '调查', '自然', '宗教', '表演']],
+    ['感知系', ['医药', '洞悉', '察觉', '求生', '交涉']]];
+  const rows = [];
+  for (const [g, names] of groups) {
+    names.forEach((n, i) => {
+      const lv = state.char.skills[n] || 0;
+      rows.push({ group: i === 0 ? g : '', name: n, total: skillMod(n), state: lv === 2 ? '专精' : lv === 1 ? '熟练' : '—' });
     });
   }
-  // 2) 完整单元格 <c r="REF" s="N">...</c>
-  const fullRe = new RegExp(`<c r="${ref}"[^>]*>[\\s\\S]*?<\\/c>`);
-  if (fullRe.test(sheetXml)) {
-    return sheetXml.replace(fullRe, (full) => {
-      const sAttr = / s="[^"]*"/.exec(full);
-      return `<c r="${ref}"${sAttr ? sAttr[0] : ''}${tAttr}>${val}</c>`;
+  return rows;
+}
+function featLv(i) { return [1, 1, 3, 6, 9, 12, 15, 18][i] || ''; }
+
+// Sheet1 角色卡
+function buildSheetChar() {
+  const s = makeSheet([9, 15, 11, 15, 9, 15, 9, 15]);
+  const c = state.char;
+  const k = klass();
+  const r = race();
+  const ver = (DATA.rules || {}).version || '';
+  const t = (txt) => txt || '';
+  s.set(1, 1, `5z 角色卡${ver ? '（规则书 v' + ver + '）' : ''}`, SX.title);
+  s.merge(1, 1, 8);
+  s.height(1, 26);
+  // —— 基本信息 ——
+  s.set(3, 1, '基本信息', SX.section); s.merge(3, 1, 8);
+  const info = [
+    ['姓名', c.name, '玩家', c.player],
+    ['职业', k ? k.name : '', '子职', c.subclass],
+    ['等级', c.level, '熟练加值', k ? '+' + profBonus() : ''],
+    ['种族', r ? r.name : '', '亚种', c.subrace],
+    ['训练选择', (c.raceTraining || '').replace(/^·/, ''), '生命骰', k ? 'D' + k.core.hitDie : ''],
+    ['背景', c.bgName, '阵营', c.alignment],
+    ['信仰', c.faith, '年龄', c.age],
+    ['性别', c.gender, '身高体重', c.heightWeight],
+  ];
+  info.forEach((row, i) => {
+    const rr = 4 + i;
+    s.set(rr, 1, row[0], SX.label);
+    s.set(rr, 2, row[1], typeof row[1] === 'number' ? SX.num : SX.value);
+    s.set(rr, 3, row[2], SX.label);
+    s.set(rr, 4, row[3], typeof row[3] === 'number' ? SX.num : SX.value);
+  });
+  // —— 属性与豁免 ——
+  const aStart = 4 + info.length + 2; // 13
+  s.set(aStart, 1, '属性与豁免', SX.section); s.merge(aStart, 1, 8);
+  ['属性', '属性值', '调整值', '豁免熟练', '豁免总值'].forEach((h, i) => s.set(aStart + 1, 1 + i, h, SX.head));
+  ATTRS.forEach((a, i) => {
+    const rr = aStart + 2 + i;
+    s.set(rr, 1, a, SX.label);
+    s.set(rr, 2, finalAttr(a), SX.num);
+    s.set(rr, 3, fmtMod(finalMod(a)), SX.num);
+    const hasSave = k ? k.core.saveList.includes(a) : false;
+    s.set(rr, 4, hasSave ? '熟练' : '—', SX.num);
+    s.set(rr, 5, fmtMod(saveMod(a)), SX.num);
+  });
+  // —— 战斗数据 ——
+  const bStart = aStart + 2 + ATTRS.length + 2; // 22
+  s.set(bStart, 1, '战斗数据', SX.section); s.merge(bStart, 1, 8);
+  const combat = [
+    ['生命值上限', k ? hpMax() : '', '生命骰数量', k ? c.level : ''],
+    ['防御等级 AC', k ? acValue() : '', '先攻', fmtMod(initBonus())],
+    ['AC 来源', t(acSourceName()), '速度', t(speedValue() + '尺')],
+    ['法术豁免 DC', k ? spellDC() : '', '法术攻击加值', k ? fmtMod(spellAttack()) : ''],
+    ['施法关键属性', c.keyAttr, '法术列表', t(classSpellList() ? classSpellList().class : '')],
+  ];
+  combat.forEach((row, i) => {
+    const rr = bStart + 1 + i;
+    s.set(rr, 1, row[0], SX.label);
+    s.set(rr, 2, row[1], /^-?\d+$/.test(String(row[1])) ? SX.num : SX.value);
+    s.set(rr, 3, row[2], SX.label);
+    s.set(rr, 4, row[3], /^-?\d+$/.test(String(row[3])) ? SX.num : SX.value);
+  });
+  // —— 技能（规则书 17 项） ——
+  const sStart = bStart + 1 + combat.length + 2; // 30
+  const skRows = skillGroupRows();
+  const chosen = skRows.filter(x => x.state !== '—').length;
+  s.set(sStart, 1, `技能（${chosen} / ${skillQuota()}）`, SX.section); s.merge(sStart, 1, 8);
+  ['分类', '技能', '总值', '状态'].forEach((h, i) => s.set(sStart + 1, 1 + i, h, SX.head));
+  skRows.forEach((sk, i) => {
+    const rr = sStart + 2 + i;
+    s.set(rr, 1, sk.group, SX.label);
+    s.set(rr, 2, sk.name, SX.value);
+    s.set(rr, 3, fmtMod(sk.total), SX.num);
+    s.set(rr, 4, sk.state, SX.num);
+  });
+  // —— 专长 ——
+  const fStart = sStart + 2 + skRows.length + 2;
+  s.set(fStart, 1, `专长（${c.feats.length} / ${featQuota()}）`, SX.section); s.merge(fStart, 1, 8);
+  ['等级', '名称', '效果摘要'].forEach((h, i) => s.set(fStart + 1, 1 + i, h, SX.head));
+  if (!c.feats.length) {
+    s.set(fStart + 2, 1, '（未选择专长）', SX.note);
+  } else {
+    c.feats.forEach((fn, i) => {
+      const rr = fStart + 2 + i;
+      const f = DATA.feats.find(x => x.name === fn);
+      s.set(rr, 1, featLv(i), SX.num);
+      s.set(rr, 2, fn, SX.value);
+      s.set(rr, 3, f ? f.text.split('\n')[0] : '', SX.text);
+      s.merge(rr, 3, 8);
+      s.height(rr, 22);
     });
   }
-  // 3) 新增单元格：插入到对应行（按列序）
-  const [col, row] = colNum(ref);
-  const rowRe = new RegExp(`(<row r="${row}"[^>]*>)([\\s\\S]*?)(<\\/row>)`);
-  const m = rowRe.exec(sheetXml);
-  if (!m) return sheetXml; // 行不存在则跳过
-  const cell = `<c r="${ref}"${tAttr}>${val}</c>`;
-  const inner = m[2];
-  const cellRe = /<c r="([A-Z]+)(\d+)"[^>]*>/g;
-  let insertAt = inner.length;
-  let cm;
-  while ((cm = cellRe.exec(inner)) !== null) {
-    const c2 = colNum(cm[1] + cm[2])[0];
-    if (c2 > col) { insertAt = cm.index; break; }
+  // —— 种族特性 ——
+  if (r && r.traits.some(x => x.name)) {
+    const tStart = fStart + 2 + Math.max(1, c.feats.length) + 1;
+    s.set(tStart, 1, `种族特性（${r.name}）`, SX.section); s.merge(tStart, 1, 8);
+    const traits = r.traits.filter(x => x.name);
+    traits.forEach((tr, i) => {
+      const rr = tStart + 1 + i;
+      s.set(rr, 1, tr.name, SX.label);
+      s.set(rr, 2, tr.text, SX.text);
+      s.merge(rr, 2, 8);
+      s.height(rr, Math.max(22, Math.ceil(tr.text.length / 40) * 15 + 8));
+    });
   }
-  const newInner = inner.slice(0, insertAt) + cell + inner.slice(insertAt);
-  return sheetXml.replace(rowRe, `$1${newInner}$3`);
+  return s;
 }
-function stripFormulaCache(sheetXml) {
-  // 删除公式格缓存值，强制 Excel 打开后重算（双保险：另设 fullCalcOnLoad）
-  return sheetXml.replace(/(<f>[\s\S]*?<\/f>)<v>[\s\S]*?<\/v>/g, '$1');
+
+// Sheet2 法术
+function buildSheetSpells() {
+  const s = makeSheet([8, 22, 14, 12, 60]);
+  const c = state.char;
+  const prepRule = preparedRule();
+  const title = `法术（${c.spells.length} 个）` + (prepRule
+    ? ` · 已准备 ${(c.prepared || []).filter(x => c.spells.includes(x)).length}` + (prepRule.balls ? '' : ' / ' + preparedLimit())
+    : '');
+  s.set(1, 1, title, SX.title); s.merge(1, 1, 5);
+  s.height(1, 24);
+  ['环阶', '名称', '学派', '已准备', '详述'].forEach((h, i) => s.set(2, 1 + i, h, SX.head));
+  if (!c.spells.length) {
+    s.set(3, 1, '（未选择法术）', SX.note);
+    return s;
+  }
+  c.spells.forEach((n, i) => {
+    const sp = DATA.spells.find(x => x.name === n);
+    const rr = 3 + i;
+    const lv = sp ? sp.level : -1;
+    s.set(rr, 1, lv === 0 ? '戏法' : lv > 0 ? lv + '环' : '?', SX.num);
+    s.set(rr, 2, n, SX.value);
+    s.set(rr, 3, sp ? (sp.school || '') : '', SX.value);
+    s.set(rr, 4, (c.prepared || []).includes(n) ? '✓ 是' : '—', SX.num);
+    s.set(rr, 5, sp ? (sp.text || '').split('\n').slice(1).join('\n').slice(0, 220) : '', SX.text);
+    s.height(rr, 30);
+  });
+  return s;
+}
+
+// Sheet3 战技
+function buildSheetManeuvers() {
+  const s = makeSheet([12, 16, 24, 60]);
+  const c = state.char;
+  s.set(1, 1, `战技（${c.maneuvers.length} 个）${c.maneuverStyle ? ' · 流派：' + c.maneuverStyle : ''}`, SX.title);
+  s.merge(1, 1, 4); s.height(1, 24);
+  ['流派', '级别·类型', '名称', '详述'].forEach((h, i) => s.set(2, 1 + i, h, SX.head));
+  if (!c.maneuvers.length) {
+    s.set(3, 1, '（未选择战技）', SX.note);
+    return s;
+  }
+  c.maneuvers.forEach((n, i) => {
+    const m = DATA.maneuvers.find(x => x.name === n);
+    const rr = 3 + i;
+    s.set(rr, 1, m ? m.style : '', SX.value);
+    s.set(rr, 2, m ? m.level + '·' + m.type : '', SX.num);
+    s.set(rr, 3, n, SX.value);
+    s.set(rr, 4, m ? m.text.slice(0, 220) : '', SX.text);
+    s.height(rr, 30);
+  });
+  return s;
+}
+
+// Sheet4 程序（赛博格专属）
+function buildSheetPrograms() {
+  const s = makeSheet([12, 14, 24, 60]);
+  const c = state.char;
+  s.set(1, 1, `程序（${c.programs.length} 个）${c.programProtocol ? ' · 协议：' + c.programProtocol : ''}`, SX.title);
+  s.merge(1, 1, 4); s.height(1, 24);
+  ['协议', '模块', '名称', '详述'].forEach((h, i) => s.set(2, 1 + i, h, SX.head));
+  if (!c.programs.length) {
+    s.set(3, 1, '（未选择程序。赛博格专属内容，其他职业可忽略本表）', SX.note);
+    return s;
+  }
+  c.programs.forEach((n, i) => {
+    const p = DATA.programs.find(x => x.name === n);
+    const rr = 3 + i;
+    s.set(rr, 1, p ? p.protocol : '', SX.value);
+    s.set(rr, 2, p ? (p.module || '') : '', SX.value);
+    s.set(rr, 3, n, SX.value);
+    s.set(rr, 4, p ? p.text.slice(0, 220) : '', SX.text);
+    s.height(rr, 30);
+  });
+  return s;
+}
+
+// Sheet5 装备与背景
+function buildSheetExtras() {
+  const s = makeSheet([16, 60]);
+  const c = state.char;
+  s.set(1, 1, '装备与背景', SX.title); s.merge(1, 1, 2); s.height(1, 24);
+  let rr = 3;
+  const putKV = (label, v, long) => {
+    if (!v) return;
+    s.set(rr, 1, label, SX.label);
+    if (long) { s.set(rr, 2, v, SX.text); s.merge(rr, 2, 2); s.height(rr, Math.max(22, Math.ceil(String(v).length / 50) * 15 + 8)); }
+    else s.set(rr, 2, v, SX.value);
+    rr++;
+  };
+  putKV('背景特性', c.bgText, true);
+  putKV('额外语言', c.bgLanguage);
+  putKV('随身物品', c.items, true);
+  putKV('备注 / 法术 / 战技 / 程序', c.traitsNote, true);
+  putKV('其他备注', c.notes, true);
+  // 1 级职业特性
+  const lv1 = classLv1Features();
+  if (lv1.length) {
+    rr++;
+    s.set(rr, 1, '1 级职业特性', SX.section); s.merge(rr, 1, 2); rr++;
+    lv1.forEach(f => {
+      s.set(rr, 1, f.name, SX.label);
+      s.set(rr, 2, f.text, SX.text); s.merge(rr, 2, 2);
+      s.height(rr, Math.max(22, Math.ceil(f.text.length / 50) * 15 + 8));
+      rr++;
+    });
+  }
+  return s;
 }
 
 function exportExcel() {
-  if (!window.__TPL_XLSX_B64__) { toast('缺少 Excel 模板数据，无法导出'); return; }
   if (typeof fflate === 'undefined') { toast('缺少 zip 组件，无法导出'); return; }
   const c = state.char;
   if (!c.raceId && !c.classId) { toast('请先完成种族/职业选择'); return; }
@@ -1604,138 +1803,32 @@ function exportExcel() {
 
 // 生成填好值的 xlsx（Uint8Array）。独立函数便于自动化测试。
 function buildXlsx() {
-  const c = state.char;
-  const k = klass();
-  // 1. 解压模板
-  const bin = atob(window.__TPL_XLSX_B64__);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const files = fflate.unzipSync(bytes);
-  const dec = new TextDecoder('utf-8');
   const enc = new TextEncoder();
-
-  // 2. 收集所有新文本与填值
-  const newTexts = [];
-  const values = { sheet1: {}, sheet2: {}, sheet5: {}, sheet6: {} };
-  for (const [sheet, map] of [['sheet1', TPL.sheet1], ['sheet2', TPL.sheet2]]) {
-    for (const ref of Object.keys(map)) {
-      const v = map[ref]();
-      if (v === '' || v == null) continue;
-      values[sheet][ref] = v;
-      if (typeof v !== 'number') newTexts.push(String(v));
-    }
-  }
-  // 专长（sheet2 AF/AJ 列）
-  c.feats.forEach((fn, i) => {
-    if (i >= FEAT_ROWS.length) return;
-    const row = FEAT_ROWS[i];
-    newTexts.push(fn);
-    values.sheet2['AF' + row] = fn;
-    const f = DATA.feats.find(x => x.name === fn);
-    if (f) { const s = f.text.split('\n')[0]; newTexts.push(s); values.sheet2['AJ' + row] = s; }
-  });
-  // 法术表（sheet5）：A=名称 E=环阶 G=详述 AL=来源（数据行从第 5 行起）
-  c.spells.forEach((n, i) => {
-    const sp = DATA.spells.find(s => s.name === n);
-    const row = 5 + i;
-    newTexts.push(n);
-    values.sheet5['A' + row] = n;
-    if (sp) {
-      values.sheet5['E' + row] = sp.level;
-      if (sp.text) { newTexts.push(sp.text); values.sheet5['G' + row] = sp.text; }
-    }
-    if (k) { newTexts.push(k.name); values.sheet5['AL' + row] = k.name; }
-  });
-  // 已准备法术数量（模板 sheet5「准备法术」输入格 X2，W2 为标签）
-  if (preparedRule()) {
-    const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
-    if (prepN > 0) values.sheet5['X2'] = prepN;
-  }
-  // 战技表（sheet6）：A=名称 E=级别 G=详述（数据行从第 4 行起）
-  c.maneuvers.forEach((n, i) => {
-    const m = DATA.maneuvers.find(x => x.name === n);
-    const row = 4 + i;
-    newTexts.push(n);
-    values.sheet6['A' + row] = n;
-    if (m) {
-      newTexts.push(m.level);
-      values.sheet6['E' + row] = m.level;
-      const d = m.style + '·' + m.type;
-      newTexts.push(d);
-      values.sheet6['G' + row] = d;
-    }
-  });
-
-  // 3. sharedStrings：追加新字符串
-  let ssXml = dec.decode(files['xl/sharedStrings.xml']);
-  const strIdx = {};
-  const existingRe = /<si>[\s\S]*?<\/si>/g;
-  let siCount = 0;
-  let em;
-  while ((em = existingRe.exec(ssXml)) !== null) {
-    const tm = /<t[^>]*>([\s\S]*?)<\/t>/.exec(em[0]);
-    if (tm) {
-      const t = tm[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"').replace(/&apos;/g, "'");
-      if (!(t in strIdx)) strIdx[t] = siCount;
-    }
-    siCount++;
-  }
-  const getIdx = (t) => {
-    if (t in strIdx) return strIdx[t];
-    const idx = siCount;
-    siCount++;
-    strIdx[t] = idx;
-    ssXml = ssXml.replace(/<\/sst>/, `<si><t>${xmlEsc(t)}</t></si></sst>`);
-    return idx;
+  const sheets = [
+    ['角色卡', buildSheetChar()],
+    ['法术', buildSheetSpells()],
+    ['战技', buildSheetManeuvers()],
+    ['程序', buildSheetPrograms()],
+    ['装备与背景', buildSheetExtras()],
+  ];
+  const files = {
+    '[Content_Types].xml': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`),
+    '_rels/.rels': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`),
+    'xl/workbook.xml': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map(([name], i) => `<sheet name="${xmlEsc(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`),
+    'xl/_rels/workbook.xml.rels': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}</Relationships>`),
+    'xl/styles.xml': enc.encode(makeStylesXml()),
   };
-  for (const t of newTexts) getIdx(t);
-  if (newTexts.length) {
-    ssXml = ssXml.replace(/(<sst[^>]*?count=")(\d+)/, (m2, p, n) => p + (+n + newTexts.length));
-    ssXml = ssXml.replace(/(<sst[^>]*?uniqueCount=")(\d+)/, (m2, p, n) => p + (+n + newTexts.length));
-  }
-
-  // 4. 填值 sheet1 / sheet2 / sheet5 / sheet6
-  let s1 = dec.decode(files['xl/worksheets/sheet1.xml']);
-  let s2 = dec.decode(files['xl/worksheets/sheet2.xml']);
-  let s5 = dec.decode(files['xl/worksheets/sheet5.xml']);
-  let s6 = dec.decode(files['xl/worksheets/sheet6.xml']);
-  for (const ref of Object.keys(values.sheet1)) {
-    const v = values.sheet1[ref];
-    s1 = setCellXml(s1, ref, typeof v === 'number' ? v : getIdx(v), typeof v === 'number');
-  }
-  for (const ref of Object.keys(values.sheet2)) {
-    const v = values.sheet2[ref];
-    s2 = setCellXml(s2, ref, typeof v === 'number' ? v : getIdx(v), typeof v === 'number');
-  }
-  for (const ref of Object.keys(values.sheet5)) {
-    const v = values.sheet5[ref];
-    s5 = setCellXml(s5, ref, typeof v === 'number' ? v : getIdx(v), typeof v === 'number');
-  }
-  for (const ref of Object.keys(values.sheet6)) {
-    const v = values.sheet6[ref];
-    s6 = setCellXml(s6, ref, typeof v === 'number' ? v : getIdx(v), typeof v === 'number');
-  }
-  // 5. 清除公式缓存 + 强制打开重算
-  s1 = stripFormulaCache(s1);
-  s2 = stripFormulaCache(s2);
-  s5 = stripFormulaCache(s5);
-  s6 = stripFormulaCache(s6);
-  let wbXml = dec.decode(files['xl/workbook.xml']);
-  wbXml = wbXml.replace(/<calcPr[^>]*\/>/, '<calcPr calcId="191029" fullCalcOnLoad="1"/>');
-
-  // 6. 重新打包
-  files['xl/sharedStrings.xml'] = enc.encode(ssXml);
-  files['xl/worksheets/sheet1.xml'] = enc.encode(s1);
-  files['xl/worksheets/sheet2.xml'] = enc.encode(s2);
-  files['xl/worksheets/sheet5.xml'] = enc.encode(s5);
-  files['xl/worksheets/sheet6.xml'] = enc.encode(s6);
-  files['xl/workbook.xml'] = enc.encode(wbXml);
+  sheets.forEach(([, sheet], i) => {
+    files['xl/worksheets/sheet' + (i + 1) + '.xml'] = enc.encode(sheet.xml());
+  });
   return fflate.zipSync(files, { level: 6 });
 }
 // 自动化测试钩子：接受可选角色覆盖（用于测试），返回导出结果（base64），不触发下载
 window.__CAR_EXPORT_TEST__ = (charOverride) => {
-  if (!window.__TPL_XLSX_B64__) return '';
   try {
     if (charOverride) state.char = Object.assign(newChar(), charOverride);
     const u8 = buildXlsx();

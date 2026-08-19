@@ -37,7 +37,7 @@
   <section class="cl-entry">
     <h2>2026-08-19 · v1.59</h2>
     <p class="cl-release">反馈批处理（问题来源：收集表 3 条修复 + 1 条待定，20260819 批次）。</p>
-    <h3>✅ 已修复（3）</h3><ul>
+    <h3>✅ 已修复（4）</h3><ul>
     <li class="cl-fix">
       <span class="cl-id">#20260819-125600-ead5</span>
       <b>修复页内搜索无法搜索二字词组</b>
@@ -55,13 +55,14 @@
       <b>词条详情排版修复（换行 + 去重）</b>
       <span class="cl-page">（dict.html 词典）</span>
       <div class="cl-detail">① 详情描述恢复换行显示（词典页详情容器缺失 pre-wrap 样式类导致所有换行被折叠，已统一补上）；② 法术详情的「环阶/学派」、物品详情的「分类」在副标题已显示，不再在详情字段中重复出现。</div>
-    </li></ul>
-    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
-    <li class="cl-pend">
+    </li>
+    <li class="cl-fix">
       <span class="cl-id">#20260819-084500-558a</span>
-      <b>角色卡 Excel 导出模板过时</b>
-      <div class="cl-detail">⏳ 当前导出基于官方旧版 Excel 模板（职业基础血量、缺少赛博格职业、部分子职数据未同步）。更新官方模板需管理者配合或重新设计自研导出模板，属于较大改动，待确认优先级后实现。</div>
+      <b>角色卡 Excel 导出改为自研模板（不再依赖官方模板）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <div class="cl-detail">重写导出：纯 JS 从规则书数据（card-data）直接生成 xlsx，彻底移除官方旧模板依赖。职业基础血量按生命骰实时计算（与网页角色卡同源，含赛博格 D12）；职业/子职/技能（17 项）/专长/法术/战技/程序全部来自规则书数据，永远同步；新增「程序」表（赛博格专属，官方模板没有）；布局为 5 张表：角色卡 / 法术 / 战技 / 程序 / 装备与背景。同步移除构建内联的 car-tpl.js（约 660KB）。</div>
     </li></ul>
+    
   </section>
 
   <section class="cl-entry">

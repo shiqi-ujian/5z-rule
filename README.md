@@ -16,7 +16,7 @@
 
 | 目录 | 说明 |
 |------|------|
-| （根目录） | 网站内容（GitHub Pages 发布源），含 Excel 导出模板 `dnd5z人物卡模板改.xlsx`（构建时读取并内联进 car.html） |
+| （根目录） | 网站内容（GitHub Pages 发布源）。Excel 导出为**自研模板**：`car.js` 纯 JS 从规则书数据生成（职业/子职/技能/程序永远同步，含赛博格职业与程序表），不再依赖官方模板 |
 | `5z_build/` | 构建工具链（build.mjs / parse-card-data.mjs / check-links.mjs / verify-complete.mjs / DEPLOY.md） |
 | `5z_src/` | CHM 反编译中间产物（不入库，见 .gitignore） |
 

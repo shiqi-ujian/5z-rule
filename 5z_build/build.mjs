@@ -538,15 +538,8 @@ for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car
   const dataJs = 'window.__CAR_DATA__ = ' + JSON.stringify(cardData).replace(/</g, '\\u003c') + ';\n';
   fs.writeFileSync(path.join(OUT, 'assets', 'card-data.js'), dataJs, 'utf8');
 
-  // Excel 导出模板（dnd5z人物卡模板改.xlsx）内联为 js（file:// 直开可用）
-  const tplFile = path.resolve('dnd5z人物卡模板改.xlsx');
-  if (!fs.existsSync(tplFile)) {
-    console.error('[build] 未找到 Excel 导出模板: dnd5z人物卡模板改.xlsx');
-    process.exit(1);
-  }
-  const tplB64 = fs.readFileSync(tplFile).toString('base64');
-  fs.writeFileSync(path.join(OUT, 'assets', 'car-tpl.js'),
-    'window.__TPL_XLSX_B64__ = "' + tplB64 + '";\n', 'utf8');
+  // Excel 导出：自研模板（car.js 纯 JS 生成，数据来自 card-data，无需外部模板文件）
+  // 旧版基于官方模板 dnd5z人物卡模板改.xlsx 的 car-tpl.js 已废弃移除
 }
 
 // ---------- 7.6 车卡页面（小页面，数据走独立 script；静态资源带构建版本防缓存） ----------
