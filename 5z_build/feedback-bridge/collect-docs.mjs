@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // 腾讯文档收集表读取桥
 //   自动读取群友在腾讯文档收集表（链接发 QQ 群）提交的问题，
 //   写入 问题收集/inbox/<id>.json，供 agent 定时处理。
@@ -82,7 +82,7 @@ function hash(s) { return crypto.createHash('sha1').update(s).digest('hex').slic
 function issueId(ts) {
   const m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(ts || iso());
   const base = m ? `${m[1]}${m[2]}${m[3]}-${m[4]}${m[5]}${m[6] || '00'}` : now().toISOString().replace(/\D/g, '').slice(0, 14);
-  return `${base}-${hash(ts + Math.random()).slice(0, 4)}`;
+  return `${base}-${hash(String(ts) + Math.random()).slice(0, 4)}`;
 }
 
 // ---------- 表格视图提取（官方 UI 流程） ----------
