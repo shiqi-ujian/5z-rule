@@ -24,16 +24,20 @@ const el = (tag, cls, html) => {
    同组内为并集（命中任一即可），组间为交集（与其它筛选同时生效）。 */
 function chipGroup(items, label, labelFn, selected, onChange) {
   const g = el('div', 'pk-chip-group');
+  const row = el('div', 'pk-chip-row');
   if (label) {
     const lab = el('span', 'pk-chip-label', esc(label) + ' ');
     const clr = el('button', 'pk-chip-clear', '清除');
     clr.type = 'button';
     clr.title = '清除该组筛选';
-    clr.onclick = () => { selected.length = 0; onChange(); };
+    clr.onclick = () => {
+      selected.length = 0;
+      row.querySelectorAll('.pk-chip').forEach(c => c.classList.remove('on'));
+      onChange();
+    };
     lab.appendChild(clr);
     g.appendChild(lab);
   }
-  const row = el('div', 'pk-chip-row');
   for (const v of items) {
     const b = el('button', 'pk-chip' + (selected.includes(v) ? ' on' : ''), esc(labelFn ? labelFn(v) : String(v)));
     b.type = 'button';
@@ -41,6 +45,9 @@ function chipGroup(items, label, labelFn, selected, onChange) {
     b.onclick = () => {
       const i = selected.indexOf(v);
       if (i >= 0) selected.splice(i, 1); else selected.push(v);
+      // chips 只构建一次（_pkReady 守卫），必须就地切换视觉态，
+      // 否则筛选已生效但按钮不变色（反馈问题 #20260820-192900）
+      b.classList.toggle('on', i < 0);
       onChange();
     };
     row.appendChild(b);
