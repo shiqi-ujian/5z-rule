@@ -35,6 +35,19 @@
 <p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
 
   <section class="cl-entry">
+    <h2>2026-08-20 · v1.59</h2>
+    <p class="cl-release">反馈修复（问题来源：收集表 #20260820-192900）。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260820-192900-c047</span>
+      <b>词典筛选按钮点击不变色（无选中高亮）</b>
+      <span class="cl-page">（dict.html 词典 / car.html 角色创建器）</span>
+      <div class="cl-detail">根因：筛选按钮组（chips）只在页面初始化时渲染一次，点击后虽然筛选已生效（列表更新），但按钮本身不重绘，选中态样式（on 类）永远不出现，玩家无法区分是否已按下。修复：点击/清除时直接就地切换按钮选中态类，选中即高亮（紫色底白字），再次点击或点「清除」恢复。车卡器（同用 Picker 组件）一并修复。</div>
+    </li></ul>
+    
+  </section>
+
+  <section class="cl-entry">
     <h2>2026-08-19 · v1.59</h2>
     <p class="cl-release">反馈批处理（问题来源：收集表 3 条修复 + 1 条待定，20260819 批次）。</p>
     <h3>✅ 已修复（4）</h3><ul>
