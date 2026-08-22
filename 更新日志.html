@@ -17,22 +17,303 @@
   li { margin: 4px 0; }
   .cl-id { color: #888; font-size: .82em; margin-right: 6px; }
   .cl-page { color: #888; font-size: .9em; }
+  .cl-date { color: #999; font-size: .8em; margin-left: 6px; }
   .cl-detail { color: #555; font-size: .92em; margin: 2px 0 0 14px; }
   .cl-pend { color: #a06800; }
   .back { display: inline-block; margin-top: 18px; color: #236; }
+  /* 状态板 */
+  .status-board { border: 1px solid #8882; border-radius: 12px; padding: 14px 18px; margin: 18px 0 8px; background: #ffffffcc; }
+  .status-board h2 { margin: 0 0 10px; font-size: 1.1em; }
+  .st { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .9em; margin-right: 6px; }
+  .st b { font-size: 1.05em; }
+  .st.done { background: #e5f6e8; color: #166534; }
+  .st.pend { background: #fdf3e0; color: #92400e; }
+  .st.open { background: #e8f0fd; color: #1e40af; }
+  .st-list { margin: 8px 0 14px; padding-left: 20px; }
+  .st-list li { margin: 5px 0; }
+  .st-empty { color: #888; font-size: .9em; margin: 4px 0 10px; }
+  .board-title { font-weight: 700; margin: 10px 0 2px; font-size: .98em; }
   @media (prefers-color-scheme: dark) {
     body { background: #16181d; color: #ddd; }
-    .cl-entry { background: #1e2128; border-color: #ffffff1a; }
-    .cl-release, .cl-detail, .cl-id, .cl-page { color: #9aa; }
+    .cl-entry, .status-board { background: #1e2128; border-color: #ffffff1a; }
+    .cl-release, .cl-detail, .cl-id, .cl-page, .cl-date { color: #9aa; }
     .cl-pend { color: #d9a648; }
     .back { color: #7ab; }
+    .st.done { background: #12301c; color: #86efac; }
+    .st.pend { background: #33250d; color: #fbbf24; }
+    .st.open { background: #12233f; color: #93c5fd; }
+    .st-empty { color: #777; }
   }
 </style>
 </head>
 <body>
 <h1>🔧 5z 规则 更新日志</h1>
-<p>本页由系统在每次修复发布后自动更新。来源：QQ 群收集表提交的问题。历史修复见下（最新在上）。</p>
+<p>本页由系统在每次修复发布后自动更新。来源：QQ 群收集表提交的问题。顶部为全部反馈的处理状态一览，下方为历史批次记录（最新在上）。</p>
 <p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
+
+<div class="status-board">
+  <h2>📋 反馈处理状态一览</h2>
+  <div><span class="st done">✅ 已修复 <b>21</b></span><span class="st pend">⏳ 待确认 <b>7</b></span><span class="st open">🆕 待处理 <b>0</b></span></div>
+  <div class="board-title">✅ 已修复（21 条）</div>
+  <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260822-152400-60ef</span>
+      <b>车卡器属性输入无法清空重填（且超限被强制 30）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">根因：属性输入框在 input 事件里用 `+value || 8` 取值，清空瞬间被回退值弹回 8，玩家只能「先输一个数字再删」的别扭方式调整；且越界值只在状态层截断。修复：输入中允许为空不弹回，非空实时截断并回写输入框（&gt;30 立即显示 30），失焦空值保持原值。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260821-164400-69e6</span>
+      <b>目录新增「展开全部 / 收起全部」</b>
+      <span class="cl-page">（全站左侧导航栏）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">左侧目录上方新增两个按钮：一键展开全部分支（92 个），一键全部收起；展开状态与原有记忆机制（localStorage）一致。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260821-162600-6286</span>
+      <b>购物页面（魔法物品选购）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">车卡器新增「11 购物」步骤：顶部手动输入金币预算（可留空）；魔法物品选购复用 Picker 引擎（分类/价格档/同调/神器/搜索筛选）；已购清单实时合计总价（按规则书价格区间下限），超出预算标红提示；角色卡新增「装备（魔法物品）」栏，Excel 导出同步写入装备清单与预算/合计。共 1553 件魔法物品可选。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260820-192900-c047</span>
+      <b>词典筛选按钮点击不变色（无选中高亮）</b>
+      <span class="cl-page">（dict.html 词典 / car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-20</span>
+      
+      
+      <div class="cl-detail">根因：筛选按钮组（chips）只在页面初始化时渲染一次，点击后虽然筛选已生效（列表更新），但按钮本身不重绘，选中态样式（on 类）永远不出现，玩家无法区分是否已按下。修复：点击/清除时直接就地切换按钮选中态类，选中即高亮（紫色底白字），再次点击或点「清除」恢复。车卡器（同用 Picker 组件）一并修复。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260819-125600-ead5</span>
+      <b>修复页内搜索无法搜索二字词组</b>
+      <span class="cl-page">（页内搜索（所有规则书页面））</span>
+      <span class="cl-date">2026-08-19</span>
+      
+      
+      <div class="cl-detail">根因：先用短词搜索（如「掷」）后，词组（如「掷骰」）中的字被高亮标记拆成独立文本节点，清除高亮时不合并，导致该词组之后永远搜不到。修复：清除高亮后合并相邻文本节点（normalize），词组恢复连续可搜。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260819-084200-119e</span>
+      <b>魔法物品价格筛选改为多选</b>
+      <span class="cl-page">（dict.html 魔法物品词典）</span>
+      <span class="cl-date">2026-08-19</span>
+      
+      
+      <div class="cl-detail">价格筛选由单选下拉改为多选按钮组（与分类一致）：可同时勾选多个价格档位（如 &gt;5万gp + 非卖品），组内并集、组间叠加，每组带「清除」一键还原。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260819-084100-69d0</span>
+      <b>词条详情排版修复（换行 + 去重）</b>
+      <span class="cl-page">（dict.html 词典）</span>
+      <span class="cl-date">2026-08-19</span>
+      
+      
+      <div class="cl-detail">① 详情描述恢复换行显示（词典页详情容器缺失 pre-wrap 样式类导致所有换行被折叠，已统一补上）；② 法术详情的「环阶/学派」、物品详情的「分类」在副标题已显示，不再在详情字段中重复出现。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260819-084500-558a</span>
+      <b>角色卡 Excel 导出改为自研模板（不再依赖官方模板）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-19</span>
+      
+      
+      <div class="cl-detail">重写导出：纯 JS 从规则书数据（card-data）直接生成 xlsx，彻底移除官方旧模板依赖。职业基础血量按生命骰实时计算（与网页角色卡同源，含赛博格 D12）；职业/子职/技能（17 项）/专长/法术/战技/程序全部来自规则书数据，永远同步；新增「程序」表（赛博格专属，官方模板没有）；布局为 5 张表：角色卡 / 法术 / 战技 / 程序 / 装备与背景。同步移除构建内联的 car-tpl.…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-132500-ace4</span>
+      <b>人类种族的训练选择</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">选择人类后立即弹出训练选择（资本/社交/知识/斥候/民兵/法术 6 选 1），选择记录到角色卡「训练选择」栏；其它含选择特性的种族同样支持。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-132400-60e6</span>
+      <b>职业技能熟练指引</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">技能步骤顶部显示本职业可选技能列表（如法师：奥秘/历史/洞悉/医药/调查/宗教选两项），并在列表中用 ✓ 标记本职业可选技能，无需再翻规则书。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-132400-c102</span>
+      <b>可选法术数量提示</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">法术步骤顶部显示当前等级的已知戏法/法术位数量与施法规则说明（如法师 1 级：已知戏法 5、1 环法术位 3），按职业表实时取数。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-132600-d07c</span>
+      <b>角色姓名与立绘</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">角色卡新增基本信息编辑：角色姓名（实时生效）、玩家、立绘（支持图片 URL 或本地文件上传，压缩后存入浏览器本地存档）。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-120600-0294</span>
+      <b>法师法术书功能（准备施法者法术书管理）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">法术步骤为准备施法者（法师/牧师/德鲁伊/圣武士/灵能武士/奇械师）新增「已准备」标记：从已选法术中勾选当日准备的法术，按环阶整理展示；顶部显示准备数量上限（法师=智力调整+等级，牧师/德鲁伊=感知调整+等级，圣武士/灵能武士=调整+等级一半，奇械师为压缩球制不限数量），超限提示且不可再准备，只能准备已获得法术位的环阶。角色卡页法术表新增「已准备」列，实时预览与 Excel 导出（模板「准备法术」…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-picker</span>
+      <b>词典与车卡器选择界面统一重构（Picker 组件）</b>
+      <span class="cl-page">（car.html / dict.html）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">抽取公共组件 assets/picker.js（+picker.css）：多选筛选 chips、关键词搜索、分页、列表+详情两栏由同一引擎驱动，词典页与车卡器共用。<br>· 词典页：法术/战技/程序/魔法物品四 Tab 全部改为 Picker 渲染，保留标签搜索（交集/并集）、仪式/专注/价格等原有筛选；<br>· 车卡器：法术步骤新增学派 chips 筛选 + 分页（法师法表 430 个不再一…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-192400-091b</span>
+      <b>狐妖种族名称串入介绍文本</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">修复解析器：种族标题只取首行并去除行尾英文名。狐妖名称由「狐妖Kitsune＋整段介绍」恢复为「狐妖」，其它种族不受影响。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-192600-a2ad</span>
+      <b>种族亚种选择功能</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">选择含「亚种」特性的种族后，出现亚种选择：精灵（高等/木/黑暗/卓尔/日/月精灵）、矮人（丘陵/山地）、半身人（轻足/壮健）、侏儒（森林/岩石），支持手动输入其它亚种；选择记录到角色卡。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-194900-c528</span>
+      <b>词典新增多选筛选（环位/学派/流派/分类等）</b>
+      <span class="cl-page">（dict.html 词典）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">法术、战技、程序、魔法物品四个页签的筛选改为多选按钮组：可同时勾选多个环位（如戏法+1环）、多个学派/流派/分类，组内并集、组间叠加，每组带「清除」按钮一键还原。原单选下拉已由多选按钮组替代。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-202000-c393</span>
+      <b>车卡器已选项目面板（专长/法术）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">专长、法术步骤顶部新增「已选」面板：已选择的专长/法术即时展示（法术按环阶分组），可点击 ✕ 直接移除；移除法术时同步取消其准备标记。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260818-202700-0534</span>
+      <b>已选法术按环阶计数（戏法单列）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-18</span>
+      
+      
+      <div class="cl-detail">法术步骤计数栏由「已选法术 N 个」升级为按环阶拆分：如「已选法术 8 个：戏法 3、1 环 2、2 环 3」，戏法数量单独列出；角色实时预览同步显示环阶明细。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260817-003700-892b</span>
+      <b>法术页新增「标签式搜索」（多标签 + 交集/并集）</b>
+      <span class="cl-page">（dict.html 法术词典）</span>
+      <span class="cl-date">2026-08-17</span>
+      
+      
+      <div class="cl-detail">在词典·法术页新增标签输入框：输入学派或关键词标签（如「塑能」「火焰」）即可筛选；支持叠加多个标签，并可切换「交集（同时满足）/并集（任一满足）」匹配方式。例：塑能 207 个；塑能+火焰 交集 54 个、并集 265 个。原单一学派下拉已由标签框覆盖。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260816-225600-99b4</span>
+      <b>程序词典「香农公式」详情显示被截断</b>
+      <span class="cl-page">（程序词典）</span>
+      <span class="cl-date">2026-08-16</span>
+      
+      
+      <div class="cl-detail">修复解析器：Word 导出残留的空红色加粗标记不再污染段落分类。受影响范围：香农公式等 163 个程序条目补全被截断的描述（含「选择：…」等后续段落），同时清除 7 个误拆的法术幽灵条目。</div>
+    </li></ul>
+  <div class="board-title">⏳ 待确认 / 待决策（7 条）</div>
+  <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260821-160900-aa65</span>
+      <b>种族增加「混血儿」「定制血统」自定义选项</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">功能需求：涉及规则如何定义混血/定制血统的属性加成与特性，需与规则主确认设计后实现。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260821-161200-00c9</span>
+      <b>车卡器支持「兼职」</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">较大功能：兼职规则见「职业」页，且多个兼职专长需联动角色卡特点更新。待设计确认。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260821-162800-ddc3</span>
+      <b>在线规则书内置辅助计算器（遭遇/属性/造物素材）</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">把 5z计算器.xlsx 的三大功能合并进在线规则书。需设计数据来源与交互，待确认。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260821-163000-e5f3</span>
+      <b>打赏功能（娱乐向建议）</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">用户标注「可无视之」。是否做由站长决定，暂不排期。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260821-163300-bbdc</span>
+      <b>各职业攻略手册（娱乐向建议）</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">用户标注「可无视之」，并提到已有爱好者手册可向管理人员索取。站长如有文件可提供，再做排版上架。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260821-163900-a281</span>
+      <b>职业主页面附录过长，建议另开一页</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">盗贼/奇械师/契术师/吟游诗人/德鲁伊/法师/召唤师等职业的附录直接附在主页面底部，阅读不便。需拆分 5z_src 源页面并处理导航，待设计确认。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260821-184700-d73b</span>
+      <b>车卡器支持 Excel 角色卡导入</b>
+      
+      <span class="cl-date">2026-08-22</span>
+      
+      <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
+      
+    </li></ul>
+  <div class="board-title">🆕 待处理（0 条 · 每 60 分钟自动巡检）</div>
+  <p class="st-empty">当前没有待处理反馈。</p>
+</div>
+
 
   <section class="cl-entry">
     <h2>2026-08-22 · v1.59</h2>
@@ -166,12 +447,7 @@
       <span class="cl-page">（car.html 角色创建器）</span>
       <div class="cl-detail">角色卡新增基本信息编辑：角色姓名（实时生效）、玩家、立绘（支持图片 URL 或本地文件上传，压缩后存入浏览器本地存档）。</div>
     </li></ul>
-    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
-    <li class="cl-pend">
-      <span class="cl-id">#20260818-132800-5da0</span>
-      <b>购物页面</b>
-      <div class="cl-detail">⏳ 较大功能：像法术/战技/程序一样为装备购物增加选择页（需先整理装备价格数据）。待设计确认后实现。</div>
-    </li></ul>
+    
   </section>
 
   <section class="cl-entry">
