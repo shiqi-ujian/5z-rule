@@ -58,6 +58,7 @@ function newChar() {
     prepared: [],
     programProtocol: '阿尔法',
     programs: [],
+    equipment: [], budget: '',
     notes: '', items: '', traitsNote: '',
   };
 }
@@ -289,7 +290,7 @@ async function initData() {
 const stage = () => $('#stage');
 const STEP_TITLES = {
   1: '选择种族', 2: '选择职业', 3: '决定属性值', 4: '设定背景', 5: '选择技能熟练',
-  6: '选择专长', 7: '选择法术', 8: '选择战技', 9: '选择程序', 10: '角色卡',
+  6: '选择专长', 7: '选择法术', 8: '选择战技', 9: '选择程序', 10: '角色卡', 11: '购物（魔法物品）',
 };
 const STEP_HINTS = {
   1: '每个角色都有其所属种族。种族提供属性值加成、速度、语言与种族特性。',
@@ -302,6 +303,7 @@ const STEP_HINTS = {
   8: '选择战技流派（及门弟子）与战技。流派入门专长见专长步骤。',
   9: '赛博格专属：按协议层级选择准备程序。其他职业可跳过。',
   10: '完成！可打印、导出 JSON 存档、导出 Excel 角色卡。',
+  11: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。',
 };
 
 function setStep(n) {
@@ -312,7 +314,7 @@ function setStep(n) {
     b.classList.toggle('done', +b.dataset.step < n);
   });
   $('#btn-prev').disabled = n <= 1;
-  $('#btn-next').textContent = n >= 10 ? '完成 ✓' : '下一步 →';
+  $('#btn-next').textContent = n >= 11 ? '完成 ✓' : '下一步 →';
   $('#btn-next').disabled = false;
   render();
 }
@@ -331,6 +333,7 @@ function render() {
     case 8: renderManeuvers(); break;
     case 9: renderPrograms(); break;
     case 10: renderSheet(); break;
+    case 11: renderShop(); break;
   }
   renderLive();
 }
@@ -1207,6 +1210,175 @@ function renderPrograms() {
 }
 
 /* ---------- 步骤10 角色卡 ---------- */
+/* ---------- 步骤11 购物（魔法物品） ---------- */
+// 魔法物品价格分级（与词典页一致）
+const MI_TIERS = [
+  { k: '0', label: '≤100gp', lo: 0, hi: 100 },
+  { k: '1', label: '101–500gp', lo: 101, hi: 500 },
+  { k: '2', label: '501–2000gp', lo: 501, hi: 2000 },
+  { k: '3', label: '2001–1万gp', lo: 2001, hi: 10000 },
+  { k: '4', label: '1万–5万gp', lo: 10001, hi: 50000 },
+  { k: '5', label: '>5万gp', lo: 50001, hi: Infinity },
+];
+// 运行时补全 hay/tiers/span（magic-items.json 原始字段不含这些）
+function enrichMagicItems() {
+  const MI = DATA.magicItems || [];
+  for (const i of MI) {
+    i.hay = [i.name, i.en || '', i.attr || '', i.text || '', (i.tables || []).map(t => t.flat().join(' ')).join(' ')]
+      .join(' ').toLowerCase();
+    const lo = i.pmin, hi = i.pmax == null ? Infinity : i.pmax;
+    i.tiers = [];
+    if (!i.nonsell && lo != null) {
+      for (const t of MI_TIERS) if (lo <= t.hi && hi >= t.lo) i.tiers.push(t.k);
+    }
+    i.span = i.nonsell ? '非卖品'
+      : lo == null ? ''
+      : i.pmax == null ? `≥${lo}gp`
+      : lo === i.pmax ? `${lo}gp`
+      : `${lo}–${i.pmax}gp`;
+  }
+  return MI;
+}
+// 物品预算价：价格区间下限；非卖品/价格见下表 → null（不参与合计）
+function miPrice(i) {
+  if (!i || i.nonsell || !i.pmin) return null;
+  if (i.price === '价格见下表' || /价格见下?表/.test(i.attr || '')) return null;
+  return i.pmin;
+}
+function renderShop() {
+  const c = state.char;
+  const MI = enrichMagicItems();
+  if (!MI.length) { stage().insertAdjacentHTML('beforeend', '<p class="hint">魔法物品数据未加载。</p>'); return; }
+
+  // 预算输入
+  const budgetBox = el('div', 'guide-box');
+  budgetBox.innerHTML = `<b>购物预算（gp）：</b>
+    <input type="number" id="shop-budget" min="0" step="100" value="${c.budget == null ? '' : esc(c.budget)}" placeholder="如 1000" style="width:130px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)">
+    <span class="hint" style="margin-left:8px">留空 = 不限预算。价格为规则书价格区间下限；「非卖品/价格见下表」不计入合计。</span>`;
+  stage().appendChild(budgetBox);
+  const budgetIn = $('#shop-budget');
+  budgetIn.addEventListener('input', () => { c.budget = budgetIn.value.trim(); save(); paintShop(); });
+
+  // 已购面板 + 合计行
+  const cnt = el('div', 'skill-count');
+  stage().appendChild(cnt);
+  const selBox = el('div', 'sel-box');
+  stage().appendChild(selBox);
+
+  const pk = el('div', 'pk-car');
+  const pkToolbar = el('div', 'pk-toolbar');
+  const pkChips = el('div', 'pk-chips');
+  const pkList = el('div', 'pk-list');
+  const pkDetail = el('div', 'pk-detail');
+  const pkPager = el('div', 'pk-pager');
+  pkPager.hidden = true;
+  pk.appendChild(pkToolbar); pk.appendChild(pkChips); pk.appendChild(pkList); pk.appendChild(pkDetail); pk.appendChild(pkPager);
+  stage().appendChild(pk);
+
+  const CATS = [...new Set(MI.map(i => i.sub).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const picker = Picker.create({
+    data: MI,
+    selKey: 'id',
+    pageSize: 80,
+    placeholder: '搜索物品名、类型、效果…',
+    emptyText: '没有匹配的魔法物品。',
+    chips: [
+      { key: 'sub', label: '分类', items: CATS },
+      { key: 'pr', label: '价格', items: [...MI_TIERS.map(t => t.k), 'nonsell', 'none'],
+        labelFn: (k) => { const t = MI_TIERS.find(x => x.k === k); return t ? t.label : (k === 'nonsell' ? '非卖品' : '特别'); },
+        match: (i, k) => k === 'nonsell' ? !!i.nonsell : k === 'none' ? !(i.nonsell || i.pmin != null) : (i.tiers || []).includes(k) },
+    ],
+    hay: (i) => i.hay || '',
+    filter: (i, f) => {
+      if (f.attune === '1' && !i.attune) return false;
+      if (f.attune === '0' && i.attune) return false;
+      if (f.artifact === '1' && !i.artifact) return false;
+      if (f.artifact === '0' && i.artifact) return false;
+      return true;
+    },
+    extraState: { attune: '', artifact: '' },
+    extraToolbar(tb, f, paint) {
+      const wrap = el('span', 'pk-toolbar-extras');
+      wrap.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+      wrap.innerHTML = `<select class="pk-attune"><option value="">同调：全部</option>
+        <option value="1"${f.attune === '1' ? ' selected' : ''}>需同调</option>
+        <option value="0"${f.attune === '0' ? ' selected' : ''}>不需同调</option></select>
+        <select class="pk-artifact"><option value="">神器：全部</option>
+        <option value="1"${f.artifact === '1' ? ' selected' : ''}>仅神器</option>
+        <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>`;
+      tb.appendChild(wrap);
+      $('.pk-attune', wrap).addEventListener('change', (e) => { f.attune = e.target.value; f.page = 1; paint(true); });
+      $('.pk-artifact', wrap).addEventListener('change', (e) => { f.artifact = e.target.value; f.page = 1; paint(true); });
+    },
+    itemHtml: (i) => {
+      const sel = (c.equipment || []).some(x => x.id === i.id);
+      const price = miPrice(i);
+      return `<div class="pk-i-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="pk-tag pk-tag-attune">同调</span>' : ''}</div>
+        <div class="pk-i-sub">${esc(i.sub)} · ${price != null ? price + 'gp' : esc(i.span || i.attr || '未收录价格')}</div>
+        <div class="pk-i-acts">
+          <button type="button" class="nav-btn pk-act" data-act="shop" data-id="${esc(i.id)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '购入'}</button>
+        </div>`;
+    },
+    detailHtml: (i) => {
+      const price = miPrice(i);
+      const fields = [
+        ['类型行', i.attr || '—'],
+        ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
+        ['价格', i.nonsell ? '非卖品' : (price != null ? price + 'gp' : (i.span || '价格见下表'))],
+        ['价格区间', i.span || '—'],
+      ];
+      return `<div class="pk-d-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}</div>
+        <div class="pk-d-sub">${esc(i.sub)}${i.en ? ` · ${esc(i.en)}` : ''}</div>
+        <div class="pk-d-fields">${fields.map(([k, v]) =>
+          `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
+        ${Picker.tablesHtml(i.tables)}
+        ${i.text ? `<div class="pk-d-text">${esc(i.text)}</div>` : '<p class="pk-muted">规则书未收录该物品的独立详述。</p>'}
+        <a class="pk-d-link" href="${esc(i.url)}" target="_blank">📖 规则书原文（${esc(i.sub)}）→</a>`;
+    },
+    containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
+  });
+
+  // 已购面板 + 合计
+  const paintShop = () => {
+    const eq = c.equipment || [];
+    let total = 0, unpriced = 0;
+    const rows = [];
+    for (const x of eq) {
+      const it = MI.find(m => m.id === x.id);
+      const p = miPrice(it);
+      if (p != null) { total += p; rows.push({ id: x.id, name: it ? it.name : x.id, p }); }
+      else { unpriced++; rows.push({ id: x.id, name: it ? it.name : x.id, p: null }); }
+    }
+    const budget = c.budget != null && c.budget !== '' ? Math.max(0, parseInt(c.budget, 10) || 0) : null;
+    const over = budget != null && total > budget;
+    cnt.innerHTML = `已购 <b>${eq.length}</b> 件 · 合计 <b class="${over ? 'over' : ''}" style="${over ? 'color:var(--bad)' : ''}">${total}gp</b>${unpriced ? ` · ${unpriced} 件价格未定（不计入）` : ''}${budget != null ? ` · 预算 <b>${budget}gp</b>${over ? ' <span style="color:var(--bad)">⚠ 超预算</span>' : ''}` : ''}`;
+    selBox.innerHTML = rows.length ? `<div class="sel-box-title">已购清单（<b>${eq.length}</b> 件${budget != null ? ` / 预算 ${budget}gp` : ''}）：</div>
+      <div class="sel-groups">` + rows.map(x =>
+        `<button type="button" class="sel-chip" data-id="${esc(x.id)}">${esc(x.name)}${x.p != null ? ` · ${x.p}gp` : ' · 价格未定'} ✕</button>`).join('') + `</div>`
+      : `<div class="sel-box-title">已购清单：暂无</div>`;
+    selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.id;
+      c.equipment = c.equipment.filter(x => x.id !== id);
+      save(); paintShop(); picker.paint();
+    }));
+  };
+
+  pkList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pk-act');
+    if (!btn || btn.dataset.act !== 'shop') return;
+    const id = btn.dataset.id;
+    c.equipment = c.equipment || [];
+    const i = c.equipment.findIndex(x => x.id === id);
+    if (i >= 0) c.equipment.splice(i, 1); else c.equipment.push({ id });
+    save(); paintShop(); picker.paint();
+  });
+
+  picker.paint();
+  picker.initialDetail();
+  paintShop();
+}
+
 function renderSheet() {
   const c = state.char;
   const s = stage();
@@ -1351,6 +1523,24 @@ function renderSheet() {
     }).join('');
     sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>程序（${c.programs.length}）</h3>
       <table><tr><th>协议</th><th>模块</th><th>名称</th><th>简介</th></tr>${rows}</table></div>`);
+  }
+
+  // —— 装备（购物） ——
+  if ((c.equipment || []).length) {
+    const MI = DATA.magicItems || [];
+    let total = 0, unpriced = 0;
+    const rows = (c.equipment || []).map(x => {
+      const it = MI.find(m => m.id === x.id);
+      const p = miPrice(it);
+      if (p != null) total += p; else unpriced++;
+      return `<tr><td><b>${esc(it ? it.name : x.id)}</b></td><td>${it ? esc(it.sub || '') : ''}</td><td>${p != null ? p + 'gp' : '价格未定'}</td>${it && it.attune ? '<td>需同调</td>' : '<td>—</td>'}</tr>`;
+    }).join('');
+    const budget = c.budget != null && c.budget !== '' ? Math.max(0, parseInt(c.budget, 10) || 0) : null;
+    const over = budget != null && total > budget;
+    sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>装备（魔法物品 ${(c.equipment || []).length} 件${budget != null ? ' · 预算 ' + budget + 'gp' : ''}${over ? ' · ⚠ 超预算' : ''}）</h3>
+      <table><tr><th>名称</th><th>分类</th><th>价格</th><th>同调</th></tr>${rows}</table>
+      <p class="muted" style="margin-top:6px">合计 <b>${total}gp</b>${unpriced ? `（另有 ${unpriced} 件价格未定不计入）` : ''}${budget != null ? `，预算 ${budget}gp，${over ? '<b style="color:var(--bad)">超支 ' + (total - budget) + 'gp</b>' : '未超预算'}` : ''}。价格为规则书价格区间下限。</p>
+    </div>`);
   }
 
   // —— 背景与扮演 ——
@@ -1788,6 +1978,26 @@ function buildSheetExtras() {
   putKV('背景特性', c.bgText, true);
   putKV('额外语言', c.bgLanguage);
   putKV('随身物品', c.items, true);
+  // 装备（购物）：魔法物品清单 + 合计
+  if ((c.equipment || []).length) {
+    const MI = DATA.magicItems || [];
+    let total = 0, unpriced = 0;
+    const lines = (c.equipment || []).map(x => {
+      const it = MI.find(m => m.id === x.id);
+      const p = miPrice(it);
+      if (p != null) total += p; else unpriced++;
+      return `${it ? it.name : x.id}（${it ? it.sub || '' : ''}）${p != null ? p + 'gp' : '价格未定'}`;
+    });
+    s.set(rr, 1, '装备（魔法物品）', SX.label);
+    s.set(rr, 2, lines.join('；'), SX.text); s.merge(rr, 2, 2);
+    s.height(rr, Math.max(22, Math.ceil(lines.join('；').length / 50) * 15 + 8));
+    rr++;
+    putKV('装备合计', total + 'gp' + (unpriced ? `（${unpriced} 件价格未定不计入）` : ''));
+    if (c.budget != null && c.budget !== '') {
+      const b = Math.max(0, parseInt(c.budget, 10) || 0);
+      putKV('购物预算', b + 'gp' + (total > b ? `（超支 ${total - b}gp）` : ''));
+    }
+  }
   putKV('备注 / 法术 / 战技 / 程序', c.traitsNote, true);
   putKV('其他备注', c.notes, true);
   // 1 级职业特性
