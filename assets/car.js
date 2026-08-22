@@ -612,29 +612,31 @@ function renderAttr() {
     const t = e.target;
     if (!t.dataset.attr) return;
     const attr = t.dataset.attr;
-    // 输入中允许为空/任意数字，不立即截断——否则清空瞬间被 || 回退值弹回（反馈 #20260822-152400）
+    // 输入中允许为空（不立即被回退值弹回）；非空则即时截断并回写（反馈 #20260822-152400）
     if (t.id.startsWith('base-')) {
       const v = t.value.trim();
-      if (v !== '' && !isNaN(+v)) c.base[attr] = Math.max(1, Math.min(30, Math.round(+v)));
+      if (v === '' || isNaN(+v)) return;
+      c.base[attr] = Math.max(1, Math.min(30, Math.round(+v)));
+      t.value = String(c.base[attr]);
     } else if (t.id.startsWith('man-')) {
       const v = t.value.trim();
-      if (v !== '' && !isNaN(+v)) c.manual[attr] = Math.max(-10, Math.min(10, Math.round(+v)));
+      if (v === '' || isNaN(+v)) return;
+      c.manual[attr] = Math.max(-10, Math.min(10, Math.round(+v)));
+      t.value = String(c.manual[attr]);
     }
     save(); paint();
   });
   grid.addEventListener('change', (e) => {
-    // 失焦/回车时收敛：空值保持原值、非法/越界截断并回写输入框
+    // 失焦/回车：空值保持原值
     const t = e.target;
     if (!t.dataset.attr) return;
     const attr = t.dataset.attr;
     if (t.id.startsWith('base-')) {
       const v = t.value.trim();
-      c.base[attr] = (v === '' || isNaN(+v)) ? (c.base[attr] != null ? c.base[attr] : 8) : Math.max(1, Math.min(30, Math.round(+v)));
-      t.value = String(c.base[attr]);
+      if (v === '' || isNaN(+v)) t.value = String(c.base[attr] != null ? c.base[attr] : 8);
     } else if (t.id.startsWith('man-')) {
       const v = t.value.trim();
-      c.manual[attr] = (v === '' || isNaN(+v)) ? (c.manual[attr] || 0) : Math.max(-10, Math.min(10, Math.round(+v)));
-      t.value = String(c.manual[attr]);
+      if (v === '' || isNaN(+v)) t.value = String(c.manual[attr] || 0);
     }
     save(); paint();
   });
