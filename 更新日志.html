@@ -35,6 +35,65 @@
 <p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
 
   <section class="cl-entry">
+    <h2>2026-08-22 · v1.59</h2>
+    <p class="cl-release">反馈批处理（问题来源：收集表 10 条，20260821-22 批次）。</p>
+    <h3>✅ 已修复（2）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260822-152400-60ef</span>
+      <b>车卡器属性输入无法清空重填（且超限被强制 30）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <div class="cl-detail">根因：属性输入框在 input 事件里用 `+value || 8` 取值，清空瞬间被回退值弹回 8，玩家只能「先输一个数字再删」的别扭方式调整；且越界值只在状态层截断。修复：输入中允许为空不弹回，非空实时截断并回写输入框（&gt;30 立即显示 30），失焦空值保持原值。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260821-164400-69e6</span>
+      <b>目录新增「展开全部 / 收起全部」</b>
+      <span class="cl-page">（全站左侧导航栏）</span>
+      <div class="cl-detail">左侧目录上方新增两个按钮：一键展开全部分支（92 个），一键全部收起；展开状态与原有记忆机制（localStorage）一致。</div>
+    </li></ul>
+    <h3>⏳ 待确认 / 暂缓（8）</h3><ul>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-160900-aa65</span>
+      <b>种族增加「混血儿」「定制血统」自定义选项</b>
+      <div class="cl-detail">⏳ 功能需求：涉及规则如何定义混血/定制血统的属性加成与特性，需与规则主确认设计后实现。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-161200-00c9</span>
+      <b>车卡器支持「兼职」</b>
+      <div class="cl-detail">⏳ 较大功能：兼职规则见「职业」页，且多个兼职专长需联动角色卡特点更新。待设计确认。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-162600-6286</span>
+      <b>购物页面（催办）</b>
+      <div class="cl-detail">⏳ 8-18 已入待确认计划：像法术/战技/程序一样为装备购物增加选择页。需先整理装备价格数据 + 设计方案，用户已催办。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-162800-ddc3</span>
+      <b>在线规则书内置辅助计算器（遭遇/属性/造物素材）</b>
+      <div class="cl-detail">⏳ 把 5z计算器.xlsx 的三大功能合并进在线规则书。需设计数据来源与交互，待确认。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-163000-e5f3</span>
+      <b>打赏功能（娱乐向建议）</b>
+      <div class="cl-detail">⏳ 用户标注「可无视之」。是否做由站长决定，暂不排期。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-163300-bbdc</span>
+      <b>各职业攻略手册（娱乐向建议）</b>
+      <div class="cl-detail">⏳ 用户标注「可无视之」，并提到已有爱好者手册可向管理人员索取。站长如有文件可提供，再做排版上架。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-163900-a281</span>
+      <b>职业主页面附录过长，建议另开一页</b>
+      <div class="cl-detail">⏳ 盗贼/奇械师/契术师/吟游诗人/德鲁伊/法师/召唤师等职业的附录直接附在主页面底部，阅读不便。需拆分 5z_src 源页面并处理导航，待设计确认。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260821-184700-d73b</span>
+      <b>车卡器支持 Excel 角色卡导入</b>
+      <div class="cl-detail">⏳ 已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
+    </li></ul>
+  </section>
+
+  <section class="cl-entry">
     <h2>2026-08-20 · v1.59</h2>
     <p class="cl-release">反馈修复（问题来源：收集表 #20260820-192900）。</p>
     <h3>✅ 已修复（1）</h3><ul>
