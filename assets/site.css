@@ -84,6 +84,14 @@ body {
   outline: none;
 }
 #q:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124, 58, 237, .15); }
+.toc-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.toc-tools .opt-btn { padding: 3px 10px; }
 .search-options {
   display: flex;
   align-items: center;

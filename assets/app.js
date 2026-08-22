@@ -114,6 +114,27 @@
   }
   renderTree();
 
+  /* ---------- 目录一键全展开 / 全收起（反馈 #20260821-164400） ---------- */
+  function collectBranchIds() {
+    const ids = [];
+    (function walk(ns) {
+      for (const n of ns) { if (n.c) { ids.push(n.i); walk(n.c); } }
+    })(tocData);
+    return ids;
+  }
+  const tocExpand = document.getElementById('toc-expand');
+  const tocCollapse = document.getElementById('toc-collapse');
+  if (tocExpand) tocExpand.addEventListener('click', () => {
+    collectBranchIds().forEach((id) => openSet.add(id));
+    localStorage.setItem('wz-open', JSON.stringify([...openSet]));
+    renderTree();
+  });
+  if (tocCollapse) tocCollapse.addEventListener('click', () => {
+    openSet.clear();
+    localStorage.setItem('wz-open', JSON.stringify([]));
+    renderTree();
+  });
+
   /* ---------- 页面导航 ---------- */
   let pendingTerms = null;
   function openPage(url, terms) {
