@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5z 规则 · 辅助计算器</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/body.css?v=__BUILD_TS__">
+<link rel="stylesheet" href="assets/calculator.css?v=__BUILD_TS__">
+</head>
+<body>
+<div id="app">
+  <nav id="tabs" class="tabs" aria-label="计算器分类">
+    <button type="button" data-tab="attr" class="tab sel">属性计算</button>
+    <button type="button" data-tab="craft" class="tab">造物素材计算</button>
+  </nav>
+
+  <!-- 属性计算 -->
+  <section id="panel-attr" class="panel">
+    <h2>属性计算（32 点购点）</h2>
+    <p class="hint">5z 规则共 5 项属性，使用 32 点购点（8~16），或采用标准属性组，或随机掷骰。</p>
+    <div class="attr-controls">
+      <button id="btn-array" class="btn ghost sm" type="button">标准属性组</button>
+      <button id="btn-roll" class="btn ghost sm" type="button">随机掷骰（5 次 4d6 去最低）</button>
+      <span id="attr-points" class="points"></span>
+    </div>
+    <div id="attr-grid" class="attr-grid"></div>
+  </section>
+
+  <!-- 造物素材计算 -->
+  <section id="panel-craft" class="panel" hidden>
+    <h2>造物素材计算</h2>
+    <p class="hint">按物品/生物类型与造物造价，计算所需无机/有机/魔晶素材与工艺费用（工艺费用 = 造价 × 20%）。</p>
+    <div class="craft-form">
+      <label class="field">物品 / 生物类型
+        <select id="craft-type" class="in"></select>
+      </label>
+      <label class="field">造物造价（gp）
+        <input type="number" id="craft-price" class="in" min="0" step="1" placeholder="如 1000">
+      </label>
+      <button id="btn-craft" class="btn" type="button">计算</button>
+    </div>
+    <div id="craft-result" class="craft-result" hidden>
+      <div class="kv"><span class="k">无机素材</span><span class="v" id="res-m"></span></div>
+      <div class="kv"><span class="k">有机素材</span><span class="v" id="res-o"></span></div>
+      <div class="kv"><span class="k">魔晶素材</span><span class="v" id="res-c"></span></div>
+      <div class="kv"><span class="k">工艺费用</span><span class="v" id="res-f"></span></div>
+    </div>
+  </section>
+</div>
+<div class="foot"><a href="index.html">← 返回目录</a></div>
+<script src="assets/card-data.js?v=__BUILD_TS__"></script>
+<script src="assets/calculator.js?v=__BUILD_TS__"></script>
+</body>
+</html>

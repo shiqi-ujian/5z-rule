@@ -514,7 +514,7 @@ for (const [ph, val] of shellRepl) shell = shell.split(ph).join(val);
 fs.writeFileSync(path.join(OUT, 'index.html'), shell, 'utf8');
 
 // ---------- 7. 复制壳资源 ----------
-for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car.css', 'picker.js', 'picker.css', 'fflate.min.js', 'dict.js', 'dict.css']) {
+for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car.css', 'picker.js', 'picker.css', 'fflate.min.js', 'dict.js', 'dict.css', 'calculator.js', 'calculator.css']) {
   fs.copyFileSync(new URL('./assets/' + f, import.meta.url), path.join(OUT, 'assets', f));
 }
 
@@ -554,6 +554,13 @@ for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car
   let dictHtml = fs.readFileSync(new URL('./dict.html', import.meta.url), 'utf8');
   dictHtml = dictHtml.split('__BUILD_TS__').join(buildTs);
   fs.writeFileSync(path.join(OUT, 'dict.html'), dictHtml, 'utf8');
+}
+
+// ---------- 7.8 辅助计算器页面 ----------
+{
+  let calcHtml = fs.readFileSync(new URL('./calculator.html', import.meta.url), 'utf8');
+  calcHtml = calcHtml.split('__BUILD_TS__').join(buildTs);
+  fs.writeFileSync(path.join(OUT, 'calculator.html'), calcHtml, 'utf8');
 }
 
 // ---------- 8. 部署辅助文件 ----------
