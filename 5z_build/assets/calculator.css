@@ -29,6 +29,25 @@ body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; max
 .kv .v { font-weight: 700; }
 .foot { text-align: center; margin-top: 26px; }
 .foot a { color: #7c3aed; text-decoration: none; }
+.enc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.enc-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; }
+.enc-card h3 { margin: 0 0 10px; font-size: 15px; }
+.enc-monsters { display: flex; flex-direction: column; gap: 8px; }
+.enc-mon-row { display: grid; grid-template-columns: auto 82px 96px 72px; gap: 8px; align-items: end; padding: 6px 8px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px; }
+.enc-mon-row .enc-mon-name { font-size: 13px; font-weight: 700; color: #64748b; align-self: center; }
+.enc-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #475569; font-weight: 600; }
+.enc-field .in { padding: 6px 8px; font-size: 13px; }
+.enc-total { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 8px 10px; background: #f5f3ff; border-radius: 10px; }
+.enc-total span { font-size: 13px; color: #6d28d9; font-weight: 600; }
+.enc-total b { font-size: 17px; color: #6d28d9; }
+.enc-form { display: flex; flex-direction: column; gap: 8px; }
+.enc-result-card { margin-top: 14px; }
+.enc-result { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+.enc-result .kv { display: contents; }
+.enc-result .k { color: #64748b; font-size: 13px; }
+.enc-result .v { font-weight: 700; text-align: right; }
+#enc-r-verdict { color: #7c3aed; font-size: 15px; }
+@media (max-width: 680px) { .enc-grid { grid-template-columns: 1fr; } .enc-mon-row { grid-template-columns: 1fr 1fr 1fr; } .enc-mon-row .enc-mon-name { grid-column: 1 / -1; } }
 @media (prefers-color-scheme: dark) {
   body { background: #16181d; color: #ddd; }
   .tab, .attr-card, .craft-result, .in { background: #1e2128; border-color: #334155; color: #ddd; }
@@ -36,4 +55,10 @@ body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; max
   .points { color: #eee; }
   .btn.ghost { color: #a78bfa; border-color: #a78bfa; }
   .attr-ops button { background: #243450; border-color: #334155; color: #ddd; }
+  .enc-card { background: #1e2128; border-color: #334155; }
+  .enc-mon-row { background: #171a20; border-color: #2a3038; }
+  .enc-mon-row .enc-mon-name, .enc-result .k { color: #9aa; }
+  .enc-field { color: #b9c2cf; }
+  .enc-total { background: #2a1e4d; }
+  .enc-total span, .enc-total b, #enc-r-verdict { color: #c4b5fd; }
 }

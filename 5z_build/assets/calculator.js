@@ -42,14 +42,13 @@
   let vals = Object.fromEntries(ATTRS.map(a => [a, 8]));
 
   /* ---------- Tabs ---------- */
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
   $('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('.tab');
     if (!b) return;
     $$('.tab').forEach(t => t.classList.toggle('sel', t === b));
-    $('#panel-attr').hidden = b.dataset.tab !== 'attr';
-    $('#panel-craft').hidden = b.dataset.tab !== 'craft';
+    $$('.panel').forEach(p => { p.hidden = p.id !== 'panel-' + b.dataset.tab; });
   });
-  const $$ = (s) => Array.from(document.querySelectorAll(s));
 
   /* ---------- 属性计算 ---------- */
   function renderAttr() {
@@ -114,5 +113,111 @@
     $('#craft-result').hidden = false;
   });
 
+  /* ---------- 遭遇难度计算 ---------- */
+  // 数据来自 5z计算器.xlsx「后台计算」：CR→个体分值表（5z/5e/万色）、玩家等级→单人团队、四类调整系数。
+  // 公式：怪物团队总分 = ( Σ 个体分值^0.5714 × 数量 )^1.75 ；玩家团队总分 = 单人团队 × 人数^搭配系数 × 操作水平 × 准备 × 状态；
+  // 难度 = 怪物团队总分 ÷ 玩家团队总分，对照评语表。
+  const ORIGINS = {
+    '5z': { 0: 1, 0.125: 2.5, 0.25: 5, 0.5: 10, 1: 20, 2: 45, 3: 70, 4: 110, 5: 180, 6: 230, 7: 290, 8: 390, 9: 500, 10: 650, 11: 850, 12: 1100, 13: 1400, 14: 1800, 15: 2300, 16: 3000, 17: 3600, 18: 4600, 19: 6000, 20: 7800, 21: 10100, 22: 12000, 23: 14400, 24: 17450, 25: 21000, 26: 25200, 27: 30200, 28: 36300, 29: 43500, 30: 52200 },
+    'dnd5e': { 0: 1, 0.125: 2.5, 0.25: 5, 0.5: 10, 1: 20, 2: 45, 3: 65, 4: 90, 5: 110, 6: 160, 7: 200, 8: 230, 9: 260, 10: 320, 11: 390, 12: 450, 13: 550, 14: 650, 15: 790, 16: 910, 17: 1100, 18: 1300, 19: 1500, 20: 1800, 21: 2150, 22: 2450, 23: 3000, 24: 3300, 25: 3900, 26: 4200, 27: 5000, 28: 5500, 29: 6500, 30: 7800 },
+    '万色卷轴': { 0: 1, 0.125: 2.5, 0.25: 5, 0.5: 10, 1: 20, 2: 45, 3: 100, 4: 180, 5: 230, 6: 290, 7: 430, 8: 650, 9: 850, 10: 1100, 11: 1600, 12: 2300, 13: 3000, 14: 3600, 15: 5200, 16: 7800, 17: 10100, 18: 12000, 19: 16000, 20: 21000, 21: 25200, 22: 30200, 23: 40000, 24: 50000, 25: 60000, 26: 72000, 27: 86400, 28: 103000, 29: 124000, 30: 150000 }
+  };
+  const SOLO = { 0: 10, 1: 20, 2: 45, 3: 70, 4: 110, 5: 180, 6: 230, 7: 290, 8: 390, 9: 500, 10: 650, 11: 850, 12: 1100, 13: 1400, 14: 1800, 15: 2300, 16: 3000, 17: 3600, 18: 4600, 19: 6000, 20: 7800 };
+  const OP = { '顶级高手': 1.35, '熟练老手': 1, '懵懂新手': 0.65 };
+  const SYN = { '定位全面': 2, '基本合格': 1.85, '严重缺陷': 1.7 };
+  const PREP = { '针对性车卡': 1.6, '有上buff时间': 1.15, '仓猝迎战': 1, '被怪物突袭': 0.55 };
+  const STATUS = { '资源充足': 1, '节能模式': 0.8, '油尽灯枯': 0.5 };
+  const VERDICTS = [
+    [0.25, '毫无悬念的清理'],
+    [0.5, '稳操胜券，注意减少损耗'],
+    [0.75, '优势在我，但不可轻敌'],
+    [1, '胜负难料，取决于临场发挥'],
+    [1.33, '优势在敌，但有一线胜机'],
+    [2, '胜算渺茫，需奇迹或完美策略'],
+    [Infinity, '差距悬殊，不可战胜，求生为上'],
+  ];
+  const encMon = [
+    { cr: 14, origin: '5z', qty: 1 },
+    { cr: 0, origin: '5z', qty: 0 },
+    { cr: 0, origin: '5z', qty: 0 },
+    { cr: 0, origin: '万色卷轴', qty: 0 },
+  ];
+
+  // 取个体分值：精确命中表中 CR；否则向下就近（避免非表内 CR 报错）
+  function crScore(cr, origin) {
+    const t = ORIGINS[origin] || ORIGINS['5z'];
+    if (t[cr] != null) return t[cr];
+    let best = 0;
+    for (const k in t) { const kk = +k; if (kk <= cr && kk > best) best = kk; }
+    return t[best] != null ? t[best] : 1;
+  }
+  const fmtNum = (n) => n.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+
+  function encRenderMonsters() {
+    const box = $('#enc-monsters');
+    box.innerHTML = '';
+    encMon.forEach((m, i) => {
+      const originOpts = Object.keys(ORIGINS).map(o => `<option value="${esc(o)}" ${o === m.origin ? 'selected' : ''}>${esc(o)}</option>`).join('');
+      const row = document.createElement('div');
+      row.className = 'enc-mon-row';
+      row.innerHTML =
+        `<span class="enc-mon-name">怪物${i + 1}</span>` +
+        `<label class="enc-field">CR<input type="number" class="in" min="0" step="0.125" data-i="${i}" data-k="cr" value="${m.cr}"></label>` +
+        `<label class="enc-field">出处<select class="in" data-i="${i}" data-k="origin">${originOpts}</select></label>` +
+        `<label class="enc-field">数量<input type="number" class="in" min="0" step="1" data-i="${i}" data-k="qty" value="${m.qty}"></label>`;
+      box.appendChild(row);
+    });
+  }
+  $('#enc-monsters').addEventListener('input', (e) => {
+    const el = e.target.closest('[data-i]');
+    if (!el) return;
+    const i = +el.dataset.i, k = el.dataset.k;
+    if (k === 'cr') encMon[i].cr = parseFloat(el.value) || 0;
+    else if (k === 'qty') encMon[i].qty = parseFloat(el.value) || 0;
+    else if (k === 'origin') encMon[i].origin = el.value;
+    encCalc();
+  });
+
+  function fillSel(sel, items, def) {
+    sel.innerHTML = items.map(it => `<option value="${esc(it)}" ${it === def ? 'selected' : ''}>${esc(it)}</option>`).join('');
+  }
+  const lvOpts = Object.keys(SOLO).map(Number).sort((a, b) => a - b);
+  $('#enc-level').innerHTML = lvOpts.map(v => `<option value="${v}" ${v === 10 ? 'selected' : ''}>${v} 级</option>`).join('');
+  fillSel($('#enc-op'), Object.keys(OP), '懵懂新手');
+  fillSel($('#enc-syn'), Object.keys(SYN), '基本合格');
+  fillSel($('#enc-prep'), Object.keys(PREP), '有上buff时间');
+  fillSel($('#enc-status'), Object.keys(STATUS), '资源充足');
+  $('#enc-player').addEventListener('input', () => encCalc());
+  $('#enc-player').addEventListener('change', () => encCalc());
+
+  function encCalc() {
+    let sum = 0;
+    for (const m of encMon) {
+      if (!m.cr && !m.qty) continue;
+      sum += Math.pow(crScore(m.cr, m.origin), 0.5714) * m.qty;
+    }
+    const total = Math.pow(sum, 1.75);
+    const level = +$('#enc-level').value || 0;
+    const solo = SOLO[level] != null ? SOLO[level] : 0;
+    const n = Math.max(1, parseFloat($('#enc-count').value) || 1);
+    const syn = SYN[$('#enc-syn').value] != null ? SYN[$('#enc-syn').value] : 1.4;
+    const px = Math.pow(n, syn);
+    const op = OP[$('#enc-op').value] != null ? OP[$('#enc-op').value] : 0.65;
+    const prep = PREP[$('#enc-prep').value] != null ? PREP[$('#enc-prep').value] : 1;
+    const status = STATUS[$('#enc-status').value] != null ? STATUS[$('#enc-status').value] : 1;
+    const ptotal = solo * px * op * prep * status;
+    const ratio = ptotal ? total / ptotal : 0;
+    let verdict = VERDICTS[VERDICTS.length - 1][1];
+    for (const [t, s] of VERDICTS) { if (ratio < t) { verdict = s; break; } }
+    $('#enc-m-total').textContent = fmtNum(total);
+    $('#enc-p-total').textContent = fmtNum(ptotal);
+    $('#enc-r-m').textContent = fmtNum(total);
+    $('#enc-r-p').textContent = fmtNum(ptotal);
+    $('#enc-r-ratio').textContent = ratio.toFixed(4);
+    $('#enc-r-verdict').textContent = verdict;
+  }
+
   renderAttr();
+  encRenderMonsters();
+  encCalc();
 })();

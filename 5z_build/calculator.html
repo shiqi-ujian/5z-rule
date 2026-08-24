@@ -13,6 +13,7 @@
   <nav id="tabs" class="tabs" aria-label="计算器分类">
     <button type="button" data-tab="attr" class="tab sel">属性计算</button>
     <button type="button" data-tab="craft" class="tab">造物素材计算</button>
+    <button type="button" data-tab="enc" class="tab">遭遇难度计算</button>
   </nav>
 
   <!-- 属性计算 -->
@@ -45,6 +46,40 @@
       <div class="kv"><span class="k">有机素材</span><span class="v" id="res-o"></span></div>
       <div class="kv"><span class="k">魔晶素材</span><span class="v" id="res-c"></span></div>
       <div class="kv"><span class="k">工艺费用</span><span class="v" id="res-f"></span></div>
+    </div>
+  </section>
+
+  <!-- 遭遇难度计算 -->
+  <section id="panel-enc" class="panel" hidden>
+    <h2>遭遇难度计算</h2>
+    <p class="hint">按规则书「遭遇难度计算」模型：对比怪物团队与玩家团队总分得出难度。CR 用小数（1/2 写 0.5，1/4 写 0.25，1/8 写 0.125）；CR20 以上或怪物超过 10 个时误差较大。</p>
+    <div class="enc-grid">
+      <div class="enc-card">
+        <h3>怪物团队</h3>
+        <div id="enc-monsters" class="enc-monsters"></div>
+        <div class="enc-total"><span>怪物团队总分</span><b id="enc-m-total">–</b></div>
+      </div>
+      <div class="enc-card">
+        <h3>玩家团队</h3>
+        <div id="enc-player" class="enc-form">
+          <label class="field">玩家等级 <select id="enc-level" class="in"></select></label>
+          <label class="field">人数 <input type="number" id="enc-count" class="in" min="1" step="1" value="4"></label>
+          <label class="field">操作水平 <select id="enc-op" class="in"></select></label>
+          <label class="field">是否搭配合理 <select id="enc-syn" class="in"></select></label>
+          <label class="field">是否提前准备 <select id="enc-prep" class="in"></select></label>
+          <label class="field">是否状态完善 <select id="enc-status" class="in"></select></label>
+        </div>
+        <div class="enc-total"><span>玩家团队总分</span><b id="enc-p-total">–</b></div>
+      </div>
+    </div>
+    <div class="enc-card enc-result-card">
+      <h3>难度判定</h3>
+      <div class="enc-result">
+        <div class="kv"><span class="k">怪物团队总分</span><span class="v" id="enc-r-m"></span></div>
+        <div class="kv"><span class="k">玩家团队总分</span><span class="v" id="enc-r-p"></span></div>
+        <div class="kv"><span class="k">怪物 / 玩家分值比</span><span class="v" id="enc-r-ratio"></span></div>
+        <div class="kv"><span class="k">难度评语</span><span class="v" id="enc-r-verdict"></span></div>
+      </div>
     </div>
   </section>
 </div>
