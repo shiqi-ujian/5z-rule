@@ -53,9 +53,18 @@
 
 <div class="status-board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><span class="st done">✅ 已修复 <b>25</b></span><span class="st pend">⏳ 待确认 <b>7</b></span><span class="st open">🆕 待处理 <b>4</b></span></div>
-  <div class="board-title">✅ 已修复（25 条）</div>
+  <div><span class="st done">✅ 已修复 <b>26</b></span><span class="st pend">⏳ 待确认 <b>7</b></span><span class="st open">🆕 待处理 <b>0</b></span></div>
+  <div class="board-title">✅ 已修复（26 条）</div>
   <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260824-docx-export</span>
+      <b>车卡器导出「Excel 角色卡」改为「Word 角色卡」</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-24</span>
+      
+      
+      <div class="cl-detail">研究发现社区 5z 角色卡实际产物 92% 是 Word 文档（.docx/.doc），且为「叙事+手写公式+粘贴规则书原文」的自由格式，Excel 网格装不下，导出 Excel 对玩家太勉强。故新增自研 Word 导出：纯 JS 手工生成 OOXML（仅用 fflate 打包 zip），仿照社区 5z空白角色卡.docx 骨架——车卡器已填数据自动填进基本信息/购点属性/战斗数据/豁免/背景/专…</div>
+    </li>
     <li>
       <span class="cl-id">#20260823-085800-dc32</span>
       <b>全站搜索修复：跨 Word 标签拆断的中文词搜不到</b>
@@ -346,46 +355,23 @@
       <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
       
     </li></ul>
-  <div class="board-title">🆕 待处理（4 条 · 每 60 分钟自动巡检）</div>
-  <ul class="st-list">
-    <li>
-      <span class="cl-id">#20260823-085800-dc32</span>
-      <b>无法搜索到包含“刺剑大师”的全部项目</b>
-      <span class="cl-page">（搜索功能）</span>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      
-    </li>
-    <li>
-      <span class="cl-id">#20260823-085900-83f0</span>
-      <b>缺少遭遇计算器</b>
-      <span class="cl-page">（辅助计算器）</span>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      
-    </li>
-    <li>
-      <span class="cl-id">#20260823-090000-6e3c</span>
-      <b>造物素材计算器的素材单位有误</b>
-      <span class="cl-page">（辅助计算器）</span>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      
-    </li>
-    <li>
-      <span class="cl-id">#20260823-090200-5c80</span>
-      <b>造物素材计算器缺少获得素材的计算功能</b>
-      <span class="cl-page">（辅助计算器）</span>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      
-    </li></ul>
+  <div class="board-title">🆕 待处理（0 条 · 每 60 分钟自动巡检）</div>
+  <p class="st-empty">当前没有待处理反馈。</p>
 </div>
 
+
+  <section class="cl-entry">
+    <h2>2026-08-24 · v1.59</h2>
+    <p class="cl-release">车卡器导出改为 Word（.docx）：对齐社区真实产物形态（非 Excel）。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260824-docx-export</span>
+      <b>车卡器导出「Excel 角色卡」改为「Word 角色卡」</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <div class="cl-detail">研究发现社区 5z 角色卡实际产物 92% 是 Word 文档（.docx/.doc），且为「叙事+手写公式+粘贴规则书原文」的自由格式，Excel 网格装不下，导出 Excel 对玩家太勉强。故新增自研 Word 导出：纯 JS 手工生成 OOXML（仅用 fflate 打包 zip），仿照社区 5z空白角色卡.docx 骨架——车卡器已填数据自动填进基本信息/购点属性/战斗数据/豁免/背景/专长/种族特性/职业特性/技能/法术/战技/程序/随身物品等分节，无法自动填的（背景叙事、主职/子职特性全文、抗性免疫、特点/理想/牵绊/缺点、同调位等）留下「（请从规则书复制粘贴）」粘贴区，玩家拿到即可在 Word 里继续编辑补充。数据全部来自规则书 card-data（与网页角色卡同源，永远同步）。原 Excel 导出降级为「⬇ Excel 数据表」次要入口（旧版模板，仅数据）。机器人已对赛博格/法师/武僧三类角色做回归校验（zip 结构+职业/HP/技能17项/程序/法术+粘贴区），并用 Word COM 验证可正常打开。</div>
+    </li></ul>
+    
+  </section>
 
   <section class="cl-entry">
     <h2>2026-08-23 · v1.59</h2>

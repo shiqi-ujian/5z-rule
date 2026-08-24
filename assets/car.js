@@ -1628,9 +1628,11 @@ function renderSheet() {
   const btns = el('div');
   btns.style.cssText = 'display:flex;gap:10px;margin-top:14px;flex-wrap:wrap';
   btns.innerHTML = `<button type="button" class="nav-btn primary" id="btn-print">🖨 打印角色卡</button>
-    <button type="button" class="nav-btn" id="btn-xlsx">⬇ 导出 Excel 角色卡</button>`;
+    <button type="button" class="nav-btn primary" id="btn-docx">⬇ 导出 Word 角色卡</button>
+    <button type="button" class="nav-btn" id="btn-xlsx" title="以表格形式导出数据（旧版 Excel，仅数据，不适合直接当角色卡）">⬇ Excel 数据表</button>`;
   s.appendChild(btns);
   $('#btn-print').addEventListener('click', () => window.print());
+  $('#btn-docx').addEventListener('click', exportWord);
   $('#btn-xlsx').addEventListener('click', exportExcel);
 }
 
@@ -2075,6 +2077,355 @@ window.__CAR_EXPORT_TEST__ = (charOverride) => {
   } catch (e) { return 'ERROR:' + e.message; }
 };
 
+/* ---------- Word（.docx）导出：纯 JS 手工生成 OOXML，仿社区 5z空白角色卡.docx 骨架 ----------
+ * 背景：社区角色卡实际产物 92% 是 Word 文档（成型卡大量为"叙事+手写公式+粘贴规则书原文"的自由格式），
+ *       Excel 网格装不下。故导出改为 Word：车卡数据自动填进对应分节，无法自动填的（背景叙事、主职/子职特性全文、
+ *       抗性免疫、特点/理想/牵绊/缺点等）留出「（请从规则书复制粘贴）」粘贴区，玩家拿到即可在 Word 里继续编辑。
+ * 数据全部来自规则书 card-data，与网页角色卡同源。仅用 fflate 打包 zip，无第三方库。
+ * 布局：标题 → 基本信息 → 购点属性 → 战斗数据 → 豁免 → 背景 → 专长 → 种族特性 → 主职/子职特性 →
+ *       技能 → 法术 → 战技 → 程序 → 随身物品 → 备注。
+ * OOXML 最小集：document.xml + styles.xml + [Content_Types].xml + _rels/.rels + word/_rels/document.xml.rels
+ */
+const W_NS = '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+
+// 单个 run：处理 \n → <w:br/>，支持加粗/斜体/字号(半点)/颜色/底纹
+function docxRun(text, o) {
+  o = o || {};
+  let rPr = '';
+  if (o.b) rPr += '<w:b/>';
+  if (o.i) rPr += '<w:i/>';
+  if (o.sz) rPr += `<w:sz w:val="${o.sz}"/><w:szCs w:val="${o.sz}"/>`;
+  if (o.color) rPr += `<w:color w:val="${o.color}"/>`;
+  if (o.shd) rPr += `<w:shd w:val="clear" w:color="auto" w:fill="${o.shd}"/>`;
+  const rPrXml = rPr ? '<w:rPr>' + rPr + '</w:rPr>' : '';
+  const lines = String(text == null ? '' : text).split('\n');
+  return lines.map((ln, i) =>
+    '<w:r>' + rPrXml + (i ? '<w:br/>' : '') + `<w:t xml:space="preserve">${xmlEsc(ln)}</w:t>` + '</w:r>'
+  ).join('');
+}
+// 段落：runs 可为字符串(已是 run xml)或数组；opts: jc / spacing(原始spacing属性) / ind(左缩进twips) / pBdr(下边框)
+function docxP(runs, o) {
+  o = o || {};
+  let pPr = '';
+  if (o.jc) pPr += `<w:jc w:val="${o.jc}"/>`;
+  if (o.spacing) pPr += `<w:spacing ${o.spacing}/>`;
+  if (o.ind) pPr += `<w:ind w:left="${o.ind}" w:hanging="0"/>`;
+  if (o.pBdr) pPr += '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="2" w:color="2F5496"/></w:pBdr>';
+  const pPrXml = pPr ? `<w:pPr>${pPr}</w:pPr>` : '';
+  const runXml = Array.isArray(runs) ? runs.join('') : (runs || '');
+  return `<w:p>${pPrXml}${runXml}</w:p>`;
+}
+// 分节标题：深蓝加粗 + 下边框
+function docxSec(title) {
+  return docxP(docxRun(title, { b: true, sz: 28, color: '1F3864' }), { spacing: 'w:before="240" w:after="80"', pBdr: true });
+}
+// 「标签：值」行；long 值时换行缩进整段
+function docxKV(label, value, o) {
+  o = o || {};
+  value = value == null ? '' : String(value);
+  if (!value && !o.keepEmpty) return '';
+  if (o.long) {
+    return docxP(docxRun(label, { b: true, color: '2F5496' }), { spacing: 'w:before="40" w:after="20"' }) +
+      docxP(docxRun(value), { ind: 420 });
+  }
+  return docxP(docxRun(label, { b: true }) + docxRun('：' + value), { spacing: 'w:before="20" w:after="20"' });
+}
+// 粘贴区提示（灰斜体）
+function docxPaste(label) {
+  return docxP(docxRun('▼ ' + label + '　（请从规则书中复制粘贴）', { b: true, color: '808080' }),
+    { spacing: 'w:before="80" w:after="20"' });
+}
+// 表格：headers 数组，rows 二维数组，widths 数组（twips，总和应≤内容宽 9638）
+function docxTable(headers, rows, widths) {
+  const total = widths.reduce((a, b) => a + b, 0);
+  const tblPr = `<w:tblW w:w="${total}" w:type="dxa"/>` +
+    '<w:tblBorders>' +
+    ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+      .map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="B0B0B0"/>`).join('') +
+    '</w:tblBorders>';
+  const grid = `<w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+  const cell = (content, w, head) => {
+    const tcPr = `<w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>` +
+      (head ? '<w:shd w:val="clear" w:color="auto" w:fill="D9E2F3"/>' : '') + '</w:tcPr>';
+    const p = docxP(docxRun(content, head ? { b: true, sz: 21 } : {}), { spacing: 'w:before="40" w:after="40"' });
+    return `<w:tc>${tcPr}${p}</w:tc>`;
+  };
+  let xml = '';
+  if (headers) {
+    xml += `<w:tr>${headers.map((h, i) => cell(h, widths[i], true)).join('')}</w:tr>`;
+  }
+  for (const r of rows) {
+    xml += `<w:tr>${r.map((c, i) => cell(c, widths[i], false)).join('')}</w:tr>`;
+  }
+  return `<w:tbl><w:tblPr>${tblPr}</w:tblPr>${grid}${xml}</w:tbl>`;
+}
+function docxGap() { return docxP('', { spacing: 'w:after="20"' }); }
+
+// 构建正文 block 列表（数组，join 后为 body 内容）
+function buildDocxBody() {
+  const c = state.char;
+  const k = klass();
+  const r = race();
+  const ver = (DATA.rules || {}).version || '';
+  const b = [];
+  const t = (x) => x || '';
+
+  // —— 标题 ——
+  b.push(docxP(docxRun(`5z 角色卡${ver ? '（规则书 v' + ver + '）' : ''}`, { b: true, sz: 36, color: '1F3864' }),
+    { jc: 'center', spacing: 'w:after="120"' }));
+  b.push(docxP(docxRun('由网页车卡器生成 · 可在 Word 中继续编辑补充', { i: true, color: '808080', sz: 18 }),
+    { jc: 'center', spacing: 'w:after="200"' }));
+
+  // —— 基本信息（label/value/label/value 四列两两成对，紧凑） ——
+  b.push(docxSec('基本信息'));
+  const infoPairs = [
+    ['姓名', t(c.name), '玩家', t(c.player)],
+    ['等级', String(c.level || 1), '生命骰', k ? 'D' + hitDie() + ' × ' + c.level : ''],
+    ['职业', k ? k.name : '', '子职', t(c.subclass)],
+    ['种族', r ? r.name : '', '亚种', t(c.subrace)],
+    ['训练选择', (c.raceTraining || '').replace(/^·/, ''), '阵营', t(c.alignment)],
+    ['信仰', t(c.faith), '体型', ''],
+    ['年龄', t(c.age), '性别', t(c.gender)],
+    ['身高体重', t(c.heightWeight), '语言', t(c.bgLanguage)],
+  ].filter(row => row[1] || row[3]);
+  if (infoPairs.length) {
+    b.push(docxTable(null, infoPairs, [1400, 3200, 1400, 3200]));
+  }
+
+  // —— 购点属性 ——
+  b.push(docxSec('购点属性'));
+  const attrRows = ATTRS.map(a => {
+    const manual = c.manual[a] || 0;
+    const lvl = levelUpBonus(a);
+    let breakdown = `基础${c.base[a]}`;
+    if (lvl) breakdown += `，升级+${lvl}`;
+    if (manual) breakdown += `，专长/装备+${manual}`;
+    return [a, finalAttr(a), fmtMod(finalMod(a)), breakdown];
+  });
+  b.push(docxTable(['属性', '最终值', '调整值', '构成（基础/升级/专长装备）'], attrRows, [1200, 1400, 1400, 5200]));
+
+  // —— 战斗数据 ——
+  b.push(docxSec('战斗数据'));
+  b.push(docxKV('生命值上限', k ? String(hpMax()) : ''));
+  b.push(docxKV('生命骰', k ? 'D' + hitDie() : ''));
+  b.push(docxKV('防御等级 AC', k ? String(acValue()) : ''));
+  b.push(docxKV('AC 来源', t(acSourceName())));
+  b.push(docxKV('先攻', fmtMod(initBonus())));
+  b.push(docxKV('熟练加值', k ? '+' + profBonus() : ''));
+  b.push(docxKV('速度', (speedValue() ? speedValue() + ' 尺' : '')));
+  b.push(docxKV('武器熟练', k ? t(k.core.weapons) : ''));
+  b.push(docxKV('护甲熟练', k ? t(k.core.armor) : ''));
+  b.push(docxKV('法术豁免 DC', k ? String(spellDC()) : ''));
+  b.push(docxKV('法术攻击加值', k ? fmtMod(spellAttack()) : ''));
+  b.push(docxKV('施法关键属性', t(c.keyAttr)));
+  b.push(docxPaste('抗性 / 免疫 / 状态免疫'));
+
+  // —— 豁免 ——
+  b.push(docxSec('豁免'));
+  const saveRows = ATTRS.map(a => {
+    const hasSave = k ? k.core.saveList.includes(a) : false;
+    return [a, finalAttr(a), fmtMod(finalMod(a)), hasSave ? '熟练' : '—', fmtMod(saveMod(a))];
+  });
+  b.push(docxTable(['属性', '属性值', '调整值', '豁免熟练', '豁免总值'], saveRows, [1200, 1400, 1400, 1400, 2000]));
+
+  // —— 背景 ——
+  b.push(docxSec('背景'));
+  if (c.bgName) b.push(docxKV('背景', c.bgName));
+  if (c.bgText) b.push(docxKV('背景设定', c.bgText, { long: true }));
+  b.push(docxKV('额外语言', t(c.bgLanguage)));
+  b.push(docxKV('随身物品', t(c.items), { long: true }));
+  b.push(docxPaste('特点 / 理想 / 牵绊 / 缺点'));
+  b.push(docxPaste('人物简介（故事背景）'));
+
+  // —— 专长 ——
+  b.push(docxSec(`专长（${c.feats.length} / ${featQuota()}）`));
+  if (!c.feats.length) {
+    b.push(docxP(docxRun('（未选择专长）', { color: '808080' })));
+  } else {
+    const featRows = c.feats.map((fn, i) => {
+      const f = DATA.feats.find(x => x.name === fn);
+      return [featLv(i), fn, f ? (f.text.split('\n')[0] || '') : ''];
+    });
+    b.push(docxTable(['等级', '名称', '效果摘要'], featRows, [1200, 2600, 5000]));
+    b.push(docxPaste('专长完整效果（从规则书复制粘贴）'));
+  }
+
+  // —— 种族特性 ——
+  if (r && r.traits.some(x => x.name)) {
+    b.push(docxSec(`种族特性（${r.name}）`));
+    const traits = r.traits.filter(x => x.name);
+    const traitRows = traits.map(tr => [tr.name, tr.text || '']);
+    b.push(docxTable(['特性', '效果'], traitRows, [2200, 7200]));
+    if (c.raceTraining) b.push(docxKV('训练选择', c.raceTraining.replace(/^·/, '')));
+    if (c.subrace) b.push(docxKV('亚种', c.subrace));
+  }
+
+  // —— 主职 / 子职特性 ——
+  b.push(docxSec('职业特性'));
+  if (k) {
+    const lv1 = classLv1Features();
+    if (lv1.length) {
+      b.push(docxKV('1 级职业特性', lv1.map(f => f.name).join('、')));
+      lv1.forEach(f => b.push(docxKV(f.name, f.text, { long: true })));
+    }
+    b.push(docxPaste(`主职特性（${k.name}，从规则书复制粘贴你已获得的特性全文）`));
+    if (c.subclass) b.push(docxPaste(`子职特性（${c.subclass}，从规则书复制粘贴）`));
+  }
+
+  // —— 技能（规则书 17 项） ——
+  b.push(docxSec(`技能（${skillChosen()} / ${skillQuota()}）`));
+  const skRows = skillGroupRows();
+  b.push(docxTable(['分类', '技能', '总值', '状态'], skRows.map(x => [x.group, x.name, fmtMod(x.total), X(x.state)]),
+    [1600, 2200, 1400, 1600]));
+  function X(s) { return s === '专精' ? '专精' : s === '熟练' ? '熟练' : '—'; }
+
+  // —— 法术 ——
+  if (c.spells.length) {
+    const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
+    const prepTitle = preparedRule()
+      ? ` · 已准备 ${prepN}${preparedRule().balls ? '' : ' / ' + preparedLimit()}` : '';
+    b.push(docxSec(`法术（${c.spells.length}${prepTitle}）`));
+    const byLv = {};
+    for (const n of c.spells) {
+      const sp = DATA.spells.find(s => s.name === n);
+      const lv = sp ? sp.level : -1;
+      (byLv[lv] = byLv[lv] || []).push(sp || { name: n, text: '' });
+    }
+    const spellRows = Object.keys(byLv).sort((a, b2) => a - b2).map(lv =>
+      byLv[lv].map(sp => [
+        lv === 0 ? '戏法' : lv < 0 ? '?' : lv + '环', sp.name,
+        (c.prepared || []).includes(sp.name) ? '✓' : '', sp.school || '',
+        (sp.text || '').split('\n').slice(1).join('\n').slice(0, 40) || '',
+      ])).flat();
+    b.push(docxTable(['环阶', '名称', '已准备', '学派', '简介'], spellRows, [1000, 2600, 1000, 1400, 4200]));
+    b.push(docxPaste('法术全文本（从规则书复制粘贴）'));
+  }
+  if (c.spells.length && preparedRule()) {
+    b.push(docxP(docxRun('准备数量公式：' + preparedLimitText() + '（未准备的已选法术不在战斗中可用）', { i: true, color: '808080', sz: 18 })));
+  }
+
+  // —— 战技 ——
+  if (c.maneuvers.length) {
+    b.push(docxSec(`战技（${c.maneuvers.length}）${c.maneuverStyle ? '　流派：' + c.maneuverStyle : ''}`));
+    const mvRows = c.maneuvers.map(n => {
+      const m = DATA.maneuvers.find(x => x.name === n);
+      return [m ? m.style : '', m ? m.level + '·' + m.type : '', n, (m ? m.text : '').slice(0, 40)];
+    });
+    b.push(docxTable(['流派', '级别·类型', '名称', '详述'], mvRows, [1200, 1400, 2600, 5200]));
+    b.push(docxPaste('战技全文本（从规则书复制粘贴）'));
+  }
+
+  // —— 程序（赛博格专属） ——
+  if (c.programs.length) {
+    b.push(docxSec(`程序（${c.programs.length}）${c.programProtocol ? '　协议：' + c.programProtocol : ''}`));
+    const pgRows = c.programs.map(n => {
+      const p = DATA.programs.find(x => x.name === n);
+      return [p ? p.protocol : '', p ? (p.module || '') : '', n, (p ? p.text : '').slice(0, 40)];
+    });
+    b.push(docxTable(['协议', '模块', '名称', '详述'], pgRows, [1200, 1400, 2600, 5200]));
+    b.push(docxPaste('程序全文本（从规则书复制粘贴）'));
+  }
+
+  // —— 随身物品 / 资源 ——
+  b.push(docxSec('随身物品'));
+  if ((c.equipment || []).length) {
+    const MI = DATA.magicItems || [];
+    let total = 0;
+    const lines = (c.equipment || []).map(x => {
+      const it = MI.find(m => m.id === x.id);
+      const p = miPrice(it);
+      if (p != null) total += p;
+      return `${it ? it.name : x.id}${it && it.sub ? '（' + it.sub + '）' : ''}${p != null ? '　' + p + 'gp' : '　价格未定'}`;
+    });
+    b.push(docxKV('魔法物品', lines.join('\n'), { long: true }));
+    b.push(docxKV('装备合计', total + 'gp'));
+    if (c.budget != null && c.budget !== '') {
+      const bud = Math.max(0, parseInt(c.budget, 10) || 0);
+      b.push(docxKV('购物预算', bud + 'gp' + (total > bud ? `（超支 ${total - bud}gp）` : '')));
+    }
+  }
+  b.push(docxPaste('同调位 / 武器·法器·奇物·卷轴·魔药清单'));
+
+  // —— 备注 ——
+  if (c.traitsNote || c.notes) {
+    b.push(docxSec('备注'));
+    if (c.traitsNote) b.push(docxKV('备注 / 法术 / 战技 / 程序', c.traitsNote, { long: true }));
+    if (c.notes) b.push(docxKV('其他备注', c.notes, { long: true }));
+  }
+
+  return b;
+}
+
+// 生成填好值的 Word 文档（Uint8Array）。独立函数便于自动化测试。
+function buildDocx() {
+  const enc = new TextEncoder();
+  const body = buildDocxBody().join('');
+  const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    W_NS +
+    '<w:body>' + body +
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr>' +
+    '</w:body></w:document>';
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="宋体" w:eastAsia="宋体" w:hAnsi="宋体" w:cs="宋体"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="60" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+</w:styles>`;
+  const files = {
+    '[Content_Types].xml': enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '</Types>'),
+    '_rels/.rels': enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>'),
+    'word/document.xml': enc.encode(documentXml),
+    'word/_rels/document.xml.rels': enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>'),
+    'word/styles.xml': enc.encode(stylesXml),
+  };
+  return fflate.zipSync(files, { level: 6 });
+}
+
+function exportWord() {
+  if (typeof fflate === 'undefined') { toast('缺少 zip 组件，无法导出'); return; }
+  const c = state.char;
+  if (!c.raceId && !c.classId) { toast('请先完成种族/职业选择'); return; }
+  toast('正在生成 Word 角色卡…');
+  try {
+    const out = buildDocx();
+    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (c.name || '角色') + '.docx';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('已导出 Word 角色卡 ✓');
+  } catch (e) {
+    console.error(e);
+    toast('导出失败：' + (e && e.message ? e.message : e));
+  }
+}
+// 自动化测试钩子：返回 Word 导出结果（base64），不触发下载
+window.__CAR_EXPORT_DOCTEST__ = (charOverride) => {
+  try {
+    if (charOverride) state.char = Object.assign(newChar(), charOverride);
+    const u8 = buildDocx();
+    let bin = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < u8.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
+  } catch (e) { return 'ERROR:' + e.message; }
+};
+
 /* ---------- 导出/导入/新建 ---------- */
 function exportChar() {
   const c = state.char;
@@ -2144,6 +2495,7 @@ async function boot() {
     setStep(state.step + 1);
   });
   $('#btn-export').addEventListener('click', exportChar);
+  $('#btn-export-docx').addEventListener('click', exportWord);
   $('#btn-export-xlsx').addEventListener('click', exportExcel);
   $('#btn-import').addEventListener('click', importChar);
   $('#btn-new').addEventListener('click', newCharAction);
