@@ -55,6 +55,18 @@ const MI_SUBS = [...new Set(MI.map(i => i.sub))]
     const ia = MI_SUB_ORDER.indexOf(a), ib = MI_SUB_ORDER.indexOf(b);
     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
   });
+// 顶级分类（可折叠分组用）：取「（」前的部分，无括号（卷轴/魔药/套装/盾牌）用自身。
+const MI_TOP = (sub) => { const i = sub.indexOf('（'); return i >= 0 ? sub.slice(0, i) : sub; };
+// 顶级分组顺序（已知的按规则书次序，未出现的按拼音兜底）：
+const MI_TOP_ORDER = ['武器', '盔甲', '盾牌', '法器', '服饰', '奇物', '卷轴', '魔药', '套装'];
+const MI_ALL_TOPS = [...new Set(MI_SUBS.map(MI_TOP))];
+for (const t of MI_ALL_TOPS) if (!MI_TOP_ORDER.includes(t)) MI_TOP_ORDER.push(t);
+// 每顶级分组的物品数（用于按钮上显示"共 N 件"）
+const MI_GROUP_ITEM_CT = {};
+for (const i of MI) { const t = MI_TOP(i.sub); MI_GROUP_ITEM_CT[t] = (MI_GROUP_ITEM_CT[t] || 0) + 1; }
+const MI_GROUPS = MI_TOP_ORDER
+  .filter(t => MI_ALL_TOPS.includes(t))
+  .map(t => ({ label: t, items: MI_SUBS.filter(s => MI_TOP(s) === t), count: MI_GROUP_ITEM_CT[t] || 0 }));
 // 价格分级：按价格区间（pmin–pmax）有交集即命中（一件物品可能跨多个档位）
 const MI_TIERS = [
   { k: '0', label: '≤100gp', lo: 0, hi: 100 },
@@ -78,6 +90,49 @@ MI.forEach(i => {
     : lo === i.pmax ? `${lo}gp`
     : `${lo}–${i.pmax}gp`;
 });
+// 列表默认按分类（固定序）排序，同分类内按名称排序，便于分组浏览。
+MI.sort((a, b) => {
+  const ia = MI_SUBS.indexOf(a.sub), ib = MI_SUBS.indexOf(b.sub);
+  return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.name.localeCompare(b.name);
+});
+
+/* ---------- 魔法物品字段提炼 ----------
+ * attr（类型行）实为「[神器], 具体类型(如 武器（标枪）/弹药（箭）/法器（法杖）)，[需XX同调]，价格」揉成一条：
+ *   - 具体类型是 sub 之外的细分，值得单列「类型」；
+ *   - 「需XX同调」与 attuneText 重复，交给「同调」字段；
+ *   - 「价格」交给「价格」字段。
+ * 据此把冗长 attr 收敛为三个一眼可读的字段。 */
+function miType(i) {
+  const parts = (i.attr || '').split(/[，,]/).map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return i.sub || '';
+  const tp = [];
+  for (const p of parts) {
+    if (/^需.*同调$/.test(p)) break;            // 同调子句 -> 停止
+    if (/^价格/.test(p)) break;                 // 价格/价格见下表/价格与其…相同 -> 停止
+    if (/^\d+(?:[.,]\d+)?gp$/i.test(p) || /^至少\d+gp$/i.test(p) || /^非卖品$/i.test(p)) break; // 价格 -> 停止
+    if (/^神器$/.test(p)) continue;             // 神器标记 -> 跳过（神器由角标显示）
+    tp.push(p);
+  }
+  return tp.join('').replace(/[，,]$/, '') || i.sub || '';
+}
+// 价格字符串去掉前置同调子句（"需XX同调，"），同调已由独立字段显示，避免重复
+function miStripAttune(s) { return String(s || '').replace(/^需[^，,，]*同调[，,]?\s*/, '').trim(); }
+function miPrice(i) {
+  if (i.nonsell) return '非卖品';
+  const p = miStripAttune(i.price);
+  if (p && !/^价格见/.test(p)) return p;
+  if (i.span) return i.span;                    // 数字区间（如 20–24000gp），比"见下表"更具体
+  if (i.tables && i.tables.length) return '见下方价格表';
+  return '—';
+}
+// 列表副标题用的价格（比详情更简短；无价格时留空）
+function miListPrice(i) {
+  if (i.nonsell) return '非卖品';
+  if (i.span) return i.span;
+  const p = miStripAttune(i.price);
+  if (p && !/^价格见/.test(p)) return p;
+  return '';
+}
 
 /* ---------- 公共容器 ---------- */
 const C = {
@@ -241,7 +296,7 @@ const miPicker = Picker.create({
   pageSize: 100,
   placeholder: '搜索物品名、类型、效果…',
   emptyText: '没有匹配的魔法物品。',
-  chips: [{ key: 'sub', label: '分类', items: MI_SUBS },
+  chips: [{ key: 'sub', label: '分类', items: MI_SUBS, groups: MI_GROUPS },
     {
       key: 'pr', label: '价格', items: [...MI_TIERS.map(t => t.k), 'nonsell', 'none'],
       labelFn: (k) => {
@@ -252,6 +307,7 @@ const miPicker = Picker.create({
         : k === 'none' ? !(i.nonsell || i.pmin != null)
         : (i.tiers || []).includes(k),
     }],
+  groupBy: (i) => i.sub,
   hay: (i) => i.hay || '',
   filter: (i, f) => {
     if (f.attune === '1' && !i.attune) return false;
@@ -278,21 +334,20 @@ const miPicker = Picker.create({
     bind('.pk-artifact', 'artifact');
   },
   itemHtml: (i) => `<div class="pk-i-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="pk-tag pk-tag-attune">同调</span>' : ''}</div>
-    <div class="pk-i-sub">${esc(i.sub)} · ${esc(i.attr || '未收录类型行')}${i.span ? ` · ${esc(i.span)}` : ''}</div>
+    <div class="pk-i-sub">${esc(i.sub)}${miListPrice(i) ? ` · ${esc(miListPrice(i))}` : ''}</div>
     ${i.text ? `<div class="pk-i-brief">${esc(i.text.split('\n')[0].slice(0, 60))}</div>` : ''}`,
   detailHtml: (i) => {
-    // 分类已显示在副标题（pk-d-sub），详情字段不再重复
+    // 分类/英文名/神器角标显示在副标题；字段收敛为「类型 / 同调 / 价格」三行，去掉冗余的类型行原文与重复区间
     const fields = [
-      ['类型行', i.attr || '—'],
+      ['类型', miType(i)],
       ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
-      ['价格', i.price || (i.attr && /价格见下?表/.test(i.attr) ? '价格见下表' : '—')],
-      ['价格区间', i.span || (i.price === '非卖品' ? '非卖品' : '—')],
+      ['价格', miPrice(i)],
     ];
     return `<div class="pk-d-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}</div>
       <div class="pk-d-sub">${esc(i.sub)}${i.en ? ` · ${esc(i.en)}` : ''}</div>
       <div class="pk-d-fields">${fields.map(([k, v]) =>
         `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
-      ${Picker.tablesHtml(i.tables)}
+      ${(i.tables && i.tables.length) ? `<div class="pk-d-table-title">价格表</div>${Picker.tablesHtml(i.tables)}` : ''}
       ${i.text ? `<div class="pk-d-text">${esc(i.text)}</div>` : '<p class="pk-muted">规则书未收录该物品的独立详述。</p>'}
       <a class="pk-d-link" href="${esc(i.url)}" target="_blank">📖 规则书原文（${esc(i.sub)}）→</a>`;
   },

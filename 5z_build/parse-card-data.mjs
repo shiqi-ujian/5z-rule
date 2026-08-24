@@ -251,7 +251,8 @@ function parseClasses() {
     const name = t.split('/').pop();
     if (seen.has(name)) continue;
     seen.add(name);
-    if (/职业和兼职|非玩家职业/.test(name)) continue;
+    // 附录页（如 法师附录.htm）是职业的补充规则页，不是可选职业，必须排除
+    if (/职业和兼职|非玩家职业|附录/.test(name)) continue;
     const file = t.includes('/')
       ? path.join(dir, ...t.split('/').slice(0, -1), name + '.htm')
       : path.join(dir, name + '.htm');

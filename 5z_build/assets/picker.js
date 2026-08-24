@@ -56,6 +56,62 @@ function chipGroup(items, label, labelFn, selected, onChange) {
   return g;
 }
 
+/* 可折叠二级分组 chips：g.groups = [{ label, items:[子值...] }]。
+   顶级为分组按钮，点按展开/收起其子 chips；selected 仍是扁平子值数组（与筛选逻辑无缝兼容）。 */
+function collapsibleChipGroup(g, selected, onChange) {
+  const root = el('div', 'pk-chip-group pk-cg');
+  const labelRow = el('div', 'pk-chip-row');
+  const lab = el('span', 'pk-chip-label', esc(g.label) + ' ');
+  const clr = el('button', 'pk-chip-clear', '清除');
+  clr.type = 'button';
+  clr.title = '清除该组筛选';
+  clr.onclick = () => {
+    selected.length = 0;
+    root.querySelectorAll('.pk-chipsub .pk-chip').forEach(c => c.classList.remove('on'));
+    root.querySelectorAll('.pk-cg-head.has-sel').forEach(h => h.classList.remove('has-sel'));
+    onChange();
+  };
+  lab.appendChild(clr);
+  labelRow.appendChild(lab);
+  root.appendChild(labelRow);
+
+  const heads = el('div', 'pk-cg-heads');
+  const subs = el('div', 'pk-cg-subs');
+  for (const grp of g.groups || []) {
+    const head = el('button', 'pk-cg-head');
+    head.type = 'button';
+    head.innerHTML = `<span class="pk-cg-caret">▸</span><span class="pk-cg-name">${esc(grp.label)} <span class="pk-cg-count">${grp.count != null ? grp.count : grp.items.length}</span></span>`;
+    head.title = '展开/收起「' + grp.label + '」';
+    const syncHead = () => head.classList.toggle('has-sel', grp.items.some(v => selected.includes(v)));
+    const subWrap = el('span', 'pk-chipsub');
+    subWrap.hidden = true;
+    for (const v of grp.items) {
+      const b = el('button', 'pk-chip' + (selected.includes(v) ? ' on' : ''), esc(g.labelFn ? g.labelFn(v) : String(v)));
+      b.type = 'button';
+      b.title = '可多选，再次点击取消';
+      b.onclick = () => {
+        const i = selected.indexOf(v);
+        if (i >= 0) selected.splice(i, 1); else selected.push(v);
+        b.classList.toggle('on', i < 0);
+        onChange();
+        syncHead();
+      };
+      subWrap.appendChild(b);
+    }
+    syncHead();
+    head.onclick = () => {
+      subWrap.hidden = !subWrap.hidden;
+      head.classList.toggle('open', !subWrap.hidden);
+      head.querySelector('.pk-cg-caret').textContent = subWrap.hidden ? '▸' : '▾';
+    };
+    heads.appendChild(head);
+    subs.appendChild(subWrap);
+  }
+  root.appendChild(heads);
+  root.appendChild(subs);
+  return root;
+}
+
 /* 通用分页工具：返回当前页切片与分页按钮 HTML（需容器 .pk-pager） */
 function pagerHtml(page, pages, onPrev, onNext) {
   return `<button type="button" class="pk-pg-prev" ${page <= 1 ? 'disabled' : ''}>← 上一页</button>
@@ -81,7 +137,8 @@ function tablesHtml(rowsArr) {
  *   data: 数组 | () => 数组          条目数据源（支持函数以便动态更换，如车卡器换职业）
  *   filter: (item, f) => bool       自定义筛选；f = { kw, chips: {key:[...]}, ...extraState }
  *   hay: (item) => string           搜索文本（缺省用 item.name）
- *   chips: [ { key, label, items, labelFn } ]   多选筛选组定义
+ *   chips: [ { key, label, items, labelFn, groups } ]   多选筛选组定义；groups 存在则渲染为可折叠二级分组
+ *   groupBy: (item) => string|null   列表按该键分组（连续分组，组间插入分组标题）；缺省为扁平列表
  *   pageSize: number                每页条数；0/undefined = 不分页
  *   selKey: string                  选中标识字段（缺省 'name'）
  *   containers: { toolbar, chips, list, detail, pager, count }
@@ -144,7 +201,10 @@ function create(opts) {
     // chips（同样只构建一次）
     if (C.chips && !C.chips._pkReady) {
       for (const g of opts.chips || []) {
-        C.chips.appendChild(chipGroup(g.items, g.label, g.labelFn, f.chips[g.key], () => { f.page = 1; paint(true); }));
+        const onChange = () => { f.page = 1; paint(true); };
+        C.chips.appendChild(g.groups
+          ? collapsibleChipGroup(g, f.chips[g.key], onChange)
+          : chipGroup(g.items, g.label, g.labelFn, f.chips[g.key], onChange));
       }
       C.chips._pkReady = true;
     }
@@ -159,7 +219,27 @@ function create(opts) {
     const slice = pageSize ? all.slice((f.page - 1) * pageSize, f.page * pageSize) : all;
     if (C.list) {
       C.list.innerHTML = '';
+      const GROUP = opts.groupBy;
+      let groupCounts = null;
+      if (GROUP) {
+        groupCounts = {};
+        for (const item of all) {
+          const k = GROUP(item);
+          if (k != null && k !== '') groupCounts[k] = (groupCounts[k] || 0) + 1;
+        }
+      }
+      let lastKey;
       for (const item of slice) {
+        if (GROUP) {
+          const k = GROUP(item) || '';
+          if (k !== lastKey) {
+            lastKey = k;
+            const grpHead = el('div', 'pk-group-head');
+            const cnt = groupCounts ? (groupCounts[k] || 0) : 0;
+            grpHead.innerHTML = `<span class="pk-group-name">${esc(k)}</span><span class="pk-group-count">${cnt}</span>`;
+            C.list.appendChild(grpHead);
+          }
+        }
         const it = el('div', 'pk-item' + (f.sel === item[selKey] ? ' sel' : ''));
         it.tabIndex = 0;
         it.setAttribute('role', 'button');
