@@ -46,12 +46,17 @@ function relPath(fromDir, to) {
   while (i < f.length && i < t.length - 1 && f[i] === t[i]) i++;
   return '../'.repeat(f.length - i) + t.slice(i).join('/');
 }
+// 块级/换行标签替换为空格（保留词边界），行内标签（font/span/b…）删除（空串），
+// 否则 Word 生成的 <b>刺剑</b><b>大师</b> 会在 tag 边界处拆断 CJK bigram「剑大」，
+// 导致搜索「刺剑大师」匹配不到该页。行内标签删除后 CJK run 连续，bigram 正确生成。
+const BLOCK_TAG_RE = /<(?:br|hr)\s*\/?>|<\/(?:p|div|tr|td|th|li|ul|ol|h[1-6]|table|section|article|header|footer|blockquote|pre|address|figure|figcaption|dt|dd|dl|tbody|thead|tfoot|caption|fieldset|legend|nav|aside|main|math|ml)\s*>|<(?:p|div|tr|td|th|li|ul|ol|h[1-6]|table|section|article|header|footer|blockquote|pre|address|figure|figcaption|dt|dd|dl|tbody|thead|tfoot|caption|fieldset|legend|nav|aside|main|math|ml)(?:\s[^>]*)?\s*\/?>/gi;
 function extractText(html) {
   let t = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<head[\s\S]*?<\/head>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ');
+    .replace(BLOCK_TAG_RE, ' ')
+    .replace(/<[^>]+>/g, '');
   t = t.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/g, "'")
     .replace(/&ldquo;/g, '“').replace(/&rdquo;/g, '”').replace(/&middot;/g, '·')

@@ -41,11 +41,19 @@ body {
   background: var(--panel);
   border-right: 1px solid var(--border);
   z-index: 30;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .side-head {
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--border);
   flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
 }
 .side-foot {
   flex: none;
@@ -55,6 +63,10 @@ body {
   gap: 8px;
   padding: 9px 14px 10px;
   border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--panel);
 }
 .side-foot .credit {
   font-size: 11.5px;
@@ -233,12 +245,12 @@ body {
 }
 
 /* ---------- 目录树 ---------- */
-/* 桌面端：内层 #toc 独立滚动。min-height:0 必不可少：否则内容超高时不会被压缩、
-   溢出被 #app 裁掉而无法滚动。touch-action: pan-y 显式允许纵向手势（WebView 兼容） */
+/* 侧栏整体作为唯一滚动容器（头部/底部 sticky 固定），#toc 自然铺开、不被压缩。
+   这样即使 WebView 内核不支持嵌套 flex 的 min-height:0 压缩（旧方案在此处失效、
+   树控件无法滚动、反而挤压 CHM 主区），树控件也能独立滚动，主区空间始终不受影响。
+   touch-action 显式允许纵向手势（WebView 兼容） */
 #toc {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  flex: 1 0 auto;
   padding: 8px;
   touch-action: pan-y;
 }
@@ -307,8 +319,8 @@ body {
 
 /* ---------- 移动端 ---------- */
 @media (max-width: 860px) {
-  /* 抽屉：侧栏整体作为滚动容器（sticky 头部/底部），不依赖内层 #toc 滚动，
-     兼容 Via 等 WebView 内核在 fixed/嵌套滚动上的怪异行为。
+  /* 抽屉：只负责把侧栏变成遮罩抽屉（滚动容器/sticky 头尾已由上方基础规则统一处理，
+     所有端共用侧栏整体滚动，兼容 Via 等 WebView 内核在 fixed/嵌套滚动上的怪异行为）。
      用 top/left/bottom 和 width+max-width，避开旧内核不支持的 inset/min()。 */
   #sidebar {
     position: fixed;
@@ -321,22 +333,6 @@ body {
     transform: translateX(-100%);
     transition: transform .22s ease;
     box-shadow: 4px 0 24px rgba(0,0,0,.25);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    touch-action: pan-y;
-  }
-  .side-head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: var(--panel);
-  }
-  .side-foot {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    background: var(--panel);
   }
   body.nav-open #sidebar { transform: translateX(0); }
   body.nav-open #mask {
@@ -351,8 +347,6 @@ body {
   }
   #menu-btn { display: block; }
   #results { max-height: 50vh; }
-  /* 移动端由侧栏整体滚动，目录树不再自己滚（flex 不压缩，内容多高就多高） */
-  #toc { flex: 1 0 auto; overflow: visible; }
 }
 
 /* 车卡入口 */

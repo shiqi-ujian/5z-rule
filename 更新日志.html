@@ -53,9 +53,27 @@
 
 <div class="status-board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><span class="st done">✅ 已修复 <b>23</b></span><span class="st pend">⏳ 待确认 <b>5</b></span><span class="st open">🆕 待处理 <b>0</b></span></div>
-  <div class="board-title">✅ 已修复（23 条）</div>
+  <div><span class="st done">✅ 已修复 <b>25</b></span><span class="st pend">⏳ 待确认 <b>7</b></span><span class="st open">🆕 待处理 <b>4</b></span></div>
+  <div class="board-title">✅ 已修复（25 条）</div>
   <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260823-085800-dc32</span>
+      <b>全站搜索修复：跨 Word 标签拆断的中文词搜不到</b>
+      <span class="cl-page">（全站搜索）</span>
+      <span class="cl-date">2026-08-23</span>
+      
+      
+      <div class="cl-detail">根因：规则书页面由 Word 生成，大量中文词被拆成多个相邻行内标签（如专长名「刺剑大师」由 &lt;b&gt;刺剑&lt;/b&gt;+&lt;b&gt;大师&lt;/b&gt; 拼成），索引器把每个标签当空格，导致「剑大」双字 bigram 在索引中丢失，搜索「刺剑大师」匹配不到该页。修复：索引文本提取改为「块级标签→空格（保留词边界）、行内标签→空串（保留中文连续性）」，跨标签的中文 big</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090000-6e3c</span>
+      <b>辅助计算器·造物素材计算修正（公式 + 单位）</b>
+      <span class="cl-page">（calculator.html 辅助计算器）</span>
+      <span class="cl-date">2026-08-23</span>
+      
+      
+      <div class="cl-detail">校正：①素材单位由「gp」更正为「份」（工艺费用保持 gp）；②修正物品素材计算器误用「生物类型系数表」的错误——改为 5z计算器.xlsx 后台计算的精确物品单位值，公式「素材 = 造价 × 单位值 / 100」（以卷轴 1314gp 实测：有机 39.42 份、魔晶 65.7 份、工艺费用 262.8gp，与原表一致）；类型列表从误混入的生物类型纠正为正确的 11 类物品。</div>
+    </li>
     <li>
       <span class="cl-id">#20260822-152400-60ef</span>
       <b>车卡器属性输入无法清空重填（且超限被强制 30）</b>
@@ -263,8 +281,26 @@
       
       <div class="cl-detail">修复解析器：Word 导出残留的空红色加粗标记不再污染段落分类。受影响范围：香农公式等 163 个程序条目补全被截断的描述（含「选择：…」等后续段落），同时清除 7 个误拆的法术幽灵条目。</div>
     </li></ul>
-  <div class="board-title">⏳ 待确认 / 待决策（5 条）</div>
+  <div class="board-title">⏳ 待确认 / 待决策（7 条）</div>
   <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260823-085900-83f0</span>
+      <b>辅助计算器缺少「遭遇难度计算器」</b>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      <div class="cl-detail">5z计算器.xlsx 中确有该功能，线上缺失。已定位原表可还原数据（后台计算：5e/5z/万色 CR→个体分值、玩家等级→单人团队分、人数/操作水平/搭配/准备/状态系数），但需核对「√求和再平方」精确实装与各项系数取值，避免发布错误数值，待专门一轮实现。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090200-5c80</span>
+      <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      <div class="cl-detail">5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
+      
+    </li>
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
       <b>种族增加「混血儿」「定制血统」自定义选项</b>
@@ -310,10 +346,75 @@
       <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
       
     </li></ul>
-  <div class="board-title">🆕 待处理（0 条 · 每 60 分钟自动巡检）</div>
-  <p class="st-empty">当前没有待处理反馈。</p>
+  <div class="board-title">🆕 待处理（4 条 · 每 60 分钟自动巡检）</div>
+  <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260823-085800-dc32</span>
+      <b>无法搜索到包含“刺剑大师”的全部项目</b>
+      <span class="cl-page">（搜索功能）</span>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260823-085900-83f0</span>
+      <b>缺少遭遇计算器</b>
+      <span class="cl-page">（辅助计算器）</span>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090000-6e3c</span>
+      <b>造物素材计算器的素材单位有误</b>
+      <span class="cl-page">（辅助计算器）</span>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090200-5c80</span>
+      <b>造物素材计算器缺少获得素材的计算功能</b>
+      <span class="cl-page">（辅助计算器）</span>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      
+    </li></ul>
 </div>
 
+
+  <section class="cl-entry">
+    <h2>2026-08-23 · v1.59</h2>
+    <p class="cl-release">反馈批处理（问题来源：收集表 2 条修复 + 2 条待确认，20260823 批次）。</p>
+    <h3>✅ 已修复（2）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260823-085800-dc32</span>
+      <b>全站搜索修复：跨 Word 标签拆断的中文词搜不到</b>
+      <span class="cl-page">（全站搜索）</span>
+      <div class="cl-detail">根因：规则书页面由 Word 生成，大量中文词被拆成多个相邻行内标签（如专长名「刺剑大师」由 &lt;b&gt;刺剑&lt;/b&gt;+&lt;b&gt;大师&lt;/b&gt; 拼成），索引器把每个标签当空格，导致「剑大」双字 bigram 在索引中丢失，搜索「刺剑大师」匹配不到该页。修复：索引文本提取改为「块级标签→空格（保留词边界）、行内标签→空串（保留中文连续性）」，跨标签的中文 bigram 全部恢复，搜索漏页问题全域解决。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260823-090000-6e3c</span>
+      <b>辅助计算器·造物素材计算修正（公式 + 单位）</b>
+      <span class="cl-page">（calculator.html 辅助计算器）</span>
+      <div class="cl-detail">校正：①素材单位由「gp」更正为「份」（工艺费用保持 gp）；②修正物品素材计算器误用「生物类型系数表」的错误——改为 5z计算器.xlsx 后台计算的精确物品单位值，公式「素材 = 造价 × 单位值 / 100」（以卷轴 1314gp 实测：有机 39.42 份、魔晶 65.7 份、工艺费用 262.8gp，与原表一致）；类型列表从误混入的生物类型纠正为正确的 11 类物品。</div>
+    </li></ul>
+    <h3>⏳ 待确认 / 暂缓（2）</h3><ul>
+    <li class="cl-pend">
+      <span class="cl-id">#20260823-085900-83f0</span>
+      <b>辅助计算器缺少「遭遇难度计算器」</b>
+      <div class="cl-detail">⏳ 5z计算器.xlsx 中确有该功能，线上缺失。已定位原表可还原数据（后台计算：5e/5z/万色 CR→个体分值、玩家等级→单人团队分、人数/操作水平/搭配/准备/状态系数），但需核对「√求和再平方」精确实装与各项系数取值，避免发布错误数值，待专门一轮实现。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20260823-090200-5c80</span>
+      <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
+      <div class="cl-detail">⏳ 5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
+    </li></ul>
+  </section>
 
   <section class="cl-entry">
     <h2>2026-08-22 · v1.59</h2>
