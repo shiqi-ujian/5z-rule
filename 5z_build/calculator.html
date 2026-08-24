@@ -47,6 +47,26 @@
       <div class="kv"><span class="k">魔晶素材</span><span class="v" id="res-c"></span></div>
       <div class="kv"><span class="k">工艺费用</span><span class="v" id="res-f"></span></div>
     </div>
+
+    <h3 class="craft-sub">怪物素材获得计算</h3>
+    <p class="hint">按生物类型、怪物等级（CR）与数量，计算击杀怪物的素材产出：素材 = 类型系数 × CR² × 数量（单位：份）。</p>
+    <div class="craft-form">
+      <label class="field">生物类型
+        <select id="mon-type" class="in"></select>
+      </label>
+      <label class="field">怪物等级（CR）
+        <input type="number" id="mon-cr" class="in" min="0" step="0.125" placeholder="如 6">
+      </label>
+      <label class="field">怪物数量
+        <input type="number" id="mon-qty" class="in" min="1" step="1" value="1">
+      </label>
+      <button id="btn-mon" class="btn" type="button">计算</button>
+    </div>
+    <div id="mon-result" class="craft-result" hidden>
+      <div class="kv"><span class="k">无机素材</span><span class="v" id="res-mon-m"></span></div>
+      <div class="kv"><span class="k">有机素材</span><span class="v" id="res-mon-o"></span></div>
+      <div class="kv"><span class="k">魔晶素材</span><span class="v" id="res-mon-c"></span></div>
+    </div>
   </section>
 
   <!-- 遭遇难度计算 -->

@@ -76,10 +76,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>27</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>6</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>28</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>5</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（27 条）</summary>
+    <summary>✅ 已修复（28 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -323,10 +323,19 @@
       
       
       <div class="cl-detail">新增「遭遇难度计算」页签，按 5z计算器.xlsx「后台计算」逐项还原：怪物团队总分 = (Σ 个体分值^0.5714 × 数量)^1.75（出处 5z/dnd5e/万色卷轴 各查 CR→个体分值表）；玩家团队总分 = 单人团队(按玩家等级) × 人数^搭配系数 × 操作水平 × 准备 × 状态系数；分值比（怪物÷玩家）对照 7 档评语。默认示例校验：怪物 1,799.33 / 玩家 6,314.…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090200-5c80</span>
+      <b>辅助计算器新增「怪物素材获得计算」（不同 CR/生物类型）</b>
+      <span class="cl-page">（calculator.html 辅助计算器 · 造物素材计算）</span>
+      <span class="cl-date">2026-08-25</span>
+      
+      
+      <div class="cl-detail">在「造物素材计算」页新增「怪物素材获得计算」：按生物类型、怪物等级（CR）、数量计算击杀怪物的素材产出——素材 = 类型系数 × CR² × 数量（单位：份），14 类生物类型系数取自 5z计算器.xlsx 后台计算 G61:J74。原 note 所述「怪物等级→基准值=CR×6 尚需多组验证」系误判，实为公式 系数×CR²×数量（sheet 公式 VLOOKUP(系数)*B7*B7*C7），泥怪…</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
-    <summary>⏳ 待确认 / 待决策（6 条）</summary>
+    <summary>⏳ 待确认 / 待决策（5 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
@@ -372,15 +381,6 @@
       
       <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
       
-    </li>
-    <li>
-      <span class="cl-id">#20260823-090200-5c80</span>
-      <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      <div class="cl-detail">5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
-      
     </li></ul>
   </details>
   <details id="board-open" class="board-sec">
@@ -392,14 +392,20 @@
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
-    <p class="cl-release">辅助计算器新增「遭遇难度计算器」：还原 5z计算器.xlsx「后台计算」模型，补齐线上缺失的此项（原为 08-23 待确认项）。</p>
-    <h3>✅ 已修复（1）</h3><ul>
+    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">✅2</span></summary>
+    <p class="cl-release">辅助计算器补齐「遭遇难度计算器」与「怪物素材获得计算」两项线上缺失功能，均按 5z计算器.xlsx「后台计算/造物素材计算」还原（原为 08-23 待确认项）。</p>
+    <h3>✅ 已修复（2）</h3><ul>
     <li class="cl-fix">
       <span class="cl-id">#20260823-085900-83f0</span>
       <b>辅助计算器新增「遭遇难度计算器」</b>
       <span class="cl-page">（calculator.html 辅助计算器 · 遭遇难度计算）</span>
       <div class="cl-detail">新增「遭遇难度计算」页签，按 5z计算器.xlsx「后台计算」逐项还原：怪物团队总分 = (Σ 个体分值^0.5714 × 数量)^1.75（出处 5z/dnd5e/万色卷轴 各查 CR→个体分值表）；玩家团队总分 = 单人团队(按玩家等级) × 人数^搭配系数 × 操作水平 × 准备 × 状态系数；分值比（怪物÷玩家）对照 7 档评语。默认示例校验：怪物 1,799.33 / 玩家 6,314.45，评语「稳操胜券，注意减少损耗」，与 Excel 缓存值一致。原表注释「先求平方根再求和再平方」实际实现为 0.5714 / 1.75 指数，已按精确实装而非字面 √、²。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260823-090200-5c80</span>
+      <b>辅助计算器新增「怪物素材获得计算」（不同 CR/生物类型）</b>
+      <span class="cl-page">（calculator.html 辅助计算器 · 造物素材计算）</span>
+      <div class="cl-detail">在「造物素材计算」页新增「怪物素材获得计算」：按生物类型、怪物等级（CR）、数量计算击杀怪物的素材产出——素材 = 类型系数 × CR² × 数量（单位：份），14 类生物类型系数取自 5z计算器.xlsx 后台计算 G61:J74。原 note 所述「怪物等级→基准值=CR×6 尚需多组验证」系误判，实为公式 系数×CR²×数量（sheet 公式 VLOOKUP(系数)*B7*B7*C7），泥怪 CR6×1 实测 21.6/14.4/7.2 与 Excel 缓存一致。</div>
     </li></ul>
     
   </details>
@@ -418,7 +424,7 @@
   </details>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-08-23 · v1.59</span><span class="cl-batch-hint">✅2 / ⏳1</span></summary>
+    <summary><span class="cl-title">2026-08-23 · v1.59</span><span class="cl-batch-hint">✅2</span></summary>
     <p class="cl-release">反馈批处理（问题来源：收集表 2 条修复 + 2 条待确认，20260823 批次）。</p>
     <h3>✅ 已修复（2）</h3><ul>
     <li class="cl-fix">
@@ -433,12 +439,7 @@
       <span class="cl-page">（calculator.html 辅助计算器）</span>
       <div class="cl-detail">校正：①素材单位由「gp」更正为「份」（工艺费用保持 gp）；②修正物品素材计算器误用「生物类型系数表」的错误——改为 5z计算器.xlsx 后台计算的精确物品单位值，公式「素材 = 造价 × 单位值 / 100」（以卷轴 1314gp 实测：有机 39.42 份、魔晶 65.7 份、工艺费用 262.8gp，与原表一致）；类型列表从误混入的生物类型纠正为正确的 11 类物品。</div>
     </li></ul>
-    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
-    <li class="cl-pend">
-      <span class="cl-id">#20260823-090200-5c80</span>
-      <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
-      <div class="cl-detail">⏳ 5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
-    </li></ul>
+    
   </details>
 
   <details class="cl-entry">

@@ -24,6 +24,7 @@ body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; max
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: #475569; font-weight: 600; }
 .in { padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: #fff; color: #1e293b; }
 .craft-result { margin-top: 18px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; display: grid; gap: 8px; max-width: 420px; }
+.craft-sub { margin: 20px 0 8px; padding-top: 14px; font-size: 15px; color: #1e293b; border-top: 1px solid #e2e8f0; }
 .kv { display: flex; justify-content: space-between; }
 .kv .k { color: #64748b; font-size: 13px; }
 .kv .v { font-weight: 700; }
@@ -52,6 +53,7 @@ body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; max
   body { background: #16181d; color: #ddd; }
   .tab, .attr-card, .craft-result, .in { background: #1e2128; border-color: #334155; color: #ddd; }
   .hint, .attr-name, .attr-cost, .kv .k, .field { color: #9aa; }
+  .craft-sub { color: #ddd; border-color: #334155; }
   .points { color: #eee; }
   .btn.ghost { color: #a78bfa; border-color: #a78bfa; }
   .attr-ops button { background: #243450; border-color: #334155; color: #ddd; }

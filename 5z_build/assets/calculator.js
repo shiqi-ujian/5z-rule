@@ -113,6 +113,39 @@
     $('#craft-result').hidden = false;
   });
 
+  /* ---------- 怪物素材获得计算 ---------- */
+  // 素材 = 类型系数 × CR² × 数量（系数来自 5z计算器.xlsx 后台计算 G61:J74，14 类生物类型）
+  // 泥怪 CR6×1 实测：0.6×36=21.6 / 0.4×36=14.4 / 0.2×36=7.2，与 Excel 缓存一致。
+  const MON_CREATURES = [
+    ['异怪', 0.3, 0.4, 0.6],
+    ['野兽', 0, 0.5, 0],
+    ['植物', 0, 0.7, 0.3],
+    ['天界生物', 0.2, 0.6, 0.7],
+    ['构装生物', 1.2, 0, 0.3],
+    ['不死生物', 0.2, 0.3, 0.2],
+    ['龙类', 0.5, 1, 1],
+    ['元素生物', 0.7, 0, 0.3],
+    ['精类', 0.4, 0.3, 0.3],
+    ['邪魔', 0.2, 0.6, 0.7],
+    ['巨人', 0.3, 0.6, 0.3],
+    ['类人生物', 0, 0.6, 0.2],
+    ['怪兽', 0.4, 0.4, 0.4],
+    ['泥怪', 0.6, 0.4, 0.2],
+  ];
+  const monSel = $('#mon-type');
+  monSel.innerHTML = MON_CREATURES.map((m, i) => `<option value="${i}">${esc(m[0])}</option>`).join('');
+  $('#btn-mon').addEventListener('click', () => {
+    const m = MON_CREATURES[parseInt(monSel.value, 10)];
+    const cr = Math.max(0, parseFloat($('#mon-cr').value) || 0);
+    const qty = Math.max(1, parseFloat($('#mon-qty').value) || 1);
+    if (!m) return;
+    const base = cr * cr * qty;
+    $('#res-mon-m').textContent = (m[1] * base).toFixed(2) + ' 份';
+    $('#res-mon-o').textContent = (m[2] * base).toFixed(2) + ' 份';
+    $('#res-mon-c').textContent = (m[3] * base).toFixed(2) + ' 份';
+    $('#mon-result').hidden = false;
+  });
+
   /* ---------- 遭遇难度计算 ---------- */
   // 数据来自 5z计算器.xlsx「后台计算」：CR→个体分值表（5z/5e/万色）、玩家等级→单人团队、四类调整系数。
   // 公式：怪物团队总分 = ( Σ 个体分值^0.5714 × 数量 )^1.75 ；玩家团队总分 = 单人团队 × 人数^搭配系数 × 操作水平 × 准备 × 状态；
