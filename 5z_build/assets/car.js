@@ -20,6 +20,60 @@ const el = (tag, cls, html) => {
 const ATTRS = ['力量', '敏捷', '体质', '智力', '感知'];
 const STORAGE_KEY = '5z-car-char-v1';
 
+/* ---------- 法术学派 / 程序模块 智能筛选辅助（与词典页一致） ----------
+ * 不做"把所有组合逐一双列"的 chips，改为：任选基础项 → 智能匹配命中项。
+ */
+// 程序核心演算模块（顺序即展示顺序）
+const CORE_MODULES = ['火力', '工程', '信息', '生存', '时空'];
+// 程序的所需模块解析：module 可能为 单个 / 组合 / 无 / 任意两个 / 空（空则回退正文"所需模块"行）
+function progModuleInfo(p) {
+  let raw = String(p.module || '').trim();
+  if (!raw) {
+    const m = /所需模块：\s*([^\n]+)/.exec(p.text || '');
+    if (m) raw = m[1].trim();
+  }
+  if (!raw || raw === '无') return { list: [], none: true, any: false };
+  if (/任意两个/.test(raw)) return { list: [], none: false, any: true };
+  return { list: raw.split(/[、,，;；\s]+/).map(s => s.trim()).filter(Boolean), none: false, any: false };
+}
+// 所需模块可读标签：无 / 任意两个 / 按 CORE_MODULES 顺序排的具体组合
+function moduleLabel(p) {
+  const info = progModuleInfo(p);
+  if (info.none) return '无';
+  if (info.any) return '任意两个';
+  if (!info.list.length) return '无';
+  return CORE_MODULES.filter(m => info.list.includes(m)).join('、');
+}
+// 法术的学派解析：单 / 多学派（预言/变化/防护）/ 任意学派 / 传奇"法术"占位 / 空
+function spellSchools(x) {
+  let raw = String(x.school || '').trim();
+  if (!raw) return [];
+  if (raw === '法术') {
+    // 传奇法术：真实学派在正文首行（如 "传奇法术 塑能"）
+    const m = /^(?:传奇(?:法术)?|([零一二三四五六七八九十百]+)环|戏法)\s*([^\s/（(]+)/.exec(x.text || '');
+    if (m && m[2]) raw = m[2];
+  }
+  return raw.split('/').map(s => s.trim()).filter(Boolean);
+}
+function spellMatchSchool(x, v) {
+  const set = spellSchools(x);
+  if (!set.length) return false;
+  if (set.includes('任意学派') && v !== '法术') return true; // 任意学派 → 匹配任意常规学派
+  return set.includes(v);
+}
+// 学派可读标签
+function schoolLabel(s) {
+  const set = spellSchools(s);
+  if (!set.length) return '未知学派';
+  if (set.includes('任意学派')) return '任意学派';
+  return set.join('/');
+}
+// 列表用基础学派（原子学派，剔除"任意学派"与"法术"占位）
+function baseSchools(list) {
+  return [...new Set(list.flatMap(s => spellSchools(s)).filter(x => x && x !== '任意学派'))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
 function toast(msg) {
   const t = $('#toast');
   t.textContent = msg;
@@ -909,7 +963,7 @@ function renderSpells() {
   stage().appendChild(pk);
 
   const LEVELS = [...new Set(spells.map(s => s.level))].sort((a, b) => a - b);
-  const SCHOOLS = [...new Set(spells.map(s => s.school).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const SCHOOLS = baseSchools(spells);
 
   const picker = Picker.create({
     data: spells,
@@ -919,7 +973,7 @@ function renderSpells() {
     emptyText: '没有匹配的法术。',
     chips: [
       { key: 'level', label: '环位', items: LEVELS, labelFn: lvLabel },
-      { key: 'school', label: '学派', items: SCHOOLS },
+      { key: 'school', label: '学派（任选，命中任一即显示）', items: SCHOOLS, match: spellMatchSchool },
     ],
     hay: (s) => s.name + ' ' + s.text,
     containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
@@ -928,7 +982,7 @@ function renderSpells() {
       const isPrep = prepRule && (c.prepared || []).includes(s.name);
       const canPrep = prepRule && s.level >= 1 && s.level <= maxSlotLevel();
       return `<div class="pk-i-name">${esc(s.name)}${isPrep ? ' <span class="pk-tag pk-tag-prep">已准备</span>' : ''}</div>
-        <div class="pk-i-sub">${lvLabel(s.level)} · ${esc(s.school || '未知学派')}</div>
+        <div class="pk-i-sub">${lvLabel(s.level)} · ${esc(schoolLabel(s))}</div>
         <div class="pk-i-acts">
           <button type="button" class="nav-btn pk-act" data-act="sel" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
           ${canPrep ? `<button type="button" class="nav-btn pk-act${isPrep ? ' on' : ''}" data-act="prep" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px" ${isPrep ? 'disabled' : ''}>${isPrep ? '✓ 已准备' : '准备'}</button>` : ''}
@@ -936,14 +990,14 @@ function renderSpells() {
     },
     detailHtml: (s) => {
       const fields = [
-        ['环阶', lvLabel(s.level)], ['学派', s.school || '—'],
+        ['环阶', lvLabel(s.level)], ['学派', schoolLabel(s)],
         ['施法时间', s.castTime || '—'], ['施法距离', s.range || '—'],
         ['法术目标', s.target || '—'], ['法术成分', s.components || '—'],
         ['持续时间', s.duration || '—'], ['需要专注', s.focus ? '是' : '否'],
         ['仪式', s.ritual ? '是（可作为仪式施展）' : '否'],
       ];
       return `<div class="pk-d-name">${esc(s.name)}</div>
-        <div class="pk-d-sub">${lvLabel(s.level)} · ${esc(s.school || '未知学派')}</div>
+        <div class="pk-d-sub">${lvLabel(s.level)} · ${esc(schoolLabel(s))}</div>
         <div class="pk-d-fields">${fields.map(([k, v]) =>
           `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
         <div class="pk-d-text">${esc(s.text)}</div>
@@ -1140,21 +1194,35 @@ function renderPrograms() {
   pk.appendChild(pkPager);
   stage().appendChild(pk);
 
-  const MODULES = [...new Set(DATA.programs.map(x => x.module).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-
   const picker = Picker.create({
     data: () => DATA.programs.filter(x => x.protocol === (c.programProtocol || '阿尔法')),
     selKey: 'name',
     pageSize: 100,
     placeholder: '搜索程序名或效果…',
     emptyText: '没有匹配的程序。',
-    chips: [{ key: 'module', label: '模块', items: MODULES }],
+    // 模块：只列 5 个核心模块（任选）。匹配规则为「所需模块 ⊆ 已选模块」，
+    // 由下方 filter 按"能用的程序"语义判定；此处 match 恒真以绕过 chips 的 OR 预筛。
+    chips: [{ key: 'module', label: '模块（任选，显示能用的程序）', items: CORE_MODULES, match: () => true }],
     hay: (p) => p.name + ' ' + (p.text || ''),
+    filter: (p, f) => {
+      const sel = f.chips.module || [];
+      if (sel.length) {
+        const info = progModuleInfo(p);
+        if (!info.none) {
+          if (info.any) {
+            if (sel.length < 2) return false;          // 任意两个：需勾选 ≥2 个模块
+          } else if (!info.list.every(m => sel.includes(m))) {
+            return false;                               // 所需模块必须全部被勾选
+          }
+        }
+      }
+      return true;
+    },
     containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
     itemHtml: (p) => {
       const sel = c.programs.includes(p.name);
       return `<div class="pk-i-name">${esc(p.name)}${p.focus ? ' <span class="pk-tag pk-tag-focus">专注</span>' : ''}</div>
-        <div class="pk-i-sub">${esc(p.protocol)} · ${esc(p.module || '无模块')} · ${esc(p.act || '')}</div>
+        <div class="pk-i-sub">${esc(p.protocol)} · ${esc(moduleLabel(p))} · ${esc(p.act || '')}</div>
         <div class="pk-i-acts">
           <button type="button" class="nav-btn pk-act" data-name="${esc(p.name)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
         </div>`;
@@ -1162,7 +1230,7 @@ function renderPrograms() {
     detailHtml: (p) => `<div class="pk-d-name">${esc(p.name)}</div>
       <div class="pk-d-sub">${esc(p.protocol)}协议</div>
       <div class="pk-d-fields">
-        <div class="f"><span class="k">所需模块</span><span class="v">${esc(p.module || '无')}</span></div>
+        <div class="f"><span class="k">所需模块</span><span class="v">${esc(moduleLabel(p))}</span></div>
         <div class="f"><span class="k">激活时间</span><span class="v">${esc(p.act || '—')}</span></div>
         <div class="f"><span class="k">需要专注</span><span class="v">${p.focus ? '是' : '否'}</span></div>
       </div>
@@ -1175,7 +1243,7 @@ function renderPrograms() {
     if (c.programs.length) {
       const rows = c.programs.map(n => {
         const p = DATA.programs.find(x => x.name === n);
-        return `<span class="sel-chip" data-f="${esc(n)}">${esc(n)}${p ? `（${esc(p.protocol)} ${esc(p.module || '')}）` : ''} ✕</span>`;
+        return `<span class="sel-chip" data-f="${esc(n)}">${esc(n)}${p ? `（${esc(p.protocol)} ${esc(moduleLabel(p))}）` : ''} ✕</span>`;
       }).join('');
       selBox.innerHTML = `<div class="sel-box-title">已选程序（<b>${c.programs.length}</b> 个）：</div>
         <div class="sel-chips">${rows}</div>`;
@@ -1500,7 +1568,7 @@ function renderSheet() {
       <table><tr><th>环阶</th><th>名称</th><th>已准备</th><th>学派</th><th>简介</th></tr>
       ${Object.keys(byLv).sort((a, b) => a - b).map(lv =>
         byLv[lv].map(sp => `<tr><td>${lv === 0 ? '戏法' : lv < 0 ? '?' : lv + '环'}</td><td><b>${esc(sp.name)}</b></td>
-          <td>${(c.prepared || []).includes(sp.name) ? '✓ 是' : '—'}</td><td>${esc(sp.school || '')}</td>
+          <td>${(c.prepared || []).includes(sp.name) ? '✓ 是' : '—'}</td><td>${esc(schoolLabel(sp))}</td>
           <td class="t-text">${esc((sp.text || '').split('\n').slice(1).join('\n').slice(0, 80))}</td></tr>`).join('')).join('')}
       </table></div>`);
   }
@@ -1519,7 +1587,7 @@ function renderSheet() {
   if (c.programs.length) {
     const rows = c.programs.map(n => {
       const m = DATA.programs.find(x => x.name === n);
-      return `<tr><td>${m ? esc(m.protocol) : ''}</td><td>${m ? esc(m.module || '') : ''}</td><td><b>${esc(n)}</b></td><td>${m ? esc(m.text.slice(0, 60)) : ''}</td></tr>`;
+      return `<tr><td>${m ? esc(m.protocol) : ''}</td><td>${m ? esc(moduleLabel(m)) : ''}</td><td><b>${esc(n)}</b></td><td>${m ? esc(m.text.slice(0, 60)) : ''}</td></tr>`;
     }).join('');
     sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>程序（${c.programs.length}）</h3>
       <table><tr><th>协议</th><th>模块</th><th>名称</th><th>简介</th></tr>${rows}</table></div>`);
@@ -1910,7 +1978,7 @@ function buildSheetSpells() {
     const lv = sp ? sp.level : -1;
     s.set(rr, 1, lv === 0 ? '戏法' : lv > 0 ? lv + '环' : '?', SX.num);
     s.set(rr, 2, n, SX.value);
-    s.set(rr, 3, sp ? (sp.school || '') : '', SX.value);
+    s.set(rr, 3, sp ? schoolLabel(sp) : '', SX.value);
     s.set(rr, 4, (c.prepared || []).includes(n) ? '✓ 是' : '—', SX.num);
     s.set(rr, 5, sp ? (sp.text || '').split('\n').slice(1).join('\n').slice(0, 220) : '', SX.text);
     s.height(rr, 30);
@@ -1956,7 +2024,7 @@ function buildSheetPrograms() {
     const p = DATA.programs.find(x => x.name === n);
     const rr = 3 + i;
     s.set(rr, 1, p ? p.protocol : '', SX.value);
-    s.set(rr, 2, p ? (p.module || '') : '', SX.value);
+    s.set(rr, 2, p ? moduleLabel(p) : '', SX.value);
     s.set(rr, 3, n, SX.value);
     s.set(rr, 4, p ? p.text.slice(0, 220) : '', SX.text);
     s.height(rr, 30);
@@ -2295,7 +2363,7 @@ function buildDocxBody() {
     const spellRows = Object.keys(byLv).sort((a, b2) => a - b2).map(lv =>
       byLv[lv].map(sp => [
         lv === 0 ? '戏法' : lv < 0 ? '?' : lv + '环', sp.name,
-        (c.prepared || []).includes(sp.name) ? '✓' : '', sp.school || '',
+        (c.prepared || []).includes(sp.name) ? '✓' : '', schoolLabel(sp),
         (sp.text || '').split('\n').slice(1).join('\n').slice(0, 40) || '',
       ])).flat();
     b.push(docxTable(['环阶', '名称', '已准备', '学派', '简介'], spellRows, [1000, 2600, 1000, 1400, 4200]));
@@ -2321,7 +2389,7 @@ function buildDocxBody() {
     b.push(docxSec(`程序（${c.programs.length}）${c.programProtocol ? '　协议：' + c.programProtocol : ''}`));
     const pgRows = c.programs.map(n => {
       const p = DATA.programs.find(x => x.name === n);
-      return [p ? p.protocol : '', p ? (p.module || '') : '', n, (p ? p.text : '').slice(0, 40)];
+      return [p ? p.protocol : '', p ? moduleLabel(p) : '', n, (p ? p.text : '').slice(0, 40)];
     });
     b.push(docxTable(['协议', '模块', '名称', '详述'], pgRows, [1200, 1400, 2600, 5200]));
     b.push(docxPaste('程序全文本（从规则书复制粘贴）'));

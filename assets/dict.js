@@ -17,7 +17,10 @@ const el = Picker.el;
 const LEVELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const LEVEL_LABEL = { 0: '戏法', 10: '传奇' };
 const lvLabel = (l) => LEVEL_LABEL[l] || l + ' 环';
-const SCHOOLS = [...new Set(DATA.spells.map(s => s.school).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+// 基础学派：常规单学派 + 多学派拼出的原子学派（剔除"任意学派"与"法术"占位），
+// 供学派筛选使用；多学派法术按"命中任一所选学派"智能匹配，不再把组合逐一双列。
+const BASE_SCHOOLS = [...new Set(DATA.spells.flatMap(s => spellSchools(s))
+  .filter(x => x && x !== '任意学派'))].sort((a, b) => a.localeCompare(b));
 const CLASS_OBJS = DATA['class-spells'].filter(cs => Object.keys(cs.lists || {}).length);
 const CLASSES = CLASS_OBJS.map(cs => cs.class);
 // 法术名 → 可用职业（由职业法表反查；非职业法术页的"职业：xxx"行并入）
@@ -37,7 +40,39 @@ const STYLES = [...new Set(DATA.maneuvers.map(m => m.style))].sort((a, b) => a.l
 const MLEVELS = [...new Set(DATA.maneuvers.map(m => m.level))].sort((a, b) => a.localeCompare(b));
 const MTYPES = [...new Set(DATA.maneuvers.map(m => m.type))].sort((a, b) => a.localeCompare(b));
 const PROTOCOLS = ['阿尔法', '贝塔', '伽马', '德尔塔', '伊普西隆', '泽塔', '欧米伽'];
-const MODULES = [...new Set(DATA.programs.map(p => p.module).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+// 程序核心演算模块：筛选改为「任选几个模块 → 智能识别能用的程序」，
+// 不再把各种组合（火力、工程 / 火力、工程、信息 …）逐一双列出来。
+const CORE_MODULES = ['火力', '工程', '信息', '生存', '时空'];
+// 程序的所需模块解析：module 字段可能为 单个 / 组合 / 无 / 任意两个 / 空（需回退到正文"所需模块"行）
+// 返回 { list: [模块...], none: 是否无需模块, any: 是否要求任意两个 }
+function progModuleInfo(p) {
+  let raw = String(p.module || '').trim();
+  if (!raw) {
+    const m = /所需模块：\s*([^\n]+)/.exec(p.text || '');
+    if (m) raw = m[1].trim();
+  }
+  if (!raw || raw === '无') return { list: [], none: true, any: false };
+  if (/任意两个/.test(raw)) return { list: [], none: false, any: true };
+  return { list: raw.split(/[、,，;；\s]+/).map(s => s.trim()).filter(Boolean), none: false, any: false };
+}
+// 法术的学派解析：单学派 / 多学派（如 预言/变化/防护）/ 任意学派 / 传奇的"法术"占位 / 空
+// 返回学派数组；「任意学派」单独标记为特殊值，供匹配层特判。
+function spellSchools(x) {
+  let raw = String(x.school || '').trim();
+  if (!raw) return [];
+  if (raw === '法术') {
+    // 传奇法术：真实学派在正文首行（如 "传奇法术 塑能"），占位字段"法术"不具区分度
+    const m = /^(?:传奇(?:法术)?|([零一二三四五六七八九十百]+)环|戏法)\s*([^\s/（(]+)/.exec(x.text || '');
+    if (m && m[2]) raw = m[2];
+  }
+  return raw.split('/').map(s => s.trim()).filter(Boolean);
+}
+function spellMatchSchool(x, v) {
+  const set = spellSchools(x);
+  if (!set.length) return false;
+  if (set.includes('任意学派') && v !== '法术') return true; // 任意学派 → 匹配任意常规学派
+  return set.includes(v);
+}
 // 魔法物品：预计算搜索串；分类顺序按规则书章节（固定序，未知分类兜底按拼音）
 const MI = DATA.magicItems || [];
 const MI_SUB_ORDER = ['卷轴', '魔药',
@@ -145,7 +180,14 @@ const C = {
 
 /* ---------- 标签匹配：标签 = 学派 或 名称/正文关键词 ---------- */
 function tagMatches(s, tag) {
-  return (s.school && s.school === tag) || s.name.includes(tag) || s.text.includes(tag);
+  return (s.school && spellSchools(s).includes(tag)) || s.name.includes(tag) || s.text.includes(tag);
+}
+/* 学派显示：多学派拼"、"；任意学派显示为"任意学派"；传奇"法术"占位回退到真实学派。 */
+function schoolLabel(s) {
+  const set = spellSchools(s);
+  if (!set.length) return '未知学派';
+  if (set.includes('任意学派')) return '任意学派';
+  return set.join('/');
 }
 
 /* ---------- 法术 Tab ---------- */
@@ -157,7 +199,7 @@ const spellPicker = Picker.create({
   emptyText: '没有匹配的法术。',
   chips: [
     { key: 'level', label: '环位', items: LEVELS, labelFn: lvLabel },
-    { key: 'school', label: '学派', items: SCHOOLS },
+    { key: 'school', label: '学派（任选，命中任一即显示）', items: BASE_SCHOOLS, match: spellMatchSchool },
     { key: 'cls', label: '职业', items: CLASSES, match: (s, c) => (SPELL_JOBS[s.name] || []).includes(c) },
   ],
   hay: (s) => s.name + ' ' + s.text,
@@ -205,7 +247,7 @@ const spellPicker = Picker.create({
     bindChg('.pk-focus', (e) => { f.focus = e.target.value; f.page = 1; paint(true); });
   },
   itemHtml: (s) => `<div class="pk-i-name">${esc(s.name)}${s.ritual ? ' <span class="pk-tag pk-tag-ritual">仪式</span>' : ''}${s.focus ? ' <span class="pk-tag pk-tag-focus">专注</span>' : ''}</div>
-    <div class="pk-i-sub">${lvLabel(s.level)} · ${esc(s.school || '未知学派')}</div>
+    <div class="pk-i-sub">${lvLabel(s.level)} · ${esc(schoolLabel(s))}</div>
     ${s.text ? `<div class="pk-i-brief">${esc(s.text.split('\n').slice(1).join(' ').slice(0, 60))}</div>` : ''}`,
   detailHtml: (s) => {
     const jobs = (SPELL_JOBS[s.name] || []).slice();
@@ -217,7 +259,7 @@ const spellPicker = Picker.create({
       ['持续时间', s.duration || '—'], ['需要专注', s.focus ? '是' : '否'],
     ];
     return `<div class="pk-d-name">${esc(s.name)}</div>
-      <div class="pk-d-sub">${lvLabel(s.level)} · ${esc(s.school || '未知学派')}</div>
+      <div class="pk-d-sub">${lvLabel(s.level)} · ${esc(schoolLabel(s))}</div>
       <div class="pk-d-fields">${fields.map(([k, v]) =>
         `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
       <div class="pk-d-text">${esc(s.text)}</div>
@@ -249,6 +291,14 @@ const mvPicker = Picker.create({
 });
 
 /* ---------- 程序 Tab ---------- */
+// 所需模块的可读标签：无 / 任意两个 / 具体组合（按 CORE_MODULES 顺序排列）
+function moduleLabel(p) {
+  const info = progModuleInfo(p);
+  if (info.none) return '无';
+  if (info.any) return '任意两个';
+  if (!info.list.length) return '无';
+  return CORE_MODULES.filter(m => info.list.includes(m)).join('、');
+}
 const pgPicker = Picker.create({
   data: DATA.programs,
   selKey: 'name',
@@ -256,12 +306,25 @@ const pgPicker = Picker.create({
   emptyText: '没有匹配的程序。',
   chips: [
     { key: 'protocol', label: '协议层级', items: PROTOCOLS },
-    { key: 'module', label: '模块', items: MODULES },
+    // 模块：只列出 5 个核心模块（任选）。匹配规则为「所需模块 ⊆ 已选模块」，
+    // 由下方 filter 按"能用的程序"语义判定；此处 match 恒真以绕过 chips 的 OR 预筛。
+    { key: 'module', label: '模块（任选，显示能用的程序）', items: CORE_MODULES, match: () => true },
   ],
   hay: (p) => p.name + ' ' + (p.text || ''),
   filter: (p, f) => {
     if (f.focus === '1' && !p.focus) return false;
     if (f.focus === '0' && p.focus) return false;
+    const sel = f.chips.module || [];
+    if (sel.length) {
+      const info = progModuleInfo(p);
+      if (!info.none) {
+        if (info.any) {
+          if (sel.length < 2) return false;        // 任意两个：需勾选 ≥2 个模块
+        } else if (!info.list.every(m => sel.includes(m))) {
+          return false;                             // 所需模块必须全部被勾选
+        }
+      }
+    }
     return true;
   },
   extraState: { focus: '' },
@@ -275,12 +338,12 @@ const pgPicker = Picker.create({
     $('.pk-focus', wrap).addEventListener('change', (e) => { f.focus = e.target.value; paint(true); });
   },
   itemHtml: (p) => `<div class="pk-i-name">${esc(p.name)}${p.focus ? ' <span class="pk-tag pk-tag-focus">专注</span>' : ''}</div>
-    <div class="pk-i-sub">${esc(p.protocol)} · ${esc(p.module || '无模块')} · ${esc(p.act || '')}</div>
+    <div class="pk-i-sub">${esc(p.protocol)} · ${esc(moduleLabel(p))} · ${esc(p.act || '')}</div>
     ${p.text ? `<div class="pk-i-brief">${esc(p.text.slice(0, 60))}</div>` : ''}`,
   detailHtml: (p) => `<div class="pk-d-name">${esc(p.name)}</div>
     <div class="pk-d-sub">${esc(p.protocol)}协议</div>
     <div class="pk-d-fields">
-      <div class="f"><span class="k">所需模块</span><span class="v">${esc(p.module || '无')}</span></div>
+      <div class="f"><span class="k">所需模块</span><span class="v">${esc(moduleLabel(p))}</span></div>
       <div class="f"><span class="k">激活时间</span><span class="v">${esc(p.act || '—')}</span></div>
       <div class="f"><span class="k">需要专注</span><span class="v">${p.focus ? '是' : '否'}</span></div>
     </div>
