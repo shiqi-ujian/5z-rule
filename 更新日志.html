@@ -9,10 +9,23 @@
 <style>
   body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; line-height: 1.7; }
   h1 { border-bottom: 2px solid #8882; padding-bottom: 8px; }
-  .cl-entry { margin: 26px 0; padding: 14px 18px; border: 1px solid #8882; border-radius: 10px; background: #ffffffcc; }
+  /* 页面级折叠控制 */
+  .page-ctrl { display: flex; gap: 8px; margin: 14px 0 6px; }
+  .page-ctrl button { font: inherit; font-size: .92em; padding: 5px 12px; border: 1px solid #8883; border-radius: 999px; background: #ffffffaa; color: #236; cursor: pointer; }
+  .page-ctrl button:hover { border-color: #236; }
+  /* 批次记录（可折叠） */
+  .cl-entry { margin: 16px 0; padding: 0 18px; border: 1px solid #8882; border-radius: 10px; background: #ffffffcc; }
+  .cl-entry summary, .board-sec summary { cursor: pointer; user-select: none; list-style: none; }
+  .cl-entry summary::-webkit-details-marker, .board-sec summary::-webkit-details-marker { display: none; }
+  .cl-entry summary::before, .board-sec summary::before { content: "▸"; display: inline-block; margin-right: 8px; color: #888; transition: transform .15s; }
+  .cl-entry[open] > summary::before, .board-sec[open] > summary::before { transform: rotate(90deg); }
+  .cl-entry > summary { padding: 13px 0; font-size: 1.05em; font-weight: 600; }
+  .cl-entry[open] > summary { border-bottom: 1px solid #8882; }
   .cl-entry h2 { margin: 0 0 6px; font-size: 1.15em; }
   .cl-entry h3 { margin: 12px 0 6px; font-size: 1em; }
-  .cl-release { margin: 4px 0 0; color: #666; }
+  .cl-title { color: #333; }
+  .cl-batch-hint { margin-left: 10px; font-size: .8em; font-weight: 400; color: #888; }
+  .cl-release { margin: 8px 0 0; color: #666; }
   ul { margin: 6px 0 0; padding-left: 20px; }
   li { margin: 4px 0; }
   .cl-id { color: #888; font-size: .82em; margin-right: 6px; }
@@ -20,24 +33,29 @@
   .cl-date { color: #999; font-size: .8em; margin-left: 6px; }
   .cl-detail { color: #555; font-size: .92em; margin: 2px 0 0 14px; }
   .cl-pend { color: #a06800; }
+  .cl-fix, .cl-pend { padding: 4px 0; }
   .back { display: inline-block; margin-top: 18px; color: #236; }
   /* 状态板 */
   .status-board { border: 1px solid #8882; border-radius: 12px; padding: 14px 18px; margin: 18px 0 8px; background: #ffffffcc; }
   .status-board h2 { margin: 0 0 10px; font-size: 1.1em; }
-  .st { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .9em; margin-right: 6px; }
+  .st { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .9em; margin: 0 6px 6px 0; text-decoration: none; }
   .st b { font-size: 1.05em; }
   .st.done { background: #e5f6e8; color: #166534; }
   .st.pend { background: #fdf3e0; color: #92400e; }
   .st.open { background: #e8f0fd; color: #1e40af; }
+  .st:hover { outline: 2px solid currentColor; outline-offset: 1px; }
+  .board-sec { border: 1px solid #8882; border-radius: 10px; margin: 8px 0; padding: 0 14px; background: #ffffffcc; }
+  .board-sec > summary { padding: 10px 0; font-weight: 700; font-size: .98em; }
+  .board-sec[open] > summary { border-bottom: 1px solid #8882; }
   .st-list { margin: 8px 0 14px; padding-left: 20px; }
   .st-list li { margin: 5px 0; }
   .st-empty { color: #888; font-size: .9em; margin: 4px 0 10px; }
-  .board-title { font-weight: 700; margin: 10px 0 2px; font-size: .98em; }
   @media (prefers-color-scheme: dark) {
     body { background: #16181d; color: #ddd; }
-    .cl-entry, .status-board { background: #1e2128; border-color: #ffffff1a; }
-    .cl-release, .cl-detail, .cl-id, .cl-page, .cl-date { color: #9aa; }
+    .cl-entry, .status-board, .board-sec { background: #1e2128; border-color: #ffffff1a; }
+    .cl-release, .cl-detail, .cl-id, .cl-page, .cl-date, .cl-title, .cl-batch-hint { color: #9aa; }
     .cl-pend { color: #d9a648; }
+    .page-ctrl button { background: #1e2128; color: #7ab; border-color: #ffffff33; }
     .back { color: #7ab; }
     .st.done { background: #12301c; color: #86efac; }
     .st.pend { background: #33250d; color: #fbbf24; }
@@ -51,127 +69,35 @@
 <p>本页由系统在每次修复发布后自动更新。来源：QQ 群收集表提交的问题。顶部为全部反馈的处理状态一览，下方为历史批次记录（最新在上）。</p>
 <p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
 
-<div class="status-board">
+<div class="page-ctrl">
+  <button type="button" data-toggle="open">🪗 全部展开</button>
+  <button type="button" data-toggle="close">🫲 全部收起</button>
+</div>
+
+<section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><span class="st done">✅ 已修复 <b>26</b></span><span class="st pend">⏳ 待确认 <b>7</b></span><span class="st open">🆕 待处理 <b>0</b></span></div>
-  <div class="board-title">✅ 已修复（26 条）</div>
-  <ul class="st-list">
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>26</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>7</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+
+  <details id="board-done" class="board-sec">
+    <summary>✅ 已修复（26 条）</summary>
+    <ul class="st-list">
     <li>
-      <span class="cl-id">#20260824-docx-export</span>
-      <b>车卡器导出「Excel 角色卡」改为「Word 角色卡」</b>
-      <span class="cl-page">（car.html 角色创建器）</span>
-      <span class="cl-date">2026-08-24</span>
+      <span class="cl-id">#20260816-225600-99b4</span>
+      <b>程序词典「香农公式」详情显示被截断</b>
+      <span class="cl-page">（程序词典）</span>
+      <span class="cl-date">2026-08-16</span>
       
       
-      <div class="cl-detail">研究发现社区 5z 角色卡实际产物 92% 是 Word 文档（.docx/.doc），且为「叙事+手写公式+粘贴规则书原文」的自由格式，Excel 网格装不下，导出 Excel 对玩家太勉强。故新增自研 Word 导出：纯 JS 手工生成 OOXML（仅用 fflate 打包 zip），仿照社区 5z空白角色卡.docx 骨架——车卡器已填数据自动填进基本信息/购点属性/战斗数据/豁免/背景/专…</div>
+      <div class="cl-detail">修复解析器：Word 导出残留的空红色加粗标记不再污染段落分类。受影响范围：香农公式等 163 个程序条目补全被截断的描述（含「选择：…」等后续段落），同时清除 7 个误拆的法术幽灵条目。</div>
     </li>
     <li>
-      <span class="cl-id">#20260823-085800-dc32</span>
-      <b>全站搜索修复：跨 Word 标签拆断的中文词搜不到</b>
-      <span class="cl-page">（全站搜索）</span>
-      <span class="cl-date">2026-08-23</span>
+      <span class="cl-id">#20260817-003700-892b</span>
+      <b>法术页新增「标签式搜索」（多标签 + 交集/并集）</b>
+      <span class="cl-page">（dict.html 法术词典）</span>
+      <span class="cl-date">2026-08-17</span>
       
       
-      <div class="cl-detail">根因：规则书页面由 Word 生成，大量中文词被拆成多个相邻行内标签（如专长名「刺剑大师」由 &lt;b&gt;刺剑&lt;/b&gt;+&lt;b&gt;大师&lt;/b&gt; 拼成），索引器把每个标签当空格，导致「剑大」双字 bigram 在索引中丢失，搜索「刺剑大师」匹配不到该页。修复：索引文本提取改为「块级标签→空格（保留词边界）、行内标签→空串（保留中文连续性）」，跨标签的中文 big</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260823-090000-6e3c</span>
-      <b>辅助计算器·造物素材计算修正（公式 + 单位）</b>
-      <span class="cl-page">（calculator.html 辅助计算器）</span>
-      <span class="cl-date">2026-08-23</span>
-      
-      
-      <div class="cl-detail">校正：①素材单位由「gp」更正为「份」（工艺费用保持 gp）；②修正物品素材计算器误用「生物类型系数表」的错误——改为 5z计算器.xlsx 后台计算的精确物品单位值，公式「素材 = 造价 × 单位值 / 100」（以卷轴 1314gp 实测：有机 39.42 份、魔晶 65.7 份、工艺费用 262.8gp，与原表一致）；类型列表从误混入的生物类型纠正为正确的 11 类物品。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260822-152400-60ef</span>
-      <b>车卡器属性输入无法清空重填（且超限被强制 30）</b>
-      <span class="cl-page">（car.html 角色创建器）</span>
-      <span class="cl-date">2026-08-22</span>
-      
-      
-      <div class="cl-detail">根因：属性输入框在 input 事件里用 `+value || 8` 取值，清空瞬间被回退值弹回 8，玩家只能「先输一个数字再删」的别扭方式调整；且越界值只在状态层截断。修复：输入中允许为空不弹回，非空实时截断并回写输入框（&gt;30 立即显示 30），失焦空值保持原值。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260821-164400-69e6</span>
-      <b>目录新增「展开全部 / 收起全部」</b>
-      <span class="cl-page">（全站左侧导航栏）</span>
-      <span class="cl-date">2026-08-22</span>
-      
-      
-      <div class="cl-detail">左侧目录上方新增两个按钮：一键展开全部分支（92 个），一键全部收起；展开状态与原有记忆机制（localStorage）一致。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260821-162600-6286</span>
-      <b>购物页面（魔法物品选购）</b>
-      <span class="cl-page">（car.html 角色创建器）</span>
-      <span class="cl-date">2026-08-22</span>
-      
-      
-      <div class="cl-detail">车卡器新增「11 购物」步骤：顶部手动输入金币预算（可留空）；魔法物品选购复用 Picker 引擎（分类/价格档/同调/神器/搜索筛选）；已购清单实时合计总价（按规则书价格区间下限），超出预算标红提示；角色卡新增「装备（魔法物品）」栏，Excel 导出同步写入装备清单与预算/合计。共 1553 件魔法物品可选。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260821-163900-a281</span>
-      <b>职业主页面附录过长，改为另开一页</b>
-      <span class="cl-page">（职业页面（7 个））</span>
-      <span class="cl-date">2026-08-22</span>
-      
-      
-      <div class="cl-detail">7 个职业的附录从主页面底部拆出为独立页面（盗贼·杂技花招、奇械师·制造物品、契术师·魔能祈唤、吟游诗人·吟唱、德鲁伊·荒野变形、法师·法术书、召唤师·指令列表）：主页面大幅降篇幅并在原位置保留跳转链接，附录页保留原文样式并在左侧目录中作为子条目可直达。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260821-162800-ddc3</span>
-      <b>在线规则书内置辅助计算器（属性计算 + 造物素材计算）</b>
-      <span class="cl-page">（calculator.html 辅助计算器）</span>
-      <span class="cl-date">2026-08-22</span>
-      
-      
-      <div class="cl-detail">新增「🧮 辅助计算器」页（侧栏入口）：① 属性计算——按规则书 32 点购点表实时计算已用点数与调整值，支持标准属性组一键应用与随机掷骰（5 次 4d6 去最低）；② 造物素材计算——按物品/生物类型（魔药/卷轴/法器/武器/护甲/服饰/奇物/攻城装置/载具/类人/怪兽/泥怪 等 14 类）与造物造价，输出无机/有机/魔晶素材量及工艺费用（造价×20%），数据取自 5z计算器.xlsx 素材系数…</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260820-192900-c047</span>
-      <b>词典筛选按钮点击不变色（无选中高亮）</b>
-      <span class="cl-page">（dict.html 词典 / car.html 角色创建器）</span>
-      <span class="cl-date">2026-08-20</span>
-      
-      
-      <div class="cl-detail">根因：筛选按钮组（chips）只在页面初始化时渲染一次，点击后虽然筛选已生效（列表更新），但按钮本身不重绘，选中态样式（on 类）永远不出现，玩家无法区分是否已按下。修复：点击/清除时直接就地切换按钮选中态类，选中即高亮（紫色底白字），再次点击或点「清除」恢复。车卡器（同用 Picker 组件）一并修复。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260819-125600-ead5</span>
-      <b>修复页内搜索无法搜索二字词组</b>
-      <span class="cl-page">（页内搜索（所有规则书页面））</span>
-      <span class="cl-date">2026-08-19</span>
-      
-      
-      <div class="cl-detail">根因：先用短词搜索（如「掷」）后，词组（如「掷骰」）中的字被高亮标记拆成独立文本节点，清除高亮时不合并，导致该词组之后永远搜不到。修复：清除高亮后合并相邻文本节点（normalize），词组恢复连续可搜。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260819-084200-119e</span>
-      <b>魔法物品价格筛选改为多选</b>
-      <span class="cl-page">（dict.html 魔法物品词典）</span>
-      <span class="cl-date">2026-08-19</span>
-      
-      
-      <div class="cl-detail">价格筛选由单选下拉改为多选按钮组（与分类一致）：可同时勾选多个价格档位（如 &gt;5万gp + 非卖品），组内并集、组间叠加，每组带「清除」一键还原。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260819-084100-69d0</span>
-      <b>词条详情排版修复（换行 + 去重）</b>
-      <span class="cl-page">（dict.html 词典）</span>
-      <span class="cl-date">2026-08-19</span>
-      
-      
-      <div class="cl-detail">① 详情描述恢复换行显示（词典页详情容器缺失 pre-wrap 样式类导致所有换行被折叠，已统一补上）；② 法术详情的「环阶/学派」、物品详情的「分类」在副标题已显示，不再在详情字段中重复出现。</div>
-    </li>
-    <li>
-      <span class="cl-id">#20260819-084500-558a</span>
-      <b>角色卡 Excel 导出改为自研模板（不再依赖官方模板）</b>
-      <span class="cl-page">（car.html 角色创建器）</span>
-      <span class="cl-date">2026-08-19</span>
-      
-      
-      <div class="cl-detail">重写导出：纯 JS 从规则书数据（card-data）直接生成 xlsx，彻底移除官方旧模板依赖。职业基础血量按生命骰实时计算（与网页角色卡同源，含赛博格 D12）；职业/子职/技能（17 项）/专长/法术/战技/程序全部来自规则书数据，永远同步；新增「程序」表（赛博格专属，官方模板没有）；布局为 5 张表：角色卡 / 法术 / 战技 / 程序 / 装备与背景。同步移除构建内联的 car-tpl.…</div>
+      <div class="cl-detail">在词典·法术页新增标签输入框：输入学派或关键词标签（如「塑能」「火焰」）即可筛选；支持叠加多个标签，并可切换「交集（同时满足）/并集（任一满足）」匹配方式。例：塑能 207 个；塑能+火焰 交集 54 个、并集 265 个。原单一学派下拉已由标签框覆盖。</div>
     </li>
     <li>
       <span class="cl-id">#20260818-132500-ace4</span>
@@ -273,43 +199,126 @@
       <div class="cl-detail">法术步骤计数栏由「已选法术 N 个」升级为按环阶拆分：如「已选法术 8 个：戏法 3、1 环 2、2 环 3」，戏法数量单独列出；角色实时预览同步显示环阶明细。</div>
     </li>
     <li>
-      <span class="cl-id">#20260817-003700-892b</span>
-      <b>法术页新增「标签式搜索」（多标签 + 交集/并集）</b>
-      <span class="cl-page">（dict.html 法术词典）</span>
-      <span class="cl-date">2026-08-17</span>
+      <span class="cl-id">#20260819-125600-ead5</span>
+      <b>修复页内搜索无法搜索二字词组</b>
+      <span class="cl-page">（页内搜索（所有规则书页面））</span>
+      <span class="cl-date">2026-08-19</span>
       
       
-      <div class="cl-detail">在词典·法术页新增标签输入框：输入学派或关键词标签（如「塑能」「火焰」）即可筛选；支持叠加多个标签，并可切换「交集（同时满足）/并集（任一满足）」匹配方式。例：塑能 207 个；塑能+火焰 交集 54 个、并集 265 个。原单一学派下拉已由标签框覆盖。</div>
+      <div class="cl-detail">根因：先用短词搜索（如「掷」）后，词组（如「掷骰」）中的字被高亮标记拆成独立文本节点，清除高亮时不合并，导致该词组之后永远搜不到。修复：清除高亮后合并相邻文本节点（normalize），词组恢复连续可搜。</div>
     </li>
     <li>
-      <span class="cl-id">#20260816-225600-99b4</span>
-      <b>程序词典「香农公式」详情显示被截断</b>
-      <span class="cl-page">（程序词典）</span>
-      <span class="cl-date">2026-08-16</span>
+      <span class="cl-id">#20260819-084200-119e</span>
+      <b>魔法物品价格筛选改为多选</b>
+      <span class="cl-page">（dict.html 魔法物品词典）</span>
+      <span class="cl-date">2026-08-19</span>
       
       
-      <div class="cl-detail">修复解析器：Word 导出残留的空红色加粗标记不再污染段落分类。受影响范围：香农公式等 163 个程序条目补全被截断的描述（含「选择：…」等后续段落），同时清除 7 个误拆的法术幽灵条目。</div>
+      <div class="cl-detail">价格筛选由单选下拉改为多选按钮组（与分类一致）：可同时勾选多个价格档位（如 &gt;5万gp + 非卖品），组内并集、组间叠加，每组带「清除」一键还原。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260819-084100-69d0</span>
+      <b>词条详情排版修复（换行 + 去重）</b>
+      <span class="cl-page">（dict.html 词典）</span>
+      <span class="cl-date">2026-08-19</span>
+      
+      
+      <div class="cl-detail">① 详情描述恢复换行显示（词典页详情容器缺失 pre-wrap 样式类导致所有换行被折叠，已统一补上）；② 法术详情的「环阶/学派」、物品详情的「分类」在副标题已显示，不再在详情字段中重复出现。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260819-084500-558a</span>
+      <b>角色卡 Excel 导出改为自研模板（不再依赖官方模板）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-19</span>
+      
+      
+      <div class="cl-detail">重写导出：纯 JS 从规则书数据（card-data）直接生成 xlsx，彻底移除官方旧模板依赖。职业基础血量按生命骰实时计算（与网页角色卡同源，含赛博格 D12）；职业/子职/技能（17 项）/专长/法术/战技/程序全部来自规则书数据，永远同步；新增「程序」表（赛博格专属，官方模板没有）；布局为 5 张表：角色卡 / 法术 / 战技 / 程序 / 装备与背景。同步移除构建内联的 car-tpl.…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260820-192900-c047</span>
+      <b>词典筛选按钮点击不变色（无选中高亮）</b>
+      <span class="cl-page">（dict.html 词典 / car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-20</span>
+      
+      
+      <div class="cl-detail">根因：筛选按钮组（chips）只在页面初始化时渲染一次，点击后虽然筛选已生效（列表更新），但按钮本身不重绘，选中态样式（on 类）永远不出现，玩家无法区分是否已按下。修复：点击/清除时直接就地切换按钮选中态类，选中即高亮（紫色底白字），再次点击或点「清除」恢复。车卡器（同用 Picker 组件）一并修复。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260822-152400-60ef</span>
+      <b>车卡器属性输入无法清空重填（且超限被强制 30）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">根因：属性输入框在 input 事件里用 `+value || 8` 取值，清空瞬间被回退值弹回 8，玩家只能「先输一个数字再删」的别扭方式调整；且越界值只在状态层截断。修复：输入中允许为空不弹回，非空实时截断并回写输入框（&gt;30 立即显示 30），失焦空值保持原值。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260821-164400-69e6</span>
+      <b>目录新增「展开全部 / 收起全部」</b>
+      <span class="cl-page">（全站左侧导航栏）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">左侧目录上方新增两个按钮：一键展开全部分支（92 个），一键全部收起；展开状态与原有记忆机制（localStorage）一致。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260821-162600-6286</span>
+      <b>购物页面（魔法物品选购）</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">车卡器新增「11 购物」步骤：顶部手动输入金币预算（可留空）；魔法物品选购复用 Picker 引擎（分类/价格档/同调/神器/搜索筛选）；已购清单实时合计总价（按规则书价格区间下限），超出预算标红提示；角色卡新增「装备（魔法物品）」栏，Excel 导出同步写入装备清单与预算/合计。共 1553 件魔法物品可选。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260821-163900-a281</span>
+      <b>职业主页面附录过长，改为另开一页</b>
+      <span class="cl-page">（职业页面（7 个））</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">7 个职业的附录从主页面底部拆出为独立页面（盗贼·杂技花招、奇械师·制造物品、契术师·魔能祈唤、吟游诗人·吟唱、德鲁伊·荒野变形、法师·法术书、召唤师·指令列表）：主页面大幅降篇幅并在原位置保留跳转链接，附录页保留原文样式并在左侧目录中作为子条目可直达。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260821-162800-ddc3</span>
+      <b>在线规则书内置辅助计算器（属性计算 + 造物素材计算）</b>
+      <span class="cl-page">（calculator.html 辅助计算器）</span>
+      <span class="cl-date">2026-08-22</span>
+      
+      
+      <div class="cl-detail">新增「🧮 辅助计算器」页（侧栏入口）：① 属性计算——按规则书 32 点购点表实时计算已用点数与调整值，支持标准属性组一键应用与随机掷骰（5 次 4d6 去最低）；② 造物素材计算——按物品/生物类型（魔药/卷轴/法器/武器/护甲/服饰/奇物/攻城装置/载具/类人/怪兽/泥怪 等 14 类）与造物造价，输出无机/有机/魔晶素材量及工艺费用（造价×20%），数据取自 5z计算器.xlsx 素材系数…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260823-085800-dc32</span>
+      <b>全站搜索修复：跨 Word 标签拆断的中文词搜不到</b>
+      <span class="cl-page">（全站搜索）</span>
+      <span class="cl-date">2026-08-23</span>
+      
+      
+      <div class="cl-detail">根因：规则书页面由 Word 生成，大量中文词被拆成多个相邻行内标签（如专长名「刺剑大师」由 &lt;b&gt;刺剑&lt;/b&gt;+&lt;b&gt;大师&lt;/b&gt; 拼成），索引器把每个标签当空格，导致「剑大」双字 bigram 在索引中丢失，搜索「刺剑大师」匹配不到该页。修复：索引文本提取改为「块级标签→空格（保留词边界）、行内标签→空串（保留中文连续性）」，跨标签的中文 big</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090000-6e3c</span>
+      <b>辅助计算器·造物素材计算修正（公式 + 单位）</b>
+      <span class="cl-page">（calculator.html 辅助计算器）</span>
+      <span class="cl-date">2026-08-23</span>
+      
+      
+      <div class="cl-detail">校正：①素材单位由「gp」更正为「份」（工艺费用保持 gp）；②修正物品素材计算器误用「生物类型系数表」的错误——改为 5z计算器.xlsx 后台计算的精确物品单位值，公式「素材 = 造价 × 单位值 / 100」（以卷轴 1314gp 实测：有机 39.42 份、魔晶 65.7 份、工艺费用 262.8gp，与原表一致）；类型列表从误混入的生物类型纠正为正确的 11 类物品。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260824-docx-export</span>
+      <b>车卡器导出「Excel 角色卡」改为「Word 角色卡」</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-24</span>
+      
+      
+      <div class="cl-detail">研究发现社区 5z 角色卡实际产物 92% 是 Word 文档（.docx/.doc），且为「叙事+手写公式+粘贴规则书原文」的自由格式，Excel 网格装不下，导出 Excel 对玩家太勉强。故新增自研 Word 导出：纯 JS 手工生成 OOXML（仅用 fflate 打包 zip），仿照社区 5z空白角色卡.docx 骨架——车卡器已填数据自动填进基本信息/购点属性/战斗数据/豁免/背景/专…</div>
     </li></ul>
-  <div class="board-title">⏳ 待确认 / 待决策（7 条）</div>
-  <ul class="st-list">
-    <li>
-      <span class="cl-id">#20260823-085900-83f0</span>
-      <b>辅助计算器缺少「遭遇难度计算器」</b>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      <div class="cl-detail">5z计算器.xlsx 中确有该功能，线上缺失。已定位原表可还原数据（后台计算：5e/5z/万色 CR→个体分值、玩家等级→单人团队分、人数/操作水平/搭配/准备/状态系数），但需核对「√求和再平方」精确实装与各项系数取值，避免发布错误数值，待专门一轮实现。</div>
-      
-    </li>
-    <li>
-      <span class="cl-id">#20260823-090200-5c80</span>
-      <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
-      
-      <span class="cl-date">2026-08-23</span>
-      
-      <div class="cl-detail">5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
-      
-    </li>
+  </details>
+  <details id="board-pend" class="board-sec">
+    <summary>⏳ 待确认 / 待决策（7 条）</summary>
+    <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
       <b>种族增加「混血儿」「定制血统」自定义选项</b>
@@ -354,14 +363,36 @@
       
       <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
       
+    </li>
+    <li>
+      <span class="cl-id">#20260823-085900-83f0</span>
+      <b>辅助计算器缺少「遭遇难度计算器」</b>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      <div class="cl-detail">5z计算器.xlsx 中确有该功能，线上缺失。已定位原表可还原数据（后台计算：5e/5z/万色 CR→个体分值、玩家等级→单人团队分、人数/操作水平/搭配/准备/状态系数），但需核对「√求和再平方」精确实装与各项系数取值，避免发布错误数值，待专门一轮实现。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260823-090200-5c80</span>
+      <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
+      
+      <span class="cl-date">2026-08-23</span>
+      
+      <div class="cl-detail">5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
+      
     </li></ul>
-  <div class="board-title">🆕 待处理（0 条 · 每 60 分钟自动巡检）</div>
-  <p class="st-empty">当前没有待处理反馈。</p>
-</div>
+  </details>
+  <details id="board-open" class="board-sec">
+    <summary>🆕 待处理（0 条 · 每 60 分钟自动巡检）</summary>
+    <p class="st-empty">当前没有待处理反馈。</p>
+  </details>
+</section>
 
+<h2 style="margin-top:28px;">📜 历史批次记录</h2>
 
-  <section class="cl-entry">
-    <h2>2026-08-24 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-24 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
     <p class="cl-release">车卡器导出改为 Word（.docx）：对齐社区真实产物形态（非 Excel）。</p>
     <h3>✅ 已修复（1）</h3><ul>
     <li class="cl-fix">
@@ -371,10 +402,10 @@
       <div class="cl-detail">研究发现社区 5z 角色卡实际产物 92% 是 Word 文档（.docx/.doc），且为「叙事+手写公式+粘贴规则书原文」的自由格式，Excel 网格装不下，导出 Excel 对玩家太勉强。故新增自研 Word 导出：纯 JS 手工生成 OOXML（仅用 fflate 打包 zip），仿照社区 5z空白角色卡.docx 骨架——车卡器已填数据自动填进基本信息/购点属性/战斗数据/豁免/背景/专长/种族特性/职业特性/技能/法术/战技/程序/随身物品等分节，无法自动填的（背景叙事、主职/子职特性全文、抗性免疫、特点/理想/牵绊/缺点、同调位等）留下「（请从规则书复制粘贴）」粘贴区，玩家拿到即可在 Word 里继续编辑补充。数据全部来自规则书 card-data（与网页角色卡同源，永远同步）。原 Excel 导出降级为「⬇ Excel 数据表」次要入口（旧版模板，仅数据）。机器人已对赛博格/法师/武僧三类角色做回归校验（zip 结构+职业/HP/技能17项/程序/法术+粘贴区），并用 Word COM 验证可正常打开。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-23 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-23 · v1.59</span><span class="cl-batch-hint">✅2 / ⏳2</span></summary>
     <p class="cl-release">反馈批处理（问题来源：收集表 2 条修复 + 2 条待确认，20260823 批次）。</p>
     <h3>✅ 已修复（2）</h3><ul>
     <li class="cl-fix">
@@ -400,10 +431,10 @@
       <b>辅助计算器缺少「怪物素材获得计算」（不同 CR/生物类型）</b>
       <div class="cl-detail">⏳ 5z计算器.xlsx「造物素材计算」含怪物素材计算器（生物类型+怪物等级+数量→无机/有机/魔晶素材），线上缺失。已提取 14 类生物类型→系数表，但怪物等级→基准值公式（以泥怪 CR6 样本反推基准=CR×6，尚需多组验证）与「份」单位待核对，待专门一轮实现。</div>
     </li></ul>
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-22 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-22 · v1.59</span><span class="cl-batch-hint">✅5 / ⏳5</span></summary>
     <p class="cl-release">反馈批处理（问题来源：收集表 10 条，20260821-22 批次）。</p>
     <h3>✅ 已修复（5）</h3><ul>
     <li class="cl-fix">
@@ -462,10 +493,10 @@
       <b>车卡器支持 Excel 角色卡导入</b>
       <div class="cl-detail">⏳ 已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
     </li></ul>
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-20 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-20 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
     <p class="cl-release">反馈修复（问题来源：收集表 #20260820-192900）。</p>
     <h3>✅ 已修复（1）</h3><ul>
     <li class="cl-fix">
@@ -475,10 +506,10 @@
       <div class="cl-detail">根因：筛选按钮组（chips）只在页面初始化时渲染一次，点击后虽然筛选已生效（列表更新），但按钮本身不重绘，选中态样式（on 类）永远不出现，玩家无法区分是否已按下。修复：点击/清除时直接就地切换按钮选中态类，选中即高亮（紫色底白字），再次点击或点「清除」恢复。车卡器（同用 Picker 组件）一并修复。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-19 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-19 · v1.59</span><span class="cl-batch-hint">✅4</span></summary>
     <p class="cl-release">反馈批处理（问题来源：收集表 3 条修复 + 1 条待定，20260819 批次）。</p>
     <h3>✅ 已修复（4）</h3><ul>
     <li class="cl-fix">
@@ -506,10 +537,10 @@
       <div class="cl-detail">重写导出：纯 JS 从规则书数据（card-data）直接生成 xlsx，彻底移除官方旧模板依赖。职业基础血量按生命骰实时计算（与网页角色卡同源，含赛博格 D12）；职业/子职/技能（17 项）/专长/法术/战技/程序全部来自规则书数据，永远同步；新增「程序」表（赛博格专属，官方模板没有）；布局为 5 张表：角色卡 / 法术 / 战技 / 程序 / 装备与背景。同步移除构建内联的 car-tpl.js（约 660KB）。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-18 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-18 · v1.59</span><span class="cl-batch-hint">✅4</span></summary>
     <p class="cl-release">车卡器反馈批处理（问题来源：收集表 6 条，20260818 批次）。</p>
     <h3>✅ 已修复（4）</h3><ul>
     <li class="cl-fix">
@@ -537,10 +568,10 @@
       <div class="cl-detail">角色卡新增基本信息编辑：角色姓名（实时生效）、玩家、立绘（支持图片 URL 或本地文件上传，压缩后存入浏览器本地存档）。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-18 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-18 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
     <p class="cl-release">车卡器功能实现（问题来源：收集表 #20260818-120600-0294，原 pending 较大功能）。</p>
     <h3>✅ 已修复（1）</h3><ul>
     <li class="cl-fix">
@@ -550,10 +581,10 @@
       <div class="cl-detail">法术步骤为准备施法者（法师/牧师/德鲁伊/圣武士/灵能武士/奇械师）新增「已准备」标记：从已选法术中勾选当日准备的法术，按环阶整理展示；顶部显示准备数量上限（法师=智力调整+等级，牧师/德鲁伊=感知调整+等级，圣武士/灵能武士=调整+等级一半，奇械师为压缩球制不限数量），超限提示且不可再准备，只能准备已获得法术位的环阶。角色卡页法术表新增「已准备」列，实时预览与 Excel 导出（模板「准备法术」格）同步记录。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-18 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-18 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
     <p class="cl-release">架构升级：词典页与车卡器共用 Picker 选择器组件（搜索/筛选/分页/详情统一引擎）。</p>
     <h3>✅ 已修复（1）</h3><ul>
     <li class="cl-fix">
@@ -563,10 +594,10 @@
       <div class="cl-detail">抽取公共组件 assets/picker.js（+picker.css）：多选筛选 chips、关键词搜索、分页、列表+详情两栏由同一引擎驱动，词典页与车卡器共用。<br>· 词典页：法术/战技/程序/魔法物品四 Tab 全部改为 Picker 渲染，保留标签搜索（交集/并集）、仪式/专注/价格等原有筛选；<br>· 车卡器：法术步骤新增学派 chips 筛选 + 分页（法师法表 430 个不再一次全渲染）+ 点击查看完整详情，战技步骤新增级别/类型 chips + 搜索 + 详情，程序步骤新增模块 chips + 搜索 + 详情；已选择项面板与准备法术标记全部保留。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-18 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-18 · v1.59</span><span class="cl-batch-hint">✅2</span></summary>
     <p class="cl-release">车卡器反馈批处理 2（问题来源：收集表 2 条，20260818-19 批次）。</p>
     <h3>✅ 已修复（2）</h3><ul>
     <li class="cl-fix">
@@ -582,10 +613,10 @@
       <div class="cl-detail">选择含「亚种」特性的种族后，出现亚种选择：精灵（高等/木/黑暗/卓尔/日/月精灵）、矮人（丘陵/山地）、半身人（轻足/壮健）、侏儒（森林/岩石），支持手动输入其它亚种；选择记录到角色卡。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-18 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-18 · v1.59</span><span class="cl-batch-hint">✅3</span></summary>
     <p class="cl-release">词典多选筛选 + 车卡器已选项目面板（问题来源：收集表 3 条，20260818-20 批次）。</p>
     <h3>✅ 已修复（3）</h3><ul>
     <li class="cl-fix">
@@ -607,10 +638,10 @@
       <div class="cl-detail">法术步骤计数栏由「已选法术 N 个」升级为按环阶拆分：如「已选法术 8 个：戏法 3、1 环 2、2 环 3」，戏法数量单独列出；角色实时预览同步显示环阶明细。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-17 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-17 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
     <p class="cl-release">自动管线第二次实战：功能需求实现（问题来源：收集表 #20260817-003700）。</p>
     <h3>✅ 已修复（1）</h3><ul>
     <li class="cl-fix">
@@ -620,17 +651,17 @@
       <div class="cl-detail">在词典·法术页新增标签输入框：输入学派或关键词标签（如「塑能」「火焰」）即可筛选；支持叠加多个标签，并可切换「交集（同时满足）/并集（任一满足）」匹配方式。例：塑能 207 个；塑能+火焰 交集 54 个、并集 265 个。原单一学派下拉已由标签框覆盖。</div>
     </li></ul>
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-16 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-16 · v1.59</span></summary>
     <p class="cl-release">工作流上线：问题收集→自动修复→自动发布 全自动管线开始运行。群友在收集表提交的问题会由系统定时读取、修复并发布，结果在此页公示。</p>
     
     
-  </section>
+  </details>
 
-  <section class="cl-entry">
-    <h2>2026-08-16 · v1.59</h2>
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-16 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
     <p class="cl-release">自动管线首次实战修复（问题来源：收集表 #20260816-225600）。</p>
     <h3>✅ 已修复（1）</h3><ul>
     <li class="cl-fix">
@@ -640,7 +671,34 @@
       <div class="cl-detail">修复解析器：Word 导出残留的空红色加粗标记不再污染段落分类。受影响范围：香农公式等 163 个程序条目补全被截断的描述（含「选择：…」等后续段落），同时清除 7 个误拆的法术幽灵条目。</div>
     </li></ul>
     
-  </section>
+  </details>
 <a class="back" href="index.html">← 返回目录</a>
+
+<script>
+(function () {
+  function allDetails() { return Array.prototype.slice.call(document.querySelectorAll('details')); }
+  function setAll(open) {
+    allDetails().forEach(function (d) {
+      if (open) d.setAttribute('open', '');
+      else d.removeAttribute('open');
+    });
+  }
+  document.querySelectorAll('.page-ctrl button').forEach(function (btn) {
+    btn.addEventListener('click', function () { setAll(btn.getAttribute('data-toggle') === 'open'); });
+  });
+  // 徽章 / 任意 #锚点：平滑滚动到目标区并自动展开
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (ev) {
+      var id = a.getAttribute('href').slice(1);
+      var t = document.getElementById(id);
+      if (!t) return;
+      ev.preventDefault();
+      if (!t.hasAttribute('open')) t.setAttribute('open', '');
+      var y = t.getBoundingClientRect().top + (window.scrollY || window.pageYOffset) - 14;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    });
+  });
+})();
+</script>
 </body>
 </html>
