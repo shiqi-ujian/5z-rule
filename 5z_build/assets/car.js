@@ -1344,9 +1344,17 @@ function renderShop() {
   stage().appendChild(pk);
 
   const CATS = [...new Set(MI.map(i => i.sub).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  // 购物清单默认按价格升序（按规则书价格区间下限），无价的排在最后，便于按价位浏览
+  const shopList = [...MI].sort((a, b) => {
+    const pa = miPrice(a), pb = miPrice(b);
+    if (pa == null && pb == null) return 0;
+    if (pa == null) return 1;
+    if (pb == null) return -1;
+    return pa - pb;
+  });
 
   const picker = Picker.create({
-    data: MI,
+    data: shopList,
     selKey: 'id',
     pageSize: 80,
     placeholder: '搜索物品名、类型、效果…',
@@ -1363,21 +1371,33 @@ function renderShop() {
       if (f.attune === '0' && i.attune) return false;
       if (f.artifact === '1' && !i.artifact) return false;
       if (f.artifact === '0' && i.artifact) return false;
+      // 自定义价格区间（gp，按规则书价格下限）——粗档次之外可精确定位价位
+      const p = miPrice(i);
+      if (f.pmin !== '' && (p == null || p < parseFloat(f.pmin))) return false;
+      if (f.pmax !== '' && (p == null || p > parseFloat(f.pmax))) return false;
       return true;
     },
-    extraState: { attune: '', artifact: '' },
+    extraState: { attune: '', artifact: '', pmin: '', pmax: '' },
     extraToolbar(tb, f, paint) {
       const wrap = el('span', 'pk-toolbar-extras');
-      wrap.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+      wrap.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center';
       wrap.innerHTML = `<select class="pk-attune"><option value="">同调：全部</option>
         <option value="1"${f.attune === '1' ? ' selected' : ''}>需同调</option>
         <option value="0"${f.attune === '0' ? ' selected' : ''}>不需同调</option></select>
         <select class="pk-artifact"><option value="">神器：全部</option>
         <option value="1"${f.artifact === '1' ? ' selected' : ''}>仅神器</option>
-        <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>`;
+        <option value="0"${f.artifact === '0' ? ' selected' : ''}>非神器</option></select>
+        <span style="font-size:12px;color:var(--muted)">价格(gp)</span>
+        <input type="number" class="pk-pmin" min="0" step="100" placeholder="最低"
+          value="${esc(f.pmin === '' ? '' : f.pmin)}" style="width:80px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)">
+        <span style="color:var(--muted)">–</span>
+        <input type="number" class="pk-pmax" min="0" step="100" placeholder="最高"
+          value="${esc(f.pmax === '' ? '' : f.pmax)}" style="width:80px;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)">`;
       tb.appendChild(wrap);
       $('.pk-attune', wrap).addEventListener('change', (e) => { f.attune = e.target.value; f.page = 1; paint(true); });
       $('.pk-artifact', wrap).addEventListener('change', (e) => { f.artifact = e.target.value; f.page = 1; paint(true); });
+      $('.pk-pmin', wrap).addEventListener('change', (e) => { f.pmin = e.target.value.trim(); f.page = 1; paint(true); });
+      $('.pk-pmax', wrap).addEventListener('change', (e) => { f.pmax = e.target.value.trim(); f.page = 1; paint(true); });
     },
     itemHtml: (i) => {
       const sel = (c.equipment || []).some(x => x.id === i.id);

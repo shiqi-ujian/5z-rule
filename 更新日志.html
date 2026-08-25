@@ -76,10 +76,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>28</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>5</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>30</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>6</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>3</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（28 条）</summary>
+    <summary>✅ 已修复（30 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -332,10 +332,28 @@
       
       
       <div class="cl-detail">在「造物素材计算」页新增「怪物素材获得计算」：按生物类型、怪物等级（CR）、数量计算击杀怪物的素材产出——素材 = 类型系数 × CR² × 数量（单位：份），14 类生物类型系数取自 5z计算器.xlsx 后台计算 G61:J74。原 note 所述「怪物等级→基准值=CR×6 尚需多组验证」系误判，实为公式 系数×CR²×数量（sheet 公式 VLOOKUP(系数)*B7*B7*C7），泥怪…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260825-085600-f768</span>
+      <b>辅助计算器「造物素材计算」首块标签改回「物品类型」</b>
+      <span class="cl-page">（calculator.html 辅助计算器）</span>
+      <span class="cl-date">2026-08-25</span>
+      
+      
+      <div class="cl-detail">第一块实际是「物品素材计算」，标签与提示却写成「物品/生物类型」（生物类型已于下块单列）。已改为「物品类型」，标题同步改为「物品素材计算」，避免与下方「怪物素材获得计算」混淆。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260825-092900-0d96</span>
+      <b>车卡器法术表「心之宁静」缺失 + 购物价位快速定位</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-08-25</span>
+      
+      
+      <div class="cl-detail">① 法术缺失根因：规则书里法术名后的英文别名含弯引号（如「心之宁静 Heart’s Ease」），名称解析正则只认直引号，在弯引号处中断，留下「心之宁静Heart’」这类错误名，导致法术表搜不到。修复正则支持弯引号，一次性修正 69 个法术名（心之宁静、皇帝的新衣、猎人印记 等），现法术表可正常看到「心之宁静」。② 购物页新增自定义价格区间（最低/最高 gp）筛选 + 列表默认按价格下限升序，粗档…</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
-    <summary>⏳ 待确认 / 待决策（5 条）</summary>
+    <summary>⏳ 待确认 / 待决策（6 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
@@ -381,11 +399,47 @@
       
       <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
       
+    </li>
+    <li>
+      <span class="cl-id">#20260825-085800-8f97</span>
+      <b>车卡器支持多格式导出/导入（word/excel/txt）</b>
+      
+      <span class="cl-date">2026-08-25</span>
+      
+      <div class="cl-detail">导出 Word(.docx) 与 Excel 已上线；缺「txt 导出」与「word/excel/txt 导入」。导入（尤其按导出格式解析回填）属较大功能，与既有「Excel 角色卡导入」d73b 待办重叠，待专门一轮统一设计实现。</div>
+      
     </li></ul>
   </details>
   <details id="board-open" class="board-sec">
-    <summary>🆕 待处理（0 条 · 每 60 分钟自动巡检）</summary>
-    <p class="st-empty">当前没有待处理反馈。</p>
+    <summary>🆕 待处理（3 条 · 每 60 分钟自动巡检）</summary>
+    <ul class="st-list">
+    <li>
+      <span class="cl-id">#20260825-085600-f768</span>
+      <b>第一个计算器是物品计算器，不应该写成“物品/生物类型”</b>
+      <span class="cl-page">（造物素材计算器）</span>
+      
+      <span class="cl-date">2026-08-25</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260825-085800-8f97</span>
+      <b>导出角色卡时，希望能添加多种格式导出功能</b>
+      <span class="cl-page">（角色创建）</span>
+      
+      <span class="cl-date">2026-08-25</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20260825-092900-0d96</span>
+      <b>请输入文本</b>
+      <span class="cl-page">（车卡）</span>
+      
+      <span class="cl-date">2026-08-25</span>
+      
+      
+    </li></ul>
   </details>
 </section>
 
@@ -408,6 +462,30 @@
       <div class="cl-detail">在「造物素材计算」页新增「怪物素材获得计算」：按生物类型、怪物等级（CR）、数量计算击杀怪物的素材产出——素材 = 类型系数 × CR² × 数量（单位：份），14 类生物类型系数取自 5z计算器.xlsx 后台计算 G61:J74。原 note 所述「怪物等级→基准值=CR×6 尚需多组验证」系误判，实为公式 系数×CR²×数量（sheet 公式 VLOOKUP(系数)*B7*B7*C7），泥怪 CR6×1 实测 21.6/14.4/7.2 与 Excel 缓存一致。</div>
     </li></ul>
     
+  </details>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">✅2 / ⏳1</span></summary>
+    <p class="cl-release">反馈批处理（问题来源：收集表 3 条，20260825 批次，1 条待确认）。</p>
+    <h3>✅ 已修复（2）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260825-085600-f768</span>
+      <b>辅助计算器「造物素材计算」首块标签改回「物品类型」</b>
+      <span class="cl-page">（calculator.html 辅助计算器）</span>
+      <div class="cl-detail">第一块实际是「物品素材计算」，标签与提示却写成「物品/生物类型」（生物类型已于下块单列）。已改为「物品类型」，标题同步改为「物品素材计算」，避免与下方「怪物素材获得计算」混淆。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260825-092900-0d96</span>
+      <b>车卡器法术表「心之宁静」缺失 + 购物价位快速定位</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <div class="cl-detail">① 法术缺失根因：规则书里法术名后的英文别名含弯引号（如「心之宁静 Heart’s Ease」），名称解析正则只认直引号，在弯引号处中断，留下「心之宁静Heart’」这类错误名，导致法术表搜不到。修复正则支持弯引号，一次性修正 69 个法术名（心之宁静、皇帝的新衣、猎人印记 等），现法术表可正常看到「心之宁静」。② 购物页新增自定义价格区间（最低/最高 gp）筛选 + 列表默认按价格下限升序，粗档次之外可直接定位任意价位装备。</div>
+    </li></ul>
+    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
+    <li class="cl-pend">
+      <span class="cl-id">#20260825-085800-8f97</span>
+      <b>车卡器支持多格式导出/导入（word/excel/txt）</b>
+      <div class="cl-detail">⏳ 导出 Word(.docx) 与 Excel 已上线；缺「txt 导出」与「word/excel/txt 导入」。导入（尤其按导出格式解析回填）属较大功能，与既有「Excel 角色卡导入」d73b 待办重叠，待专门一轮统一设计实现。</div>
+    </li></ul>
   </details>
 
   <details class="cl-entry">

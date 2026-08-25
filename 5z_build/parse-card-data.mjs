@@ -373,7 +373,7 @@ function parseSpells() {
     const flow = parsePage(readText(path.join(dir, e.name)));
     for (let i = 0; i < flow.length; i++) {
       if (!(flow[i].type === 'h3' && flow[i].red)) continue;
-      let name = flow[i].text.replace(/\s*[A-Za-z][A-Za-z\s']*$/, '').trim();
+      let name = flow[i].text.replace(/\s*[A-Za-z][A-Za-z\s'’]*$/, '').trim();
       if (!name) continue;
       let text = '';
       for (let j = i + 1; j < flow.length; j++) {
@@ -412,7 +412,7 @@ function parseSpells() {
     const flow = parsePage(readText(file));
     for (let i = 0; i < flow.length; i++) {
       if (!(flow[i].type === 'h3' && flow[i].red)) continue;
-      let name = flow[i].text.replace(/\s*[A-Za-z][A-Za-z\s']*$/, '').trim();
+      let name = flow[i].text.replace(/\s*[A-Za-z][A-Za-z\s'’]*$/, '').trim();
       if (!name || spells.some(s => s.name === name)) continue; // 详述页已有则跳过
       let text = '';
       for (let j = i + 1; j < flow.length; j++) {
@@ -467,7 +467,7 @@ function parseClassSpells() {
       let spellName = null;
       for (const x of flow) {
         if (x.type === 'h3' && x.red) {
-          spellName = x.text.replace(/\s*[A-Za-z][A-Za-z\s']*$/, '').trim();
+          spellName = x.text.replace(/\s*[A-Za-z][A-Za-z\s'’]*$/, '').trim();
           continue;
         }
         if (x.type === 'p' && spellName) {
