@@ -76,10 +76,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>30</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>10</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>31</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>9</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（30 条）</summary>
+    <summary>✅ 已修复（31 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -350,10 +350,19 @@
       
       
       <div class="cl-detail">① 法术缺失根因：规则书里法术名后的英文别名含弯引号（如「心之宁静 Heart’s Ease」），名称解析正则只认直引号，在弯引号处中断，留下「心之宁静Heart’」这类错误名，导致法术表搜不到。修复正则支持弯引号，一次性修正 69 个法术名（心之宁静、皇帝的新衣、猎人印记 等），现法术表可正常看到「心之宁静」。② 购物页新增自定义价格区间（最低/最高 gp）筛选 + 列表默认按价格下限升序，粗档…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260825-213600-18ed</span>
+      <b>新增「专长词典」</b>
+      <span class="cl-page">（dict.html 专长词典）</span>
+      <span class="cl-date">2026-08-27</span>
+      
+      
+      <div class="cl-detail">在 dict.html 新增「专长」页签：浏览 798 个专长，按类别（娴熟/战技/种族/秘法/职业/超魔/通用专长）+ 关键字筛选，详情显示效果全文并跳转规则书原文；解析器为每条专长补充 url 字段以便原文跳转。</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
-    <summary>⏳ 待确认 / 待决策（10 条）</summary>
+    <summary>⏳ 待确认 / 待决策（9 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
@@ -410,15 +419,6 @@
       
     </li>
     <li>
-      <span class="cl-id">#20260825-213600-18ed</span>
-      <b>新增「专长词典」（把专长也编为词典并赋予标签）</b>
-      
-      <span class="cl-date">2026-08-25</span>
-      
-      <div class="cl-detail">复用现有词典框架。数据已就绪：assets/card-data/feats.json 含 798 个专长（name/category/sub/page/text），可在 dict.html 新增「专长」页签，用 Picker 按类别(娴熟/战技/秘法/通用/种族专长等)+关键字筛选。与 91da 的「专长词典」为同一需求。</div>
-      
-    </li>
-    <li>
       <span class="cl-id">#20260825-213800-91da</span>
       <b>新增「怪物词典」「专长词典」功能</b>
       
@@ -438,11 +438,11 @@
     </li>
     <li>
       <span class="cl-id">#20260825-213800-0fd6</span>
-      <b>魔法物品分类进一步标签化（如「奥法秘典」应可在「法器（书本）」下找到）</b>
+      <b>魔法物品分类「sub + attr 形态」双标签（本批暂缓）</b>
       
       <span class="cl-date">2026-08-25</span>
       
-      <div class="cl-detail">根因：magic-items.json 的 sub 归为「法器（职业基础）」，而物品实际形态见 attr「法器（书本）」等，词典按 sub 过滤导致书本类下找不到。需让物品可同时命中其形态子类（按 sub + attr 形态双标签）。属分类增强，待专门一轮。</div>
+      <div class="cl-detail">根因：magic-items.json 的 sub 归为「法器（职业基础）」，而物品实际形态见 attr「法器（书本）」等，词典按 sub 过滤导致书本类下找不到。需让物品可同时命中其形态子类（按 sub + attr 形态双标签）。属分类增强，待专门一轮。本批决定暂不实现、另行排期（已按用户指令在更新日志标注）：magic-items.json 的 sub 归为「法器（职业基础）」而物品实际形态见 attr「法器（书本）」，按 sub 过滤导致「法器（书本）」下找不到（约 1553 件中 662 件 attr 形态 ≠ sub，奥法秘典/奥法大全即此类）。</div>
       
     </li></ul>
   </details>
@@ -453,6 +453,19 @@
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-27 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
+    <p class="cl-release">词典功能增强第一批：新增「专长」页签（问题来源：收集表 #20260825-213600-18ed）。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260825-213600-18ed</span>
+      <b>新增「专长词典」</b>
+      <span class="cl-page">（dict.html 专长词典）</span>
+      <div class="cl-detail">在 dict.html 新增「专长」页签：浏览 798 个专长，按类别（娴熟/战技/种族/秘法/职业/超魔/通用专长）+ 关键字筛选，详情显示效果全文并跳转规则书原文；解析器为每条专长补充 url 字段以便原文跳转。</div>
+    </li></ul>
+    
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">✅2</span></summary>
@@ -498,15 +511,10 @@
   </details>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">⏳4</span></summary>
+    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">⏳3</span></summary>
     <p class="cl-release">词典功能增强请求（问题来源：收集表 4 条，20260825 晚间批次，均为功能需求，待专门一轮统一实现）。</p>
     
-    <h3>⏳ 待确认 / 暂缓（4）</h3><ul>
-    <li class="cl-pend">
-      <span class="cl-id">#20260825-213600-18ed</span>
-      <b>新增「专长词典」（把专长也编为词典并赋予标签）</b>
-      <div class="cl-detail">⏳ 复用现有词典框架。数据已就绪：assets/card-data/feats.json 含 798 个专长（name/category/sub/page/text），可在 dict.html 新增「专长」页签，用 Picker 按类别(娴熟/战技/秘法/通用/种族专长等)+关键字筛选。与 91da 的「专长词典」为同一需求。</div>
-    </li>
+    <h3>⏳ 待确认 / 暂缓（3）</h3><ul>
     <li class="cl-pend">
       <span class="cl-id">#20260825-213800-91da</span>
       <b>新增「怪物词典」「专长词典」功能</b>
@@ -519,8 +527,8 @@
     </li>
     <li class="cl-pend">
       <span class="cl-id">#20260825-213800-0fd6</span>
-      <b>魔法物品分类进一步标签化（如「奥法秘典」应可在「法器（书本）」下找到）</b>
-      <div class="cl-detail">⏳ 根因：magic-items.json 的 sub 归为「法器（职业基础）」，而物品实际形态见 attr「法器（书本）」等，词典按 sub 过滤导致书本类下找不到。需让物品可同时命中其形态子类（按 sub + attr 形态双标签）。属分类增强，待专门一轮。</div>
+      <b>魔法物品分类「sub + attr 形态」双标签（本批暂缓）</b>
+      <div class="cl-detail">⏳ 根因：magic-items.json 的 sub 归为「法器（职业基础）」，而物品实际形态见 attr「法器（书本）」等，词典按 sub 过滤导致书本类下找不到。需让物品可同时命中其形态子类（按 sub + attr 形态双标签）。属分类增强，待专门一轮。本批决定暂不实现、另行排期（已按用户指令在更新日志标注）：magic-items.json 的 sub 归为「法器（职业基础）」而物品实际形态见 attr「法器（书本）」，按 sub 过滤导致「法器（书本）」下找不到（约 1553 件中 662 件 attr 形态 ≠ sub，奥法秘典/奥法大全即此类）。</div>
     </li></ul>
   </details>
 

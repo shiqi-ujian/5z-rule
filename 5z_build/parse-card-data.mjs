@@ -350,7 +350,7 @@ function parseFeats() {
               if (flow[j].type === 'h2') break;
               if (flow[j].type === 'p') text += (text ? '\n' : '') + flow[j].text;
             }
-            feats.push({ name, category: bigCat, sub: subCat, page: pageLabel, text });
+            feats.push({ name, category: bigCat, sub: subCat, page: pageLabel, url: relUrl(full), text });
           }
         }
       }
@@ -834,7 +834,7 @@ const magicItems = parseMagicItems();
 // 把种族页内的"种族专长"合并进专长列表
 for (const r of races) {
   for (const f of r.raceFeats || []) {
-    feats.push({ name: f.name, category: '种族专长', page: r.url, text: f.text });
+    feats.push({ name: f.name, category: '种族专长', page: r.url, url: r.url, text: f.text });
   }
 }
 

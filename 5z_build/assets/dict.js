@@ -290,6 +290,34 @@ const mvPicker = Picker.create({
   containers: C,
 });
 
+/* ---------- 专长 Tab ---------- */
+// 类别按规则书顺序（娴熟/战技/种族/秘法/职业/超魔/通用专长）；不认识的类别兜底排后
+const FEAT_CAT_ORDER = ['娴熟专长', '战技专长', '种族专长', '秘法专长', '职业专长', '超魔专长', '通用专长'];
+const FEAT_CATS = [...new Set(DATA.feats.map(f => f.category))]
+  .sort((a, b) => {
+    const ia = FEAT_CAT_ORDER.indexOf(a), ib = FEAT_CAT_ORDER.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+// 专长有重名（同名可跨类别，且 `raceFeats` 合并出的种族特性句），给每条一个稳定 id 作为选中标识
+DATA.feats.forEach((f, i) => { if (f.id == null) f.id = (f.category || '') + '\u0000' + (f.name || '') + '\u0000' + i; });
+const featPicker = Picker.create({
+  data: DATA.feats,
+  selKey: 'id',
+  pageSize: 100,
+  placeholder: '搜索专长名或效果…',
+  emptyText: '没有匹配的专长。',
+  chips: [{ key: 'category', label: '类别', items: FEAT_CATS }],
+  hay: (f) => f.name + ' ' + (f.text || ''),
+  itemHtml: (f) => `<div class="pk-i-name">${esc(f.name)}</div>
+    <div class="pk-i-sub">${esc(f.category)}</div>
+    ${f.text ? `<div class="pk-i-brief">${esc(f.text.split('\n')[0].slice(0, 60))}</div>` : ''}`,
+  detailHtml: (f) => `<div class="pk-d-name">${esc(f.name)}</div>
+    <div class="pk-d-sub">${esc(f.category)}</div>
+    ${f.text ? `<div class="pk-d-text">${esc(f.text)}</div>` : '<p class="pk-muted">规则书未收录该专长的独立详述。</p>'}
+    <a class="pk-d-link" href="${esc(f.url || '#')}" target="_blank">📖 规则书原文 →</a>`,
+  containers: C,
+});
+
 /* ---------- 程序 Tab ---------- */
 // 所需模块的可读标签：无 / 任意两个 / 具体组合（按 CORE_MODULES 顺序排列）
 function moduleLabel(p) {
@@ -417,7 +445,7 @@ const miPicker = Picker.create({
   containers: C,
 });
 
-const PICKERS = { spells: spellPicker, maneuvers: mvPicker, programs: pgPicker, 'magic-items': miPicker };
+const PICKERS = { spells: spellPicker, maneuvers: mvPicker, feats: featPicker, programs: pgPicker, 'magic-items': miPicker };
 
 /* ---------- Tab 切换 ---------- */
 function switchTab(tab) {
