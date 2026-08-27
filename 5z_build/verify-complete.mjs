@@ -30,8 +30,13 @@ const hhcLocals = [...hhc.matchAll(/param name="Local" value="([^"]*)"/gi)]
 const hhcUniq = [...new Set(hhcLocals)];
 console.log(`hhc 树 Local: ${hhcLocals.length} 条, 去重 ${hhcUniq.length} 个`);
 
-// 3. hhk 索引引用
-const hhk = enc.decode(fs.readFileSync(path.join(SRC, '5z规则1.59版.hhk')));
+// 3. hhk 索引引用（自动发现 5z_src 下的 .hhk，兼容版本号变化）
+const hhkFile = fs.readdirSync(SRC).find(f => /\.hhk$/i.test(f));
+if (!hhkFile) {
+  console.error('5z_src 下未找到 .hhk 索引文件');
+  process.exit(1);
+}
+const hhk = enc.decode(fs.readFileSync(path.join(SRC, hhkFile)));
 const hhkRefs = [...hhk.matchAll(/value="([^"]+\.(?:htm|html))"/gi)]
   .map(m => m[1].replace(/&amp;/g, '&').replace(/\\/g, '/'));
 const hhkUniq = [...new Set(hhkRefs)];
