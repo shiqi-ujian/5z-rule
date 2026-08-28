@@ -2579,7 +2579,7 @@ async function boot() {
   $$('.step').forEach(b => b.addEventListener('click', () => setStep(+b.dataset.step)));
   $('#btn-prev').addEventListener('click', () => setStep(Math.max(1, state.step - 1)));
   $('#btn-next').addEventListener('click', () => {
-    if (state.step >= 7) { render(); return; }
+    if (state.step >= 11) { render(); return; }
     setStep(state.step + 1);
   });
   $('#btn-export').addEventListener('click', exportChar);
