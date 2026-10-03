@@ -9,6 +9,7 @@ export async function onRequest(context) {
   if (!ct.includes('text/html')) return res;
   const out = new Response(res.body, res);
   out.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
-  out.headers.set('X-Cache-Probe', 'fn-v1');
+  out.headers.set('Expires', 'Thu, 01 Jan 1970 00:00:00 GMT');
+  out.headers.set('X-Cache-Probe', 'fn-v2');
   return out;
 }
