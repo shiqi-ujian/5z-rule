@@ -584,6 +584,46 @@ a{color:#7c3aed;font-weight:600;text-decoration:none;padding:10px 22px;border:1p
 `);
 fs.writeFileSync(path.join(OUT, 'robots.txt'), 'User-agent: *\nAllow: /\n');
 
+// ---------- 8.4 Cloudflare Pages 缓存策略（_headers） ----------
+// 背景：Pages 默认给 HTML 发 `public, max-age=14400, must-revalidate`（4 小时）。
+// 发布新版本时，边缘缓存的旧 index.html 仍会在 TTL 内被直接命中，表现为
+// 「源站已是新版、不同 Cloudflare 节点看到不同版本」（1.62 发布时实际踩到过）。
+// 这里改写为：HTML 一律回源校验（换版本立即生效），带 ?v= 戳的静态资源长缓存
+// （URL 随构建戳变化，不需要靠 TTL 失效）。
+fs.writeFileSync(path.join(OUT, '_headers'),
+  [
+    '# 由 5z_build/build.mjs 自动生成，请勿手改',
+    '# 规则同长时更具体的路径优先；Cloudflare Pages 部署时读取本文件。',
+    '',
+    '# HTML 文档与站点入口：不缓存，始终回源校验 -> 发布后立即生效',
+    '/',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '/index.html',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '/car.html',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '/dict.html',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '/calculator.html',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '/404.html',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '# 更新日志页（中文文件名已 URL 编码）',
+    '/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97.html',
+    '  Cache-Control: public, max-age=0, must-revalidate',
+    '',
+    '# 带构建戳的资源（?v=__BUILD_TS__）长缓存；改内容必换 URL',
+    '/assets/*',
+    '  Cache-Control: public, max-age=31536000',
+    '',
+  ].join('\n'));
+
 // ---------- 8.5 更新日志页（由 5z_build/changelog.json 渲染，随构建发布） ----------
 {
   const r = _spawnSync(process.execPath,

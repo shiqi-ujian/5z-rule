@@ -1,8 +1,18 @@
 {
-  "_comment": "复制本文件为 deploy.config.json（不入库）后填写。Cloudflare Pages 部署所需：环境变量 CLOUDFLARE_API_TOKEN（Cloudflare 后台 → 我的资料 → API 令牌 → 创建令牌，权限：Account > Cloudflare Pages > Edit），多账号时加 CLOUDFLARE_ACCOUNT_ID 或在此填 accountId。",
+  "_comment": "复制本文件为 deploy.config.json（不入库）后填写。云凭据一律走环境变量，不要写进本文件。",
+  "_env": {
+    "CLOUDFLARE_API_TOKEN": "Cloudflare 后台 → 我的资料 → API 令牌 → 创建令牌。需要两个权限：Account > Cloudflare Pages > Edit（本地部署器用）+ Zone > Cache Purge > Purge（发布后自动清缓存用）",
+    "CLOUDFLARE_ACCOUNT_ID": "可选，多账号时填，否则可写下面的 accountId",
+    "CLOUDFLARE_ZONE_ID": "可选，留空则自动按域名反查"
+  },
   "cloudflare": {
     "projectName": "5z-rule",
     "accountId": "",
-    "branch": "main"
+    "branch": "main",
+    "_purge": "以下三项用于「发布后自动清理边缘缓存」，只靠 Git 集成发布时也能用；不填则自动反查域名与默认配置",
+    "domain": "5z-rules.top",
+    "zoneId": "",
+    "waitForDeployMs": 240000,
+    "purgePaths": []
   }
 }

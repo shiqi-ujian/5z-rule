@@ -76,10 +76,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>31</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>9</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>34</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>9</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（31 条）</summary>
+    <summary>✅ 已修复（34 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -359,6 +359,33 @@
       
       
       <div class="cl-detail">在 dict.html 新增「专长」页签：浏览 798 个专长，按类别（娴熟/战技/种族/秘法/职业/超魔/通用专长）+ 关键字筛选，详情显示效果全文并跳转规则书原文；解析器为每条专长补充 url 字段以便原文跳转。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260828-btn-next</span>
+      <b>车卡器「下一步」在第 7 步起无法继续</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <span class="cl-date">2026-10-03</span>
+      
+      
+      <div class="cl-detail">根源：btn-next 的守卫写成 state.step &gt;= 7 就直接 return，而车卡向导在加入购物步骤后共有 11 步，导致第 7 步（法术）之后无法前进。修复：守卫改为 state.step &gt;= 11，最后一步（购物）不再前移。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260827-dict-name</span>
+      <b>侧栏按钮名「法术词典」改为「5z词典」</b>
+      <span class="cl-page">（全站侧栏）</span>
+      <span class="cl-date">2026-10-03</span>
+      
+      
+      <div class="cl-detail">词典页已含法术/战技/程序/魔法物品四类，旧名容易让玩家以为只有法术。按钮文案与 title 提示统一改为「5z词典」。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20260827-shell-ver</span>
+      <b>站点头部残留的下拉版本号 1.59 校正为 1.60</b>
+      <span class="cl-page">（全站头部）</span>
+      <span class="cl-date">2026-10-03</span>
+      
+      
+      <div class="cl-detail">根源：面包屑处的版本号是写死的旧值，未跟随构建。修复：改用 __TITLE__ 占位符，版本号随 CHM 自动提取，与页面标题始终一致。</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
@@ -453,6 +480,45 @@
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-10-03 · v1.62</span><span class="cl-batch-hint">✅3</span></summary>
+    <p class="cl-release">规则书更新至 1.62 版（CHM 导入）：673 页，较 1.61 的 663 页净增 10 页（改动 232 个文件，+50496 / -83689 行）。本批同时把 1.60~1.62 期间只进了仓库、未随版本号公示的三处修复一并带上线。</p>
+    <h3>✅ 已修复（3）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20260828-btn-next</span>
+      <b>车卡器「下一步」在第 7 步起无法继续</b>
+      <span class="cl-page">（car.html 角色创建器）</span>
+      <div class="cl-detail">根源：btn-next 的守卫写成 state.step &gt;= 7 就直接 return，而车卡向导在加入购物步骤后共有 11 步，导致第 7 步（法术）之后无法前进。修复：守卫改为 state.step &gt;= 11，最后一步（购物）不再前移。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260827-dict-name</span>
+      <b>侧栏按钮名「法术词典」改为「5z词典」</b>
+      <span class="cl-page">（全站侧栏）</span>
+      <div class="cl-detail">词典页已含法术/战技/程序/魔法物品四类，旧名容易让玩家以为只有法术。按钮文案与 title 提示统一改为「5z词典」。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20260827-shell-ver</span>
+      <b>站点头部残留的下拉版本号 1.59 校正为 1.60</b>
+      <span class="cl-page">（全站头部）</span>
+      <div class="cl-detail">根源：面包屑处的版本号是写死的旧值，未跟随构建。修复：改用 __TITLE__ 占位符，版本号随 CHM 自动提取，与页面标题始终一致。</div>
+    </li></ul>
+    
+  </details>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-09-17 · v1.61</span></summary>
+    <p class="cl-release">规则书更新至 1.61 版（CHM 导入）：663 页（改动 146 个文件，+33064 / -20051 行）。以装备与护甲类条目改动为主（重甲、外套、头饰、戒指、护符等），另含标记与物品工艺条目修正。</p>
+    
+    
+  </details>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-08-27 · v1.60</span></summary>
+    <p class="cl-release">规则书更新至 1.60 版（CHM 导入）：668 页（改动 180 个文件，+37467 / -21550 行）。以装备条目（护甲、戒指、护符、近战/远程武器、盾牌、魔杖等）与辅助计算器数据同步为主。本批之后站点进入纯净的 CHM 自动发布流程，不再逐条挂修复记录。</p>
+    
+    
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-08-27 · v1.59</span><span class="cl-batch-hint">✅1</span></summary>
