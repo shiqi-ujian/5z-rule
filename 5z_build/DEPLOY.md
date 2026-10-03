@@ -43,24 +43,34 @@
 
 ### 发布后自动清缓存（解决「部分节点还是旧版」）
 
-Cloudflare 默认给 HTML 发 4 小时缓存（`max-age=14400`）。Git 集成的 Pages 虽然在部署时会清理一次缓存，但如果清理动作早于部署真正生效，边缘会把**旧内容**重新缓存 4 小时——表现为「源站已是新版、同一域名不同 Cloudflare 节点返回不同版本」。1.62 发布时实际踩到过这个坑（LAX 节点返回 1.61 的首页，同时 SJC 节点已是 1.62）。
+**问题现象**：发布新版本后，源站已是新版，但同一域名不同 Cloudflare 节点返回不同版本——例如 1.62 发布时 `104.21.73.101`（SJC）已是 1.62，而 `172.67.189.163`（LAX）仍返回 1.61 首页，持续约 4 小时。根域名 `/`、`/index.html`、内页 `/car`、`/dict`、`/更新日志` 全都受影响（含裸域名访问的每个入口）。
 
-两层防护：
+**根因（2026-10-03 实测确认）**：`5z-rules.top` 的 Zone 上有一条**把 `Cache-Control` 改写成 `public, max-age=14400, must-revalidate` 的缓存规则**（页面规则 / Cache Rules）。判据有三：
 
-1. **`_headers`（已自动带上，无需配置）**：`build.mjs` 每次构建都会在 `5z_web/_headers` 写一份缓存策略并随发布上线——
-   HTML 与站点入口 `Cache-Control: public, max-age=0, must-revalidate`（换版本立即生效），
-   带 `?v=<构建戳>` 的 `assets/*` 长缓存 1 年（URL 随构建变化，不靠 TTL 失效）。
+1. GitHub Pages 上**同一份 HTML** 返回的是 `max-age=600`（且 `Age: 0`、无边缘缓存），说明 4 小时不是 Pages 的默认行为；
+2. Pages 的 `_headers` 对 `/assets/*` 生效（`max-age=31536000` 成功透出），但对 HTML 文档不生效——官方文档也写明 `_headers` 仅作用于 static asset responses；
+3. 加了 Pages Function 主动设置 `Cache-Control` 后，**Function 设的 `Expires` 能透出、`Cache-Control` 仍被改回 14400**，证明是 Zone 规则在 Function 之后覆盖。
 
-2. **发布后自动 purge（可选，需 API Token）**：`update.mjs` 第 8 步会先轮询确认新构建戳已上线，再调用 Cloudflare `purge_cache` 清理边缘缓存。只靠 Git 集成发布也能用，与上面的「本地部署器」互不依赖。
+**修法一（推荐，根治，需在 Cloudflare 后台操作一次）**
 
-   配置方式：`deploy.config.json` 的 `cloudflare.domain` 填站点域名（默认 `5z-rules.top`），并提供 Zone 级 API Token：
+进 Cloudflare 后台 → 选中 `5z-rules.top` → **规则 / Rules → Cache Rules**（旧版叫「页面规则 / Page Rules」）→ 找到那条把 HTML 设成 4 小时缓存的规则，二选一：
 
-   ```powershell
-   $env:CLOUDFLARE_API_TOKEN = "<Zone 级令牌>"   # 权限：Zone > 缓存 Purge > Purge
-   $env:CLOUDFLARE_ZONE_ID   = "<可选，留空自动按域名反查>"
-   ```
+- **删掉它**：HTML 将回落到 Pages 默认（本项目会用下面第 2 点的 Function 补成 `max-age=0, must-revalidate`，即"每次回源校验"，换版本立即生效）；或
+- **改成 Browser TTL 不覆盖 / Edge TTL 设为 0（不缓存 HTML）**：只让 `assets/*` 这类带 `?v=<构建戳>` 的资源保持长缓存。
 
-   未配置凭据时该步只打印提示并跳过，不会中断发布；没确认新版上线时也会主动跳过 purge（否则会把旧内容重新填回缓存）。
+改完访问首页，`Cache-Control` 应不再是 `max-age=14400`。`5z_web/functions/[[path]].js` 已经就位，规则一改它就会自动生效，无需再改代码。
+
+**修法二（无需后台，项目已内置）**：发布后自动 purge 边缘缓存。`update.mjs` 第 8 步会先轮询确认新构建戳已上线，再调用 Cloudflare `purge_cache`。
+
+- 配 `deploy.config.json` 的 `cloudflare.domain`（默认 `5z-rules.top`），并提供 Zone 级令牌：
+
+  ```powershell
+  $env:CLOUDFLARE_API_TOKEN = "<Zone 级令牌>"   # 权限：Zone > 缓存 Purge > Purge
+  $env:CLOUDFLARE_ZONE_ID   = "<可选，留空自动按域名反查>"
+  ```
+
+- 未配置凭据时该步只打印提示并跳过，不中断发布；没确认新版上线时也会主动跳过 purge（否则会把旧内容重新填回缓存）。
+- 注意：purge 能立刻让所有节点换版，但**下一个访客的 4 小时窗口会重新开始**，所以修法一才是根治。
 
 ### 方式二：本地部署器（wrangler + API Token）
 
@@ -70,6 +80,10 @@ Cloudflare 默认给 HTML 发 4 小时缓存（`max-age=14400`）。Git 集成�
 4. 之后每次 `一键更新.bat` 在推送后自动调用 wrangler 部署到 Cloudflare Pages
 
 部署失败会中止并提示（主站 GitHub Pages 不受影响）；可用 `--skip-deploy` 跳过，或事后 `node 5z_build/update.mjs --no-extract --no-push` 重跑部署（该命令也会重跑缓存清理）。
+
+> 缓存策略现状一览（构建自动生成，见 `build.mjs` 第 8.4 段）：
+> `_headers` 声明 `/assets/*` 长缓存 1 年（带 `?v=<构建戳>`，URL 随构建变化，不靠 TTL 失效）；
+> `functions/[[path]].js` + `_routes.json` 负责 HTML 文档不缓存（受上述 Zone 规则压制，待修法一）；`_routes.json` 只 include 文档路径、exclude `/assets/*`，避免给 4.5MB 的 `card-data.js` 白套一层 Function。
 
 ### 添加其他托管平台
 
