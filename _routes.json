@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "include": [
+    "/",
+    "/index.html",
+    "/car.html",
+    "/dict.html",
+    "/calculator.html",
+    "/404.html",
+    "/更新日志.html"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/favicon.ico",
+    "/robots.txt",
+    "/_headers",
+    "/_routes.json"
+  ]
+}

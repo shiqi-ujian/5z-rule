@@ -584,26 +584,51 @@ a{color:#7c3aed;font-weight:600;text-decoration:none;padding:10px 22px;border:1p
 `);
 fs.writeFileSync(path.join(OUT, 'robots.txt'), 'User-agent: *\nAllow: /\n');
 
-// ---------- 8.4 Cloudflare Pages 缓存策略（_headers） ----------
+// ---------- 8.4 Cloudflare 缓存策略 ----------
 // 背景：Pages 默认给 HTML 发 `public, max-age=14400, must-revalidate`（4 小时）。
 // 发布新版本时，边缘缓存的旧 index.html 仍会在 TTL 内被直接命中，表现为
 // 「源站已是新版、不同 Cloudflare 节点看到不同版本」（1.62 发布时实际踩到过）。
-// 这里改写为：HTML 一律回源校验（换版本立即生效），带 ?v= 戳的静态资源长缓存
-// （URL 随构建戳变化，不需要靠 TTL 失效）。
+//
+// 分两层，缺一不可：
+//   1) `_headers`——只管静态资源。官方文档明确它「applied to static asset responses」，
+//      对 HTML 文档不生效（实测：/assets/* 的长缓存生效，/* 与 /index.html 都不生效）。
+//      所以这里只声明资源长缓存；HTML 交给下面的 Function。
+//   2) `functions/[[path]].js`——Pages Functions 生成的响应不受 `_headers` 影响，
+//      正好用来给 HTML 补上「不缓存、每次回源校验」，换版本立即生效。
 fs.writeFileSync(path.join(OUT, '_headers'),
   [
     '# 由 5z_build/build.mjs 自动生成，请勿手改',
-    '# Cloudflare Pages 部署时读取本文件；同长的规则更靠后者优先。',
-    '',
-    '# 兜底：文档与任何未列出的路径都不缓存，始终回源校验 -> 发布后立即生效',
-    '/*',
-    '  Cache-Control: public, max-age=0, must-revalidate',
+    '# 注意：_headers 只作用于静态资源；HTML 的缓存策略见 functions/[[path]].js',
     '',
     '# 带构建戳的资源（?v=__BUILD_TS__）长缓存；改内容必换 URL',
     '/assets/*',
     '  Cache-Control: public, max-age=31536000',
     '',
   ].join('\n'));
+
+fs.mkdirSync(path.join(OUT, 'functions'), { recursive: true });
+fs.writeFileSync(path.join(OUT, 'functions', '[[path]].js'),
+  `// 由 5z_build/build.mjs 自动生成，请勿手改。
+// 目的：HTML 文档不缓存（每次回源校验），保证发布新版本后立即生效。
+// 原因：_headers 只管静态资源，HTML 会吃 Pages 默认的 4 小时缓存。
+// 只改写 HTML 响应，静态资源（返 304/静态资产）原样透传、保持长缓存。
+export async function onRequest(context) {
+  const res = await context.next();
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('text/html')) return res;
+  const out = new Response(res.body, res);
+  out.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+  return out;
+}
+`);
+
+// _routes.json：Functions 只处理文档路径，静态资源目录排除在外，
+// 避免给 4.5MB 的 card-data.js / 搜索索引白白套一层 Function 调用。
+fs.writeFileSync(path.join(OUT, '_routes.json'), JSON.stringify({
+  version: 1,
+  include: ['/', '/index.html', '/car.html', '/dict.html', '/calculator.html', '/404.html', '/更新日志.html'],
+  exclude: ['/assets/*', '/favicon.ico', '/robots.txt', '/_headers', '/_routes.json'],
+}, null, 2) + '\n');
 
 // ---------- 8.5 更新日志页（由 5z_build/changelog.json 渲染，随构建发布） ----------
 {
