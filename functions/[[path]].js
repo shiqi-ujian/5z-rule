@@ -2,11 +2,13 @@
 // 目的：HTML 文档不缓存（每次回源校验），保证发布新版本后立即生效。
 // 原因：_headers 只管静态资源，HTML 会吃 Pages 默认的 4 小时缓存。
 // 只改写 HTML 响应，静态资源（返 304/静态资产）原样透传、保持长缓存。
+// X-Cache-Probe 仅用于确认 Function 是否真的在处理该请求。
 export async function onRequest(context) {
   const res = await context.next();
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('text/html')) return res;
   const out = new Response(res.body, res);
   out.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+  out.headers.set('X-Cache-Probe', 'fn-v1');
   return out;
 }

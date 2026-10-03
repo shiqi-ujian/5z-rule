@@ -3,11 +3,11 @@
   "include": [
     "/",
     "/index.html",
-    "/car.html",
-    "/dict.html",
-    "/calculator.html",
+    "/car",
+    "/dict",
+    "/calculator",
     "/404.html",
-    "/更新日志.html"
+    "/更新日志"
   ],
   "exclude": [
     "/assets/*",

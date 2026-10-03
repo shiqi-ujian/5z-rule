@@ -612,21 +612,24 @@ fs.writeFileSync(path.join(OUT, 'functions', '[[path]].js'),
 // 目的：HTML 文档不缓存（每次回源校验），保证发布新版本后立即生效。
 // 原因：_headers 只管静态资源，HTML 会吃 Pages 默认的 4 小时缓存。
 // 只改写 HTML 响应，静态资源（返 304/静态资产）原样透传、保持长缓存。
+// X-Cache-Probe 仅用于确认 Function 是否真的在处理该请求。
 export async function onRequest(context) {
   const res = await context.next();
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('text/html')) return res;
   const out = new Response(res.body, res);
   out.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+  out.headers.set('X-Cache-Probe', 'fn-v1');
   return out;
 }
 `);
 
 // _routes.json：Functions 只处理文档路径，静态资源目录排除在外，
 // 避免给 4.5MB 的 card-data.js / 搜索索引白白套一层 Function 调用。
+// 注意：Pages 会把 /x.html 308 到 /x，所以这里必须用无扩展名的规范路径。
 fs.writeFileSync(path.join(OUT, '_routes.json'), JSON.stringify({
   version: 1,
-  include: ['/', '/index.html', '/car.html', '/dict.html', '/calculator.html', '/404.html', '/更新日志.html'],
+  include: ['/', '/index.html', '/car', '/dict', '/calculator', '/404.html', '/更新日志'],
   exclude: ['/assets/*', '/favicon.ico', '/robots.txt', '/_headers', '/_routes.json'],
 }, null, 2) + '\n');
 
