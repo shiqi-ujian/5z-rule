@@ -1,6 +1,6 @@
 // ============================================================
 // 5z 车卡数据解析器：从 5z_src/（CHM 反编译产物）提取角色创建数据
-// 输出: 5z_web/assets/card-data/{rules,races,classes,feats,spells,class-spells,maneuvers,programs,magic-items}.json
+// 输出: 5z_web/assets/card-data/{rules,races,classes,feats,spells,class-spells,maneuvers,programs,magic-items,monsters}.json
 // 由 build.mjs 在构建流程末尾调用；也可独立运行：
 //   node 5z_build/parse-card-data.mjs [输出目录，默认 5z_web]
 // ============================================================
@@ -759,6 +759,282 @@ function parseMagicItems() {
   return out;
 }
 
+// ---------- 5d. 怪物（怪物/**/*.htm；Word 导出的「按 CR 分组」合集页，一页多只） ----------
+// 页面没有语义标题，只能按文本行切分。切分锚点用**结构判定**而不是类型行措辞：
+// 类型行（如「中型不死生物，中立邪恶」）后面 1–3 行内必须出现 AC/HP 等 stat block 行。
+// 原因（2026-10-21 骰子侧真实用户反馈）：类型行有半角逗号/空格/句号、错字「中形」、
+// 多阵营带百分比等变体，枚举正则必漏；漏判的后果不是报错，而是**下一只怪被并进上一只的
+// 正文**（静默串页），因此此函数末尾还有一道串页自检。
+//
+// 输出字段分两层：
+//   ① 与 qq-dice 现有 query-data.json 怪物条目**同语义**的 7 个字段
+//      name/type/desc/cr/text/page/url —— 骰子构建脚本可直接改读本文件，无需改查询逻辑；
+//   ② 词典页用的结构化字段 ac/hp/speed/abilities/saves/.../sections（解析不到则留空）。
+const MONSTER_SIZE_RE = /(超微型|微型|小型或中型|小型|中型|中形|大型|巨型|超巨型|无体型|任意体型)/;
+const MONSTER_ALIGN_RE = /(任何|任意|绝对中立|守序善良|守序中立|守序邪恶|中立善良|中立邪恶|混乱善良|混乱中立|混乱邪恶|无阵营|善良|邪恶|守序|混乱|中立)/;
+const MONSTER_SECTION_RE = /^(传奇动作（\d+动作）|传奇动作|非传奇特性|传奇特性|特性|附赠动作|反应|动作|巢穴动作|区域效应|专长|装备|法术|职业)$/;
+const MONSTER_ATTR_RE = /^(AC|护甲等级|防御等级|HP|生命值|最大HP|速度|力量|敏捷|体质|智力|感知|豁免|技能|伤害免疫|伤害抗性|伤害易伤|伤害抵抗|伤害吸收|状态免疫|状态抗性|感官|语言|熟练加值|挑战等级|先攻)[：:\s]/;
+// stat block 结构锚点的「AC/HP」行：允许全角/半角冒号、空格，甚至无分隔符（源站有「防御等级14」「AC 15」写法）
+// 注意不要用 \s* 直接跨行匹配——源页表格被摊平成行后会有单独一行的「AC」表头，会被误判成 stat block
+const MONSTER_STAT_ANCHOR_RE = /^(?:AC|护甲等级|防御等级|HP|生命值)(?:[：:]|[ \t]|(?=\d))\s*\S/;
+// 字段提取：标签 + 可选冒号/空格 + 值（顺序有意义：先具体后宽泛）
+const MONSTER_FIELD_RES = [
+  ['ac', /^(?:AC|护甲等级|防御等级)\s*[：:]?\s*(.+)$/],
+  ['maxHp', /^最大HP\s*[：:]?\s*(.+)$/],
+  ['hp', /^(?:HP|生命值)\s*[：:]?\s*(.+)$/],
+  ['speed', /^速度\s*[：:]?\s*(.+)$/],
+  ['saves', /^豁免\s*[：:]?\s*(.+)$/],
+  ['skills', /^技能\s*[：:]?\s*(.+)$/],
+  ['damageImmunities', /^伤害免疫\s*[：:]?\s*(.+)$/],
+  ['damageResistances', /^(?:伤害抗性|伤害抵抗|抗性)\s*[：:]?\s*(.+)$/],
+  ['damageVulnerabilities', /^伤害易伤\s*[：:]?\s*(.+)$/],
+  ['damageAbsorption', /^伤害吸收\s*[：:]?\s*(.+)$/],
+  ['conditionImmunities', /^状态免疫\s*[：:]?\s*(.+)$/],
+  ['conditionResistances', /^(?:状态抗性|害抗性)\s*[：:]?\s*(.+)$/],
+  ['senses', /^感官\s*[：:]?\s*(.+)$/],
+  ['languages', /^语言\s*[：:]?\s*(.+)$/],
+  ['proficiencyBonus', /^熟练加值\s*[：:]?\s*(.+)$/],
+  ['initiative', /^先攻\s*[：:]?\s*(.+)$/],
+  ['crText', /^挑战等级\s*[：:]?\s*(.+)$/],
+];
+const MONSTER_ATTR_NAMES = ['力量', '敏捷', '体质', '智力', '感知'];
+
+/** 页面 → 文本行（保留块级行结构；GBK/UTF-8 自动判别；去零宽字符与面包屑） */
+function htmlToLines(html) {
+  let s = String(html)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<xml[\s\S]*?<\/xml>/gi, '')
+    .replace(/<\/?(?:html|head|body|o:p|v:[a-z]+|w:[a-z]+)[^>]*>/gi, '');
+  s = s.replace(/<\/?(?:p|div|h[1-6]|li|tr|table|ul|ol|br|section|article|blockquote|pre)\b[^>]*>/gi, '\n')
+    .replace(/<\/td>/gi, '\t')
+    .replace(/<[^>]+>/g, '');
+  s = decodeEntities(s);
+  const out = [];
+  for (const raw of s.split(/\r?\n/)) {
+    const line = raw.replace(/[\u200b-\u200f\ufeff]/g, '').replace(/[ \t]+/g, ' ').trim();
+    if (line) out.push(line);
+  }
+  if (out.length && /^(怪物|职业|法术|种族|装备|专长|世界|基础)›/.test(out[0])) out.shift();
+  return out;
+}
+
+function isMonsterTypeLineText(t) {
+  if (!t || t.length > 60) return false;
+  if (/[。！？：]/.test(t)) return false;
+  if (!/[，,]/.test(t)) return false;
+  if (!MONSTER_SIZE_RE.test(t)) return false;
+  if (!MONSTER_ALIGN_RE.test(t)) return false;
+  return true;
+}
+/** 类型行锚点：有 stat block 时靠结构；没有 stat block 的少数页退回措辞启发式 */
+function isMonsterTypeAnchor(lines, i) {
+  const t = String(lines[i] || '').trim();
+  if (!t || t.length > 60) return false;
+  if (t.indexOf('：') >= 0) return false;
+  let statNearby = false;
+  for (let d = 1; d <= 3; d++) {
+    if (MONSTER_STAT_ANCHOR_RE.test(String(lines[i + d] || '').trim())) { statNearby = true; break; }
+  }
+  if (!statNearby) return isMonsterTypeLineText(t);
+  if (!MONSTER_SIZE_RE.test(t) || !MONSTER_ALIGN_RE.test(t)) return false;
+  // 有 stat block 时类型行分隔符可能是全角/半角逗号、句号、空格
+  return /[，,。\s]/.test(t);
+}
+/** 名字行：短、无句末标点、非节名/属性行/noise；允许中文逗号（「莎尔，暗夜夫人」） */
+function isMonsterNameLine(l) {
+  const t = String(l || '').trim();
+  if (!t || t.length > 45) return false;
+  if (/[。！？；：]/.test(t)) return false;
+  if (/^[·【]/.test(t)) return false;
+  if (MONSTER_SECTION_RE.test(t) || MONSTER_ATTR_RE.test(t) || isMonsterTypeLineText(t)) return false;
+  return true;
+}
+function isMonsterDescLine(l) {
+  return l.length > 25 && /[。！？]$/.test(l) && !/^[·【]/.test(l) && l.indexOf('：') < 0 && !MONSTER_ATTR_RE.test(l);
+}
+
+/** 类型行 → { size, creatureType, alignment }（供筛选/列表；解析不到则留空） */
+function parseMonsterType(typeLine) {
+  const raw = String(typeLine || '').trim();
+  // 源站有「一般为中型类人生物，混乱邪恶」这类前缀
+  const t = raw.replace(/^(?:一般为|通常为|普遍为|一般是)\s*/, '');
+  const sizeM = /^(超微型|微型|小型或中型|小型|中型|中形|大型|巨型|超巨型|无体型|任意体型)/.exec(t);
+  let size = sizeM ? sizeM[1] : '';
+  if (size === '中形') size = '中型'; // 源站错字（中形）→ 归一为中型
+  // 「中型类人生物组成的超巨型军团」这类集群条目：实际体型是军团体型
+  const army = /组成的(超巨型|巨型|大型|中型|小型)军团/.exec(t);
+  if (army) size = army[1];
+  const rest = sizeM ? t.slice(sizeM[0].length) : t;
+  // 阵营：优先取最后一个逗号/句号后的部分；类型行只用空格分隔时（「大型构装体 无阵营」）退回对齐词搜索
+  let alignment = '';
+  const seps = [...t.matchAll(/[，,。]/g)];
+  if (seps.length) alignment = t.slice(seps[seps.length - 1].index + 1).trim();
+  else {
+    // 「大型构装体 无阵营」：先精确匹配无阵营，再匹配带阵营前缀词的写法
+    const am = /(无阵营|(?:任何|任意|绝对|通常|普遍|一般|守序|中立|混乱|善良|邪恶)(?:守序|中立|混乱|善良|邪恶|阵营|中立)+)/.exec(t);
+    if (am) alignment = am[1].trim();
+  }
+  let creatureType = rest.split(/[，,。（(\s]/)[0].trim().split('的')[0].trim().replace(/组成$/, '');
+  // 类型行首段可能只有体型（「小型（狗形态）或中型（人形态），邪魔（魔鬼），守序邪恶」）：
+  // 退回到「已知生物类型词」在去括号后的整行里搜索
+  const KNOWN_TYPES = /(不死生物|元素生物|天界生物|异怪|怪兽|构装生物|植物|泥怪|类人生物|精类生物|精类|邪魔|魔鬼|恶魔|野兽|龙类|元素|构装体)/;
+  if (!creatureType) {
+    const bare = t.replace(/[（(][^）)]*[）)]/g, '');
+    const km = KNOWN_TYPES.exec(bare);
+    if (km) creatureType = km[1];
+  }
+  return { size, creatureType, alignment };
+}
+
+/** stat 区 → 结构化字段 + 属性行 + 未识别行（如「使用“大法师”的数据…」） */
+function parseMonsterStatBlock(statLines) {
+  const out = {};
+  for (const [key, re] of MONSTER_FIELD_RES) {
+    for (const l of statLines) {
+      const m = re.exec(l);
+      if (m && m[1].trim()) { out[key] = m[1].trim(); break; }
+    }
+  }
+  // 五属性行可能一行/多行、带不带冒号、含「—」「∞」「见表格」等非数值
+  const attrLines = statLines.filter(l => new RegExp('^(?:' + MONSTER_ATTR_NAMES.join('|') + ')\\s*[：:]?\\s*').test(l));
+  const attrText = attrLines.join('');
+  const abilities = [];
+  for (const name of MONSTER_ATTR_NAMES) {
+    const m = new RegExp(name + '\\s*[：:]?\\s*(\\d+|—|–|∞|无|见表格)').exec(attrText);
+    if (!m) continue;
+    const raw = m[1];
+    const score = /^\d+$/.test(raw) ? +raw : null;
+    const after = attrText.slice(m.index + m[0].length, m.index + m[0].length + 12);
+    const mm = /^[（(]\s*([+\-−]?\s*(?:\d+|∞))\s*[）)]/.exec(after);
+    let mod = null;
+    if (mm) {
+      const ms = mm[1].replace(/\s+/g, '').replace('−', '-');
+      if (/^[+\-]?\d+$/.test(ms)) mod = +ms;
+    }
+    abilities.push(score == null ? { name, raw } : { name, score, mod });
+  }
+  if (abilities.length) out.abilities = abilities;
+  if (attrText) out.abilityText = attrText;
+  // 未识别的 stat 区行（NPC 变体「使用XX的数据」等，详情页需要原样展示，不能静默丢）。
+  // 少数条目漏了「语言：」标签（如舞翼索尔兽正文只有「理解通用语，但不会说」），按内容归位。
+  const extra = [];
+  for (const l of statLines) {
+    if (attrLines.includes(l)) continue;
+    if (MONSTER_FIELD_RES.some(([, re]) => re.test(l))) continue;
+    if (!out.languages && /(语|不会说|心灵感应|心灵链接)/.test(l)) { out.languages = l; continue; }
+    extra.push(l);
+  }
+  if (extra.length) out.extraText = extra.join('\n');
+  return out;
+}
+
+/** 怪物合集页 → 条目数组（与 qq-dice collectMonsters 的行切分语义保持一致） */
+function parseMonsters() {
+  const dir = path.join(SRC, '怪物');
+  if (!fs.existsSync(dir)) return [];
+  const files = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) { if (!/\.files$/i.test(e.name)) walk(full); continue; }
+      if (/\.html?$/i.test(e.name)) files.push(full);
+    }
+  })(dir);
+  const monsters = [];
+  // 「纯数值怪」是纯数值表，不是 stat block 条目（骰子侧同样排除）
+  const usable = files.filter(f => !/纯数值怪/.test(f));
+  for (const file of usable) {
+    const rel = relUrl(file); // 怪物/<生物类型>/<CR组>.htm
+    const parts = rel.split('/');
+    const page = parts.length >= 3 ? parts[1] : '怪物';
+    const lines = htmlToLines(readText(file));
+    const entries = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!isMonsterTypeAnchor(lines, i)) continue;
+      const name = lines[i - 1];
+      if (!isMonsterNameLine(name)) continue;
+      let descStart = i - 1;
+      while (descStart - 1 >= 0 && i - 1 - (descStart - 1) < 3 && isMonsterDescLine(lines[descStart - 1])) descStart--;
+      entries.push({ nameIdx: i - 1, typeIdx: i, descStart });
+    }
+    // 整页都没有锚点（整页模板怪）：把整页作为一条，用文件名命名（保持与骰子侧一致）
+    if (!entries.length) {
+      const title = parts[parts.length - 1].replace(/\.html?$/i, '');
+      const text = lines.join('\n');
+      monsters.push({
+        id: rel + '#1', name: title, type: '', desc: '', cr: '', crText: '', crNum: null,
+        text, page, category: page, url: rel, sections: [{ name: '', start: 0 }],
+      });
+      continue;
+    }
+    let seq = 0;
+    for (let k = 0; k < entries.length; k++) {
+      const e = entries[k];
+      const next = entries[k + 1];
+      const end = next ? next.descStart : lines.length;
+      const text = lines.slice(e.nameIdx, end).filter(Boolean).join('\n');
+      const typeLine = lines[e.typeIdx];
+      // 与骰子侧同口径：从正文里取「挑战等级：」后的整行，截 24 字符（保持字段兼容）
+      const crHit = text.match(/挑战等级[：:]\s*([^\n]+)/);
+      const cr = crHit ? crHit[1].trim().slice(0, 24) : '';
+      // stat 区 = 类型行之后到第一个分节标题；分节标题缺失时退到第一个「【」条目。
+      // 两者取更早者：有些页面缺「特性」标题、直接以【条目开头（否则这些条目会被当成 stat 行漏掉）
+      const lines2 = lines.slice(e.nameIdx, end);
+      let sectionStart = -1;
+      for (let i = 2; i < lines2.length; i++) {
+        if (MONSTER_SECTION_RE.test(lines2[i]) || /^[·]?【/.test(lines2[i])) { sectionStart = i; break; }
+      }
+      const statLines = lines2.slice(2, sectionStart < 0 ? lines2.length : sectionStart);
+      const stat = parseMonsterStatBlock(statLines);
+      const typeInfo = parseMonsterType(typeLine);
+      // 分节（特性/动作/附赠动作/…）只记「标题 + 在 text 里的起始行号」，
+      // 不重复存正文（正文已在 text 里；重复存储会让 monsters.json 膨胀约 50%）。
+      // 前端按相邻分节的 start 切片还原；骰子侧只读 text，不受影响。
+      const sections = [];
+      if (sectionStart >= 0) {
+        let cur = null;
+        for (let i = sectionStart; i < lines2.length; i++) {
+          const l = lines2[i];
+          if (MONSTER_SECTION_RE.test(l)) { cur = { name: l, start: i }; sections.push(cur); continue; }
+          if (!cur) { cur = { name: '', start: i }; sections.push(cur); }
+        }
+      }
+      seq += 1;
+      monsters.push({
+        id: rel + '#' + seq,
+        name: lines[e.nameIdx],
+        type: typeLine,
+        category: page,
+        page,
+        url: rel,
+        size: typeInfo.size,
+        creatureType: typeInfo.creatureType,
+        alignment: typeInfo.alignment,
+        desc: e.descStart < e.nameIdx ? lines.slice(e.descStart, e.nameIdx).join(' ') : '',
+        cr,
+        crText: crHit ? crHit[1].trim() : '',
+        crNum: parseCrNum(crHit ? crHit[1].trim() : ''),
+        text,
+        sections,
+        ...stat,
+      });
+    }
+  }
+  return monsters;
+}
+
+/** 挑战等级 → 数值（「1/2」=0.5、「10（无坐骑）或11（有坐骑）」取首个数字；不可解析 = null） */
+function parseCrNum(s) {
+  const t = String(s || '').trim();
+  if (!t) return null;
+  const frac = /^(\d+)\s*\/\s*(\d+)/.exec(t);
+  if (frac) return +frac[1] / +frac[2];
+  const m = /^[-+]?\d+(?:\.\d+)?/.exec(t);
+  return m ? +m[0] : null;
+}
+
 // ---------- 5b. 核心规则表（来自 1.59 规则书正文） ----------
 function buildRules(version) {
   return {
@@ -831,6 +1107,39 @@ const classSpells = parseClassSpells();
 const maneuvers = parseManeuvers();
 const programs = parsePrograms();
 const magicItems = parseMagicItems();
+const monsters = parseMonsters();
+
+// ---------- 怪物数据自检（防静默串页/丢条目） ----------
+// 教训（2026-10-21 骰子侧真实反馈）：聚合页解析最常见的静默错误是「下一项被并入上一项」，
+// 用户看到的是「文本多截了一段」。用结构断言在构建期抓住，不等用户反馈。
+{
+  const errs = [];
+  const ids = new Set();
+  for (const m of monsters) {
+    if (ids.has(m.id)) errs.push('重复 id: ' + m.id);
+    ids.add(m.id);
+    if (!m.name) errs.push('怪物缺少名称: ' + m.id);
+    if (!m.text) errs.push('怪物正文为空: ' + m.id);
+  }
+  if (monsters.length < 600) errs.push(`怪物条数 ${monsters.length} < 下限 600（源页结构可能变了）`);
+  // 同一只怪正文里出现第二个完整 stat block ⇒ 类型行未被识别，下一只怪被并了进来
+  // （表格被摊平成行后可能有单独一行的「AC」表头，因此要求标签后必须跟冒号/空格/数字）
+  const multiStat = monsters.filter(m => (m.text.match(/^(?:AC|护甲等级|防御等级)(?:[：:]|[ \t]|(?=\d))/gm) || []).length > 1);
+  if (multiStat.length) errs.push('疑似串页（同一正文多个 AC stat block）: ' + multiStat.slice(0, 8).map(m => m.name).join(' / ') + (multiStat.length > 8 ? ' …' : ''));
+  // AC/正文结构化解析覆盖率（源站确有 5 个 NPC 变体条目「使用XX的数据」，允许少量缺失）
+  const withAc = monsters.filter(m => m.ac).length / monsters.length;
+  const withHp = monsters.filter(m => m.hp).length / monsters.length;
+  if (withAc < 0.95) errs.push(`AC 解析覆盖率 ${(withAc * 100).toFixed(1)}% < 95%`);
+  if (withHp < 0.95) errs.push(`HP 解析覆盖率 ${(withHp * 100).toFixed(1)}% < 95%`);
+  const noCr = monsters.filter(m => !m.crText).length;
+  if (errs.length) {
+    console.error('[parse-card-data] 怪物数据自检失败：');
+    for (const e of errs) console.error('  ✗ ' + e);
+    process.exit(1);
+  }
+  const unparsedCr = monsters.filter(m => !m.crText).map(m => m.name);
+  console.log(`[parse-card-data] 怪物自检通过：${monsters.length} 只（AC ${(withAc * 100).toFixed(1)}% / HP ${(withHp * 100).toFixed(1)}%；无挑战等级 ${noCr} 条${unparsedCr.length ? '：' + unparsedCr.join('、') : ''}）`);
+}
 // 把种族页内的"种族专长"合并进专长列表
 for (const r of races) {
   for (const f of r.raceFeats || []) {
@@ -850,6 +1159,7 @@ write('class-spells.json', classSpells);
 write('maneuvers.json', maneuvers);
 write('programs.json', programs);
 write('magic-items.json', magicItems);
+write('monsters.json', monsters);
 
-console.log(`[parse-card-data] 规则 v${version || '?'}: 种族 ${races.length} | 职业 ${classes.length} | 专长 ${feats.length} | 法术 ${spells.length} | 职业法表 ${classSpells.length} | 战技 ${maneuvers.length} | 程序 ${programs.length} | 魔法物品 ${magicItems.length}`);
+console.log(`[parse-card-data] 规则 v${version || '?'}: 种族 ${races.length} | 职业 ${classes.length} | 专长 ${feats.length} | 法术 ${spells.length} | 职业法表 ${classSpells.length} | 战技 ${maneuvers.length} | 程序 ${programs.length} | 魔法物品 ${magicItems.length} | 怪物 ${monsters.length}`);
 console.log(`[parse-card-data] 输出: ${outDir}`);

@@ -1,4 +1,4 @@
-/* 5z 词典前端：法术 / 战技 / 程序 / 魔法物品 浏览、搜索、筛选、详情
+/* 5z 词典前端：法术 / 战技 / 专长 / 程序 / 魔法物品 / 怪物 浏览、搜索、筛选、详情
  * 列表/筛选/分页/详情由公共组件 Picker（assets/picker.js）提供，本文件只做 Tab 配置。
  */
 (function () {
@@ -445,7 +445,133 @@ const miPicker = Picker.create({
   containers: C,
 });
 
-const PICKERS = { spells: spellPicker, maneuvers: mvPicker, feats: featPicker, programs: pgPicker, 'magic-items': miPicker };
+/* ---------- 怪物 Tab ---------- */
+// 数据来自 assets/monster-data.js（window.__MONSTER_DATA__）：与 assets/card-data/monsters.json 同源，
+// 由 5z_build/parse-card-data.mjs 从规则书怪物页解析。字段同时服务本词典与骰子机器人查询
+// （name/type/desc/cr/text/page/url 与 qq-dice 现有查询数据同语义）。
+const MON_DATA = window.__MONSTER_DATA__ || null;
+const MON = (MON_DATA && Array.isArray(MON_DATA.monsters)) ? MON_DATA.monsters : [];
+// 生物类型顺序按规则书章节（怪物目录下的子目录），未知的兜底排后
+const MON_CAT_ORDER = ['不死生物', '元素生物', '天界生物', '异怪', '怪兽', '构装生物', '植物', '泥怪', '类人生物', '精类', '邪魔', '野兽', '龙类'];
+const MON_CATS = [...new Set(MON.map(m => m.category))]
+  .sort((a, b) => {
+    const ia = MON_CAT_ORDER.indexOf(a), ib = MON_CAT_ORDER.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+  });
+const MON_SIZE_ORDER = ['微型', '小型', '中型', '大型', '巨型', '超巨型'];
+const MON_SIZE_CHIPS = [...MON_SIZE_ORDER, '其他'];
+const MON_SIZE_OTHER = ['小型或中型', '任意体型', '无体型'];
+function monSizeMatch(m, v) {
+  if (v === '其他') return MON_SIZE_OTHER.includes(m.size) || !m.size;
+  if (m.size === v) return true;
+  // 「小型或中型」对小型/中型筛选都算命中
+  return m.size === '小型或中型' && (v === '小型' || v === '中型');
+}
+// 阵营归一到 8 种常规阵营 + 无阵营 + 任意阵营 + 其他（源站有「通常为…」「75%守序中立/25%绝对中立」等写法，
+// 归一后按「命中任一所选阵营」匹配；多阵营条目会同时命中多个）
+const ALIGN_BASE = ['守序善良', '中立善良', '混乱善良', '守序中立', '绝对中立', '中立邪恶', '守序邪恶', '混乱邪恶'];
+const MON_ALIGN_CHIPS = [...ALIGN_BASE, '无阵营', '任意阵营', '其他'];
+const ALIGN_TAG_CACHE = new WeakMap();
+function monAlignTags(m) {
+  if (ALIGN_TAG_CACHE.has(m)) return ALIGN_TAG_CACHE.get(m);
+  const raw = m.alignment || '';
+  const set = new Set();
+  if (/无阵营/.test(raw)) set.add('无阵营');
+  if (/任何|任意/.test(raw)) set.add('任意阵营');
+  for (const a of ALIGN_BASE) if (raw.includes(a)) set.add(a);
+  if (/邪恶中立/.test(raw)) set.add('中立邪恶');   // 源站错序写法「普遍邪恶中立」
+  if (/善良中立/.test(raw)) set.add('中立善良');
+  if (!set.size) set.add('其他');
+  ALIGN_TAG_CACHE.set(m, set);
+  return set;
+}
+// 挑战等级分级（crNum 不可解析的「无 / +∞ / 见表格 / 动态」归入「特殊」）
+const MON_CR_BUCKETS = [
+  { k: '0-1', label: 'CR 0–1', test: (c) => c != null && c <= 1 },
+  { k: '2-4', label: 'CR 2–4', test: (c) => c != null && c > 1 && c <= 4 },
+  { k: '5-10', label: 'CR 5–10', test: (c) => c != null && c > 4 && c <= 10 },
+  { k: '11-16', label: 'CR 11–16', test: (c) => c != null && c > 10 && c <= 16 },
+  { k: '17+', label: 'CR 17+', test: (c) => c != null && c > 16 },
+  { k: 'special', label: '特殊/无固定', test: (c) => c == null },
+];
+// 列表默认按「生物类型（规则书章节序）→ 挑战等级 → 名称」排序；groupBy 生物类型便于浏览
+MON.sort((a, b) => {
+  const ia = MON_CAT_ORDER.indexOf(a.category), ib = MON_CAT_ORDER.indexOf(b.category);
+  return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib)
+    || (a.crNum == null ? 999 : a.crNum) - (b.crNum == null ? 999 : b.crNum)
+    || a.name.localeCompare(b.name);
+});
+const MON_CR_LABEL = (m) => (m.crText ? 'CR ' + m.crText : 'CR —');
+function monFields(m) {
+  return [
+    ['挑战等级', m.crText ? 'CR ' + m.crText : 'CR —'],
+    ['AC', m.ac || '—'],
+    ['HP', m.hp || m.maxHp || '—'],
+    ['速度', m.speed || '—'],
+    ['体型', m.size || '—'],
+    ['阵营', m.alignment || '—'],
+    ['豁免', m.saves || '—'],
+    ['技能', m.skills || '—'],
+    ['伤害免疫', m.damageImmunities || '—'],
+    ['伤害抗性', m.damageResistances || '—'],
+    ['伤害易伤', m.damageVulnerabilities || '—'],
+    ['伤害吸收', m.damageAbsorption || '—'],
+    ['状态免疫', m.conditionImmunities || '—'],
+    ['状态抗性', m.conditionResistances || '—'],
+    ['感官', m.senses || '—'],
+    ['语言', m.languages || '—'],
+    ['熟练加值', m.proficiencyBonus || '—'],
+    ['先攻', m.initiative || '—'],
+  ].filter(([, v]) => v && v !== '—');
+}
+// 分节正文不重复存储：数据里只有 {name, start}（start = 在 text 里的起始行号），
+// 用相邻分节的 start 切片还原（与解析器口径一致，monsters.json 体积约省一半）
+function monSectionText(m, sec, idx) {
+  if (sec.text) return sec.text; // 兼容旧格式
+  const lines = String(m.text || '').split('\n');
+  const next = (m.sections || [])[idx + 1];
+  const from = sec.start + (sec.name ? 1 : 0); // 有标题时跳过标题行本身
+  return lines.slice(from, next ? next.start : lines.length).join('\n');
+}
+function monDetailHtml(m) {
+  const fields = monFields(m);
+  const secs = (m.sections || []).map((s, idx) => ({ name: s.name, text: monSectionText(m, s, idx) }))
+    .filter(s => s.text);
+  return `<div class="pk-d-name">${esc(m.name)}</div>
+    <div class="pk-d-sub">${esc(m.type || '')}</div>
+    <div class="pk-d-fields mon-fields">${fields.map(([k, v]) =>
+      `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
+    ${m.abilityText ? `<div class="pk-d-ability"><span class="k">属性</span>${esc(m.abilityText)}</div>` : ''}
+    ${m.desc ? `<div class="pk-d-desc"><span class="k">背景</span>${esc(m.desc)}</div>` : ''}
+    ${m.extraText ? `<div class="pk-d-text">${esc(m.extraText)}</div>` : ''}
+    ${secs.map(s => `<div class="pk-d-sec">${s.name ? `<div class="pk-d-sec-title">${esc(s.name)}</div>` : ''}<div class="pk-d-text">${esc(s.text)}</div></div>`).join('')}
+    <a class="pk-d-link" href="${esc(m.url)}" target="_blank">📖 规则书原文（${esc(m.category)}）→</a>`;
+}
+const monPicker = Picker.create({
+  data: MON,
+  selKey: 'id',
+  pageSize: 50,
+  placeholder: '搜索怪物名、类型、特性…',
+  emptyText: MON_DATA ? '没有匹配的怪物。' : '怪物数据未加载（assets/monster-data.js 缺失）。',
+  chips: [
+    { key: 'category', label: '生物类型', items: MON_CATS },
+    { key: 'size', label: '体型', items: MON_SIZE_CHIPS, match: monSizeMatch },
+    { key: 'align', label: '阵营（任选，命中任一阵营即显示）', items: MON_ALIGN_CHIPS, match: (m, v) => monAlignTags(m).has(v) },
+    {
+      key: 'cr', label: '挑战等级', items: MON_CR_BUCKETS.map(b => b.k),
+      labelFn: (k) => (MON_CR_BUCKETS.find(b => b.k === k) || {}).label || k,
+      match: (m, k) => (MON_CR_BUCKETS.find(b => b.k === k) || { test: () => false }).test(m.crNum),
+    },
+  ],
+  groupBy: (m) => m.category,
+  hay: (m) => (m.name + ' ' + (m.type || '') + ' ' + (m.category || '') + ' ' + (m.crText || '') + ' ' + (m.desc || '') + ' ' + (m.text || '')).toLowerCase(),
+  itemHtml: (m) => `<div class="pk-i-name">${esc(m.name)}</div>
+    <div class="pk-i-sub">${esc(m.type || m.category)} · ${esc(MON_CR_LABEL(m))}</div>`,
+  detailHtml: monDetailHtml,
+  containers: C,
+});
+
+const PICKERS = { spells: spellPicker, maneuvers: mvPicker, feats: featPicker, programs: pgPicker, 'magic-items': miPicker, monsters: monPicker };
 
 /* ---------- Tab 切换 ---------- */
 function switchTab(tab) {

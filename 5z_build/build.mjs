@@ -543,6 +543,14 @@ for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car
   const dataJs = 'window.__CAR_DATA__ = ' + JSON.stringify(cardData).replace(/</g, '\\u003c') + ';\n';
   fs.writeFileSync(path.join(OUT, 'assets', 'card-data.js'), dataJs, 'utf8');
 
+  // 怪物词典数据单独成文件：card-data.js 会被车卡器（car.html）加载，4.6MB 已不小；
+  // 679 只怪的结构化数据约 1.4MB，只在词典页（dict.html）加载，避免拖慢车卡器。
+  // 同时保留 assets/card-data/monsters.json 供骰子机器人构建脚本直接读取（同源单一数据源）。
+  const monsters = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data', 'monsters.json'), 'utf8'));
+  const monsterJs = 'window.__MONSTER_DATA__ = ' + JSON.stringify({ version: (cardData.rules || {}).version || '', monsters }).replace(/</g, '\\u003c') + ';\n';
+  fs.writeFileSync(path.join(OUT, 'assets', 'monster-data.js'), monsterJs, 'utf8');
+  log(`[build] 怪物词典: ${monsters.length} 只 → assets/monster-data.js (${(monsterJs.length / 1024 / 1024).toFixed(2)} MB)`);
+
   // Excel 导出：自研模板（car.js 纯 JS 生成，数据来自 card-data，无需外部模板文件）
   // 旧版基于官方模板 dnd5z人物卡模板改.xlsx 的 car-tpl.js 已废弃移除
 }

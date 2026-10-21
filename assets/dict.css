@@ -36,13 +36,20 @@ input, select { font: inherit; color: inherit; }
 /* Tab */
 .tabs {
   max-width: 1280px; margin: 0 auto; padding: 12px 18px 0;
-  display: flex; gap: 6px;
+  display: flex; gap: 6px; flex-wrap: wrap; /* 6 个页签：窄屏换行，避免横向溢出 */
 }
 .tab {
   border: 1px solid var(--line); background: var(--panel); color: var(--sub);
   padding: 8px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
 }
 .tab.sel { background: var(--acc); border-color: var(--acc); color: #fff; }
+/* 窄屏：6 个页签 + 长标题，缩小字号控制头部高度 */
+@media (max-width: 640px) {
+  .dict-top h1 { font-size: 15px; }
+  .dict-top-inner { padding: 9px 12px; gap: 10px; }
+  .tabs { padding: 9px 12px 0; }
+  .tab { padding: 7px 16px; font-size: 13px; }
+}
 
 /* 工具栏 */
 .toolbar {

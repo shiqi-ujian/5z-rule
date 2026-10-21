@@ -95,6 +95,17 @@
 .pk-detail .pk-d-link { margin-top: 12px; display: inline-block; }
 .pk-detail a { color: var(--acc, #7c3aed); }
 .pk-detail .pk-muted { color: var(--sub, #64748b); font-size: 13px; }
+/* 怪物 stat block：字段较长（免疫/感官/语言），用更宽的 2 列网格，避免 k/v 挤在一起 */
+.pk-detail .pk-d-fields.mon-fields { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.pk-detail .pk-d-fields.mon-fields .f .v { max-width: 70%; }
+/* 怪物词典：属性行 / 背景段 / 分节（特性·动作·反应·传奇动作…） */
+.pk-detail .pk-d-ability { margin: 4px 0 8px; padding: 8px 12px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: var(--bg, #f6f7fb); font-weight: 600; letter-spacing: .2px; }
+.pk-detail .pk-d-ability .k { color: var(--sub, #64748b); font-weight: 700; margin-right: 10px; }
+.pk-detail .pk-d-desc { margin: 4px 0 8px; padding: 10px 12px; border-left: 3px solid var(--acc, #7c3aed); background: var(--acc-soft, #f3eefc); border-radius: 6px; line-height: 1.7; }
+.pk-detail .pk-d-desc .k { display: block; color: var(--sub, #64748b); font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.pk-detail .pk-d-sec { margin-top: 8px; }
+.pk-detail .pk-d-sec-title { margin: 10px 0 2px; font-size: 13px; font-weight: 800; color: var(--acc, #7c3aed); }
+.pk-detail .pk-d-sec .pk-d-text { margin-top: 2px; }
 
 /* 分页 */
 .pk-pager { display: flex; gap: 8px; align-items: center; justify-content: center; padding: 8px 0 0; }
