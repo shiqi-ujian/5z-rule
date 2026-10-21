@@ -467,10 +467,10 @@ function monSizeMatch(m, v) {
   // 「小型或中型」对小型/中型筛选都算命中
   return m.size === '小型或中型' && (v === '小型' || v === '中型');
 }
-// 阵营归一到 8 种常规阵营 + 无阵营 + 任意阵营 + 其他（源站有「通常为…」「75%守序中立/25%绝对中立」等写法，
+// 阵营归一到 9 种常规阵营 + 无阵营 + 任意阵营（源站有「通常为…」「75%守序中立/25%绝对中立」等写法，
 // 归一后按「命中任一所选阵营」匹配；多阵营条目会同时命中多个）
-const ALIGN_BASE = ['守序善良', '中立善良', '混乱善良', '守序中立', '绝对中立', '中立邪恶', '守序邪恶', '混乱邪恶'];
-const MON_ALIGN_CHIPS = [...ALIGN_BASE, '无阵营', '任意阵营', '其他'];
+// ⚠️ 常规阵营是 3×3 共 9 种，别漏「混乱中立」（漏了会把这类全打进「其他」）
+const ALIGN_BASE = ['守序善良', '中立善良', '混乱善良', '守序中立', '绝对中立', '混乱中立', '守序邪恶', '中立邪恶', '混乱邪恶'];
 const ALIGN_TAG_CACHE = new WeakMap();
 function monAlignTags(m) {
   if (ALIGN_TAG_CACHE.has(m)) return ALIGN_TAG_CACHE.get(m);
@@ -485,6 +485,9 @@ function monAlignTags(m) {
   ALIGN_TAG_CACHE.set(m, set);
   return set;
 }
+// 「其他」只在确有无法归一的写法时出现，避免出现一个恒为 0 的空筛选组
+const MON_ALIGN_CHIPS = [...ALIGN_BASE, '无阵营', '任意阵营'];
+if (MON.some(m => monAlignTags(m).has('其他'))) MON_ALIGN_CHIPS.push('其他');
 // 挑战等级分级（crNum 不可解析的「无 / +∞ / 见表格 / 动态」归入「特殊」）
 const MON_CR_BUCKETS = [
   { k: '0-1', label: 'CR 0–1', test: (c) => c != null && c <= 1 },
