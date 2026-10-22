@@ -94,6 +94,7 @@
 - 因此 **仓库里不能删除历史提交**（不要 force-push / 改写历史），否则旧版链接会 404；
 - `robots.txt` 与响应头 `X-Robots-Tag: noindex` 都会屏蔽旧版页面的搜索引擎收录；
 - GitHub Pages 镜像没有 Functions：旧版落地页会显示提示并禁用旧版卡片，属预期行为。
+- ⚠️ Zone 缓存规则会给 `/v/` 的 HTML 响应也套上 4 小时边缘缓存（实测：部署切换瞬间命中的 404 会被缓存，`cf-cache-status: HIT` 且 `Age` 增长）。旧版内容按提交不可变，正常页面无影响；但如果要**立刻**生效 Function/存档逻辑改动、或清掉部署竞态产生的错误页，需要在 Cloudflare 后台或 `purge_cache` 清对应 URL（未配 Zone 令牌时 `update.mjs` 的 purge 步会自动跳过）。
 
 ### 添加其他托管平台
 
