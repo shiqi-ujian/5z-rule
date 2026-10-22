@@ -315,6 +315,14 @@ async function handleArchive(context, url) {
   const meta = findVersion(ver);
   if (!meta) return notFoundVersion(ver);
   if (!filePath || filePath.endsWith('/')) filePath = 'index.html';
+  // 旧版站点里若自己也有「旧版规则书」入口（1.63 之后的版本才带），
+  // 一律跳到站点根的旧版落地页，避免出现 /v/1.63/v/1.62/ 这种嵌套路径。
+  if (filePath === '旧版规则.html') {
+    return new Response(null, {
+      status: 302,
+      headers: { location: encodeURI('/旧版规则.html'), 'cache-control': 'public, max-age=86400' },
+    });
+  }
   const problem = validatePath(filePath);
   if (problem) {
     return pageHtml(400, '路径不可用', '<h1>路径不可用</h1><p>' + escapeHtml(problem) + '</p>');
