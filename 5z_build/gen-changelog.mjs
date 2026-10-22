@@ -179,6 +179,7 @@ const html = `<!DOCTYPE html>
 <h1>🔧 5z 规则 更新日志</h1>
 <p>本页由系统在每次修复发布后自动更新。来源：QQ 群收集表提交的问题。顶部为全部反馈的处理状态一览，下方为历史批次记录（最新在上）。</p>
 <p><a class="back" href="https://docs.qq.com/form/page/DWm5Mb1ZUVU15Y1hX" target="_blank" rel="noopener">📝 发现问题？点这里提交反馈</a>（需 QQ 登录腾讯文档）</p>
+<p><a class="back" href="旧版规则.html">📜 想查历史版本的规则书？点这里查看旧版规则书</a></p>
 
 <div class="page-ctrl">
   <button type="button" data-toggle="open">🪗 全部展开</button>

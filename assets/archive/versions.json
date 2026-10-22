@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-10-22T07:34:05.209Z",
+  "source": "git-history",
+  "repo": "shiqi-ujian/5z-rule",
+  "versions": [
+    {
+      "version": "1.62",
+      "label": "5z 规则 1.62 版",
+      "commit": "3aebca10947b0ea9187a84438c7ec3b141ffa1b9",
+      "date": "2026-10-03",
+      "pages": 673
+    },
+    {
+      "version": "1.61",
+      "label": "5z 规则 1.61 版",
+      "commit": "c39337ddc316647448e12fe660fbf7ce8b645e12",
+      "date": "2026-09-17",
+      "pages": 663
+    },
+    {
+      "version": "1.60",
+      "label": "5z 规则 1.60 版",
+      "commit": "86aeb3fef6888d4034602c50c3027344f7720007",
+      "date": "2026-08-27",
+      "pages": 668
+    },
+    {
+      "version": "1.59",
+      "label": "5z 规则 1.59 版",
+      "commit": "acce659f70b331d888e3e731326b0f5030dfe624",
+      "date": "2026-08-27",
+      "pages": 678
+    }
+  ]
+}

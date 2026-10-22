@@ -85,6 +85,14 @@ body {
   letter-spacing: 1px;
 }
 .version { font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
+a.version {
+  display: inline-block;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color .15s;
+}
+a.version:hover { color: var(--accent); text-decoration: none; }
+a.version .ver-history { color: var(--accent); font-weight: 600; }
 .search-box { position: relative; }
 #q {
   width: 100%;

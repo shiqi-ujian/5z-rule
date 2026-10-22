@@ -24,6 +24,9 @@ function check(htmlFile, relFrom) {
   while ((m = re.exec(html)) !== null) {
     let target = m[1].split('#')[0].split('?')[0];
     if (!target || skipProto.test(target)) continue;
+    // 旧版规则书入口 v/<版本>/ 由 Cloudflare Pages Function 动态代理（见 build.mjs 8.4.1），
+    // 站点里没有对应静态文件，不能按坏链处理。
+    if (/^v\/(?:\d+(?:\.\d+)+|__probe)(?:\/|$)/.test(target)) continue;
     if (target.startsWith('/')) target = target.slice(1);
     else {
       const parts = [];

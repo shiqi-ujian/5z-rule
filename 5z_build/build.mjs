@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { spawnSync as _spawnSync } from 'node:child_process';
+import { computeArchiveVersions } from './archive-versions.mjs';
 
 const SRC = path.resolve('5z_src');
 const OUT = path.resolve('5z_web');
@@ -590,7 +591,7 @@ a{color:#7c3aed;font-weight:600;text-decoration:none;padding:10px 22px;border:1p
 </style></head>
 <body><div class="card"><h1>404</h1><p>你要找的页面不存在，或已被移动。</p><a href="index.html">← 返回目录</a></div></body></html>
 `);
-fs.writeFileSync(path.join(OUT, 'robots.txt'), 'User-agent: *\nAllow: /\n');
+fs.writeFileSync(path.join(OUT, 'robots.txt'), 'User-agent: *\nAllow: /\n# 旧版规则书为历史存档，避免搜索引擎收录重复内容\nDisallow: /v/\n');
 
 // ---------- 8.4 Cloudflare 缓存策略 ----------
 // 背景：Pages 默认给 HTML 发 `public, max-age=14400, must-revalidate`（4 小时）。
@@ -614,37 +615,79 @@ fs.writeFileSync(path.join(OUT, '_headers'),
     '',
   ].join('\n'));
 
-fs.mkdirSync(path.join(OUT, 'functions'), { recursive: true });
-fs.writeFileSync(path.join(OUT, 'functions', '[[path]].js'),
-  `// 由 5z_build/build.mjs 自动生成，请勿手改。
-// 目的：给 HTML 文档补上「不缓存、每次回源校验」，让发布新版本后立即生效。
-//
-// 现状（2026-10-03 实测）：5z-rules.top 的 Zone 上有一条把 Cache-Control 改写成
-// \`public, max-age=14400, must-revalidate\` 的缓存规则（页面规则/Cache Rules）。
-// 该规则在 Function 之后生效，会覆盖本文件设置的值——实测 Function 设的 Expires
-// 能透出、Cache-Control 却仍被改回 14400，而 GitHub Pages 上同一份 HTML 是 max-age=600，
-// 说明这 4 小时不是 Pages 默认值，而是这条 Zone 规则造成的。
-// 因此：**要根治必须改/删那条 Zone 缓存规则**（见 5z_build/DEPLOY.md）。
-// 本 Function 保留为保险：规则一旦修正或移除，它就会自动生效，无需再改代码。
-export async function onRequest(context) {
-  const res = await context.next();
-  const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('text/html')) return res;
-  const out = new Response(res.body, res);
-  out.headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
-  out.headers.set('Expires', 'Thu, 01 Jan 1970 00:00:00 GMT');
-  return out;
-}
-`);
+// ---------- 8.4.1 旧版规则书存档（git 历史 + Pages Function 反向代理） ----------
+// 需求：群友希望查看旧版规则书，而站点只展示最新版。
+// 做法：旧版内容不复制进仓库——构建时从 git 历史算出「每个历史版本最后发布时的提交号」，
+//       由 Cloudflare Pages Function 把这些提交里的站点文件反向代理到 /v/<版本>/ 下，
+//       旧版站点自身的相对链接 / CSS / 图片 / 当时的搜索索引都能自然工作（见 function-template.js）。
+// 归档提交的推算规则见 5z_build/archive-versions.mjs 顶部注释。
+const archive = computeArchiveVersions({ cwd: path.resolve('.'), currentVersion: VERSION });
+const archiveJson = {
+  generatedAt: archive.generatedAt,
+  source: archive.source,
+  repo: archive.repo,
+  versions: archive.versions,
+  ...(archive.error ? { error: archive.error } : {}),
+};
+fs.mkdirSync(path.join(OUT, 'assets', 'archive'), { recursive: true });
+fs.writeFileSync(path.join(OUT, 'assets', 'archive', 'versions.json'),
+  JSON.stringify(archiveJson, null, 2) + '\n', 'utf8');
+log(`旧版存档: ${archive.versions.length} 个历史版本` +
+  (archive.versions.length ? ` (${archive.versions.map(v => 'v' + v.version).join(' / ')})` : '') +
+  (archive.error ? `（git 信息不可用: ${archive.error}）` : ''));
 
-// _routes.json：Functions 只处理文档路径，静态资源目录排除在外，
+// 落地页「旧版规则书」：版本卡片在这里服务端渲染，前端只探测代理是否可用
+{
+  const cards = [];
+  cards.push(`<a class="card latest" href="index.html">
+    <div class="v">v${esc(VERSION)}<span class="tag">最新</span></div>
+    <div class="meta">共 ${pages.length} 页 · 当前线上版本</div>
+    <div class="open">进入最新版 →</div>
+  </a>`);
+  for (const v of archive.versions) {
+    const meta = [v.date ? `${esc(v.date)} 最后更新` : '', v.pages ? `共 ${v.pages} 页` : '']
+      .filter(Boolean).join(' · ');
+    cards.push(`<a class="card" href="v/${esc(v.version)}/" title="${esc(v.label)} · 快照 ${esc(v.commit.slice(0, 7))}">
+    <div class="v">v${esc(v.version)}<span class="tag">旧版</span></div>
+    <div class="meta">${meta}</div>
+    <div class="open">进入浏览 →</div>
+  </a>`);
+  }
+  const emptyNotice = archive.versions.length ? '' : `
+  <div class="empty">未检测到历史版本存档：当前构建环境缺少 git 历史或未配置 GitHub remote。旧版规则书需要从仓库历史读取，请在本仓库的完整克隆中运行构建。</div>`;
+  let page = fs.readFileSync(new URL('./archive.html', import.meta.url), 'utf8');
+  page = page
+    .split('__VERSION_CARDS__').join(cards.join('\n  '))
+    .split('__ARCHIVE_EMPTY__').join(emptyNotice)
+    .split('__CURRENT_VERSION__').join(esc(VERSION))
+    .split('__CURRENT_PAGES__').join(String(pages.length));
+  fs.writeFileSync(path.join(OUT, '旧版规则.html'), page, 'utf8');
+}
+
+// Pages Function：旧版代理 + 原「HTML 不缓存」逻辑，存档清单在构建时注入
+fs.mkdirSync(path.join(OUT, 'functions'), { recursive: true });
+{
+  const fnManifest = {
+    generatedAt: archiveJson.generatedAt,
+    repo: archiveJson.repo,
+    versions: archiveJson.versions.map(v => ({
+      version: v.version, commit: v.commit, date: v.date, pages: v.pages,
+    })),
+  };
+  let fn = fs.readFileSync(new URL('./function-template.js', import.meta.url), 'utf8');
+  fn = fn.split('__ARCHIVE_MANIFEST__').join(JSON.stringify(fnManifest));
+  fs.writeFileSync(path.join(OUT, 'functions', '[[path]].js'), fn, 'utf8');
+}
+
+// _routes.json：Functions 只处理文档路径与 /v/* 旧版代理，静态资源目录排除在外，
 // 避免给 4.5MB 的 card-data.js / 搜索索引白白套一层 Function 调用。
 // 注意：Pages 会把 /x.html 308 到 /x，所以这里必须用无扩展名的规范路径。
 fs.writeFileSync(path.join(OUT, '_routes.json'), JSON.stringify({
   version: 1,
-  include: ['/', '/index.html', '/car', '/dict', '/calculator', '/404.html', '/更新日志'],
+  include: ['/', '/index.html', '/car', '/dict', '/calculator', '/404.html', '/更新日志', '/v', '/v/*'],
   exclude: ['/assets/*', '/favicon.ico', '/robots.txt', '/_headers', '/_routes.json'],
 }, null, 2) + '\n');
+
 
 // ---------- 8.5 更新日志页（由 5z_build/changelog.json 渲染，随构建发布） ----------
 {

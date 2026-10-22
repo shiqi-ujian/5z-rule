@@ -7,7 +7,9 @@
     "/dict",
     "/calculator",
     "/404.html",
-    "/更新日志"
+    "/更新日志",
+    "/v",
+    "/v/*"
   ],
   "exclude": [
     "/assets/*",

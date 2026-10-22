@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+# 旧版规则书为历史存档，避免搜索引擎收录重复内容
+Disallow: /v/

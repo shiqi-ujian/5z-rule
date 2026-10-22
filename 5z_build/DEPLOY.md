@@ -83,7 +83,17 @@
 
 > 缓存策略现状一览（构建自动生成，见 `build.mjs` 第 8.4 段）：
 > `_headers` 声明 `/assets/*` 长缓存 1 年（带 `?v=<构建戳>`，URL 随构建变化，不靠 TTL 失效）；
-> `functions/[[path]].js` + `_routes.json` 负责 HTML 文档不缓存（受上述 Zone 规则压制，待修法一）；`_routes.json` 只 include 文档路径、exclude `/assets/*`，避免给 4.5MB 的 `card-data.js` 白套一层 Function。
+> `functions/[[path]].js` + `_routes.json` 负责 HTML 文档不缓存（受上述 Zone 规则压制，待修法一）；`_routes.json` 只 include 文档路径与 `/v/*`，exclude `/assets/*`，避免给 4.5MB 的 `card-data.js` 白套一层 Function。
+
+### 旧版规则书（`/v/<版本>/` 反向代理）
+
+`旧版规则.html` 页面与 `/v/<版本>/…` 路径由 Pages Function 提供，**没有任何额外存储或后台配置**：
+
+- 构建时 `5z_build/archive-versions.mjs` 用 `git log` 算出每个历史版本最终状态的提交号（下一版本第一个「自动更新」提交的父提交），注入到 `functions/[[path]].js` 的 `ARCHIVE` 常量；
+- 运行时 Function 按提交号去 GitHub 取原始文件（`raw.githubusercontent.com` → `github.com/<repo>/raw` → `cdn.jsdelivr.net` 依次回退），按原路径返回，并给旧版壳页注入「📜 旧版存档」徽标与 `<base>`；
+- 因此 **仓库里不能删除历史提交**（不要 force-push / 改写历史），否则旧版链接会 404；
+- `robots.txt` 与响应头 `X-Robots-Tag: noindex` 都会屏蔽旧版页面的搜索引擎收录；
+- GitHub Pages 镜像没有 Functions：旧版落地页会显示提示并禁用旧版卡片，属预期行为。
 
 ### 添加其他托管平台
 
