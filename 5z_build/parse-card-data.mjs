@@ -6,6 +6,8 @@
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
+import { canonName } from './lib/html-scan.mjs';
+import { locateAnchors, makeAnchorId } from './lib/anchorize.mjs';
 
 const SRC = path.resolve('5z_src');
 const OUT = path.resolve(process.argv[2] || '5z_web');
@@ -1140,10 +1142,96 @@ const monsters = parseMonsters();
   const unparsedCr = monsters.filter(m => !m.crText).map(m => m.name);
   console.log(`[parse-card-data] 怪物自检通过：${monsters.length} 只（AC ${(withAc * 100).toFixed(1)}% / HP ${(withHp * 100).toFixed(1)}%；无挑战等级 ${noCr} 条${unparsedCr.length ? '：' + unparsedCr.join('、') : ''}）`);
 }
+// ---------- 锚点解析（2026-10-24「超链接索引」） ----------
+// 为「一页多词条」的目标页定位每个词条标题，写入 anchor 字段（url 保持不变，避免破坏骰子侧兼容）：
+//   - kw-<归一化名字>，同页重复加 -2/-3
+//   - 页级词条（职业/种族/子职、一页一条的专长等）anchor=''，链接到页顶
+//   - 「种族专长」是种族页里的特性片段（名字含整段话），暂不参与互链，anchor=''
+// 定位口径见 lib/anchorize.mjs 的 CATEGORY_STYLE（run 级加粗/字号/颜色）。
+function attachAnchors() {
+  const cats = { spells, maneuvers, programs, feats, magicItems, monsters };
+  for (const c of classes) { c.anchor = ''; for (const s of c.subclasses || []) s.anchor = ''; }
+  for (const r of races) r.anchor = '';
+  for (const r of races) for (const f of r.raceFeats || []) f.anchor = '';
+  const pageUsedIds = new Map(); // url -> Set(已用锚点 id)，跨类别共用，保证页内唯一
+  const pageHtml = new Map();
+  const getHtml = (url) => {
+    if (!pageHtml.has(url)) pageHtml.set(url, readText(path.join(SRC, url)));
+    return pageHtml.get(url);
+  };
+  const stats = [];
+  for (const [catKey, entries] of Object.entries(cats)) {
+    const byUrl = new Map();
+    for (const e of entries) {
+      const url = e.url || e.page;
+      if (!url) { e.anchor = ''; continue; }
+      if (!byUrl.has(url)) byUrl.set(url, []);
+      byUrl.get(url).push(e);
+    }
+    let located = 0, missing = 0, pageLevel = 0;
+    const misses = [];
+    for (const [url, list] of byUrl) {
+      for (const e of list) e.anchor = '';
+      if (list.length <= 1) { pageLevel += list.length; continue; }
+      // 种族专长不参与互链/锚点
+      const need = list.filter(e => !(catKey === 'feats' && e.category === '种族专长'));
+      if (!need.length) continue;
+      const html = getHtml(url);
+      let res;
+      try {
+        res = locateAnchors(html, need.map(e => e.name), catKey);
+      } catch (err) {
+        console.warn(`[parse-card-data] 锚点定位异常 ${url}: ${err.message}`);
+        continue;
+      }
+      if (!pageUsedIds.has(url)) pageUsedIds.set(url, new Set());
+      const used = pageUsedIds.get(url);
+      for (let i = 0; i < need.length; i++) {
+        if (!res.found[i]) {
+          missing++;
+          if (misses.length < 8) misses.push(need[i].name);
+          continue;
+        }
+        need[i].anchor = makeAnchorId(canonName(need[i].name), used);
+        located++;
+      }
+    }
+    stats.push({ catKey, located, missing, pageLevel, misses });
+  }
+  return stats;
+}
+
 // 把种族页内的"种族专长"合并进专长列表
 for (const r of races) {
   for (const f of r.raceFeats || []) {
     feats.push({ name: f.name, category: '种族专长', page: r.url, url: r.url, text: f.text });
+  }
+}
+
+// ---------- 锚点解析 + 自检（「超链接索引」P0） ----------
+// 门禁：核心类别缺锚点数不得超过实测基线（源站结构变化时会立刻失败，防止锚点静默失效）。
+// 先例：怪物页 17 条（毛绒动物·X 变体 / 「XXX，称号」式名字）、程序 1 条（同条异写）为已知基线。
+const anchorStats = attachAnchors();
+{
+  const ANCHOR_MAX_MISSING = { spells: 0, maneuvers: 0, programs: 2, magicItems: 0, feats: 0, monsters: 25 };
+  const errs = [];
+  const parts = [];
+  for (const s of anchorStats) {
+    parts.push(`${s.catKey} ${s.located} 锚点${s.missing ? `（缺 ${s.missing}）` : ''}`);
+    if (s.missing > ANCHOR_MAX_MISSING[s.catKey]) {
+      errs.push(`${s.catKey} 缺锚点 ${s.missing} 条 > 基线 ${ANCHOR_MAX_MISSING[s.catKey]}：${s.misses.join('、')}`);
+    }
+  }
+  console.log(`[parse-card-data] 锚点: ${parts.join(' | ')} | 页级词条（跳页顶）${anchorStats.reduce((n, s) => n + s.pageLevel, 0)}`);
+  for (const s of anchorStats) {
+    if (s.missing && s.missing <= ANCHOR_MAX_MISSING[s.catKey]) {
+      console.log(`[parse-card-data]   ${s.catKey} 已知缺锚点 ${s.missing} 条（回退页顶）：${s.misses.join('、')}${s.missing > 8 ? ' …' : ''}`);
+    }
+  }
+  if (errs.length) {
+    console.error('[parse-card-data] 锚点自检失败：');
+    for (const e of errs) console.error('  ✗ ' + e);
+    process.exit(1);
   }
 }
 

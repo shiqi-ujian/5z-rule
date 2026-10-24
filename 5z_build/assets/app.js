@@ -550,7 +550,8 @@
       const base = location.href.replace(/index\.html([?#].*)?$/, '');
       let cur = frame.contentWindow.location.href;
       if (cur.startsWith(base)) {
-        const rel = decodeURI(cur.slice(base.length)).split('?')[0];
+        // 剥掉 ?query 与 #fragment（关键词互链会跳到 #kw-xxx，带 fragment 时目录/面包屑仍应高亮本页）
+        const rel = decodeURI(cur.slice(base.length)).split(/[?#]/)[0];
         if (rel && rel !== 'index.html') highlight(rel);
       }
       // 全站搜索跳转 → 页内高亮+导航器（5echm 行为）

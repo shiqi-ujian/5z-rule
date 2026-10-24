@@ -1,7 +1,7 @@
 <html>
 
 <head>
-<link rel="stylesheet" href="../../assets/body.css">
+<link rel="stylesheet" href="../../assets/body.css?v=20261024155341">
 <meta charset="utf-8">
 <meta name=ProgId content=Word.Document>
 
@@ -1121,7 +1121,7 @@ mso-ligatures:none'>引导神力：联络神祇<span lang=EN-US></span></span></
 <p class=MsoNormal style='margin-bottom:0cm;text-indent:24.0pt;mso-char-indent-count:
 2.0;line-height:normal;mso-pagination:widow-orphan;layout-grid-mode:char'><span
 style='font-size:12.0pt;font-family:宋体;mso-bidi-font-family:"Times New Roman";
-mso-ligatures:none'>以一个动作，你对你信仰的神祇，施展“短讯术<span lang=EN-US>Send</span>”。<span
+mso-ligatures:none'>以一个动作，你对你信仰的神祇，施展“<a class="wz-kw" href="../../法术/法术详述/3环.htm#kw-%E7%9F%AD%E8%AE%AF%E6%9C%AF" title="法术 · 3环 · 预言">短讯术</a><span lang=EN-US>Send</span>”。<span
 lang=EN-US></span></span></p>
 
 </div>
@@ -1248,6 +1248,29 @@ lang=EN-US></span></span></p>
     else if (d.type === 'wz-nav') jump(d.dir);
     else if (d.type === 'wz-clear') clearHighlights();
   });
+})();
+</script>
+<script>
+(function () {
+  function flash() {
+    var h = location.hash;
+    if (!h || h.indexOf('#kw-') !== 0) return;
+    var el = null;
+    try { el = document.getElementById(decodeURIComponent(h.slice(1))); } catch (e) { return; }
+    if (!el || !el.closest) return;
+    var box = el.closest('p,h1,h2,h3,h4,h5,h6,li,td');
+    if (!box) return;
+    box.classList.remove('wz-jump-flash');
+    void box.offsetWidth;
+    box.classList.add('wz-jump-flash');
+    setTimeout(function () { box.classList.remove('wz-jump-flash'); }, 1500);
+  }
+  window.addEventListener('hashchange', flash);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(flash, 30); });
+  } else {
+    setTimeout(flash, 30);
+  }
 })();
 </script>
 </body>

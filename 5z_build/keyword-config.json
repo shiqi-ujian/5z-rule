@@ -1,0 +1,34 @@
+{
+  "_说明": "规则书正文关键词自动互链（超链接索引 P1）配置。改这里后重跑 build.mjs 即可生效；categories 里的类别要有 card-data 且带 anchor 字段。",
+  "categories": {
+    "spells": true,
+    "maneuvers": true,
+    "programs": true,
+    "feats": true,
+    "magicItems": false,
+    "monsters": false,
+    "classes": false,
+    "races": false,
+    "subclasses": false
+  },
+  "minLen": 3,
+  "maxLen": 16,
+  "firstPerPage": true,
+  "excludePages": [
+    "基础/版本更新.htm",
+    "基础/设计师访谈.htm",
+    "基础/5z说明.htm",
+    "法术/召唤物.htm",
+    "辅助计算器.htm",
+    "$$unsavedpage1.htm",
+    "$$unsavedpage2.htm"
+  ],
+  "excludePagePrefixes": [
+    "私货，未通过的/"
+  ],
+  "excludeCategories": [
+    "种族专长"
+  ],
+  "excludeNames": [],
+  "twoCharWhitelist": []
+}

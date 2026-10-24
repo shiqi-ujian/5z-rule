@@ -65,3 +65,55 @@ html.wz-in-frame .wz-crumbs { display: none; }
   }
   .wz-nav a.wz-btn:hover { background: #1e3a8a; }
 }
+
+/* ---------- 关键词互链（超链接索引） ----------
+ * 原则：不改变字号/字色，只用虚下划线提示可点；hover/focus 加强。
+ * 内容来自构建期注入的 <a class="wz-kw" href="目标页#kw-词条">。
+ */
+a.wz-kw {
+  color: inherit;
+  text-decoration: underline dotted rgba(124, 58, 237, 0.55);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+a.wz-kw:hover,
+a.wz-kw:focus {
+  color: inherit;
+  text-decoration-style: solid;
+  text-decoration-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.08);
+  border-radius: 2px;
+  outline: none;
+}
+@media (prefers-color-scheme: dark) {
+  a.wz-kw { text-decoration-color: rgba(167, 139, 250, 0.6); }
+  a.wz-kw:hover,
+  a.wz-kw:focus {
+    text-decoration-color: #a78bfa;
+    background: rgba(167, 139, 250, 0.14);
+  }
+}
+/* 打印时去掉链接视觉，保持纸面干净 */
+@media print {
+  a.wz-kw {
+    color: inherit !important;
+    text-decoration: none !important;
+    background: none !important;
+  }
+}
+/* 跳转落点闪一下（锚点是空 <a id>，闪的是所在段落/标题；脚本见正文页注入的 wz-flash） */
+.wz-jump-flash {
+  animation: wz-jump-flash 1.3s ease-out;
+}
+@keyframes wz-jump-flash {
+  0% { background: rgba(253, 230, 138, 0.85); }
+  100% { background: transparent; }
+}
+@media (prefers-color-scheme: dark) {
+  @keyframes wz-jump-flash {
+    0% { background: rgba(180, 130, 40, 0.55); }
+    100% { background: transparent; }
+  }
+}
+

@@ -6,9 +6,12 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { spawnSync as _spawnSync } from 'node:child_process';
 import { computeArchiveVersions } from './archive-versions.mjs';
+import { createContentTransformer, DEFAULT_CONFIG as DEFAULT_KEYWORD_CONFIG } from './lib/linkify.mjs';
 
 const SRC = path.resolve('5z_src');
 const OUT = path.resolve('5z_web');
+// 构建戳（UTC 前 14 位）：壳资源/正文页 CSS 的 ?v=、旧版归档与上线指纹都用它
+const buildTs = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 // 自动发现 5z_src 下的 .hhc 目录文件（CHM 每版文件名不同，如 5z规则1.60版.hhc）
 const hhcFiles = fs.readdirSync(SRC).filter(f => /\.hhc$/i.test(f));
 if (!hhcFiles.length) {
@@ -203,6 +206,44 @@ function walk(nodes, parentChain) {
 walk(tree, []);
 log(`目录树节点: ${countNodes(tree)} | 唯一页面: ${pages.length} | 聚合页: ${aggPages.size}`);
 
+// ---------- 3.5 规则书数据（提前到正文生成之前：关键词互链需要 card-data 的锚点/词条） ----------
+// 原先在 7.5 步调用；「超链接索引」需要在生成正文时把关键词包成 <a href="目标页#锚点">，
+// 所以把 parse-card-data 前移。JSON 同时供 7.5 步合并成 card-data.js。
+const CARD_DATA_FILES = ['rules', 'races', 'classes', 'feats', 'spells', 'class-spells', 'maneuvers', 'programs', 'magic-items'];
+const cardData = {};
+{
+  const r = _spawnSync(process.execPath,
+    [path.resolve('5z_build/parse-card-data.mjs'), OUT],
+    { encoding: 'utf8', timeout: 5 * 60 * 1000 });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stdout.write(r.stderr);
+  if (r.status !== 0) {
+    console.error('[build] 规则书数据解析失败，中止构建');
+    process.exit(1);
+  }
+  for (const f of CARD_DATA_FILES) {
+    const key = f === 'magic-items' ? 'magicItems' : f;
+    cardData[key] = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data', f + '.json'), 'utf8'));
+  }
+}
+// 关键词互链配置（缺失/字段不全时用默认值兜底）
+let keywordConfig = DEFAULT_KEYWORD_CONFIG;
+try {
+  const userCfg = JSON.parse(fs.readFileSync(new URL('./keyword-config.json', import.meta.url), 'utf8'));
+  keywordConfig = { ...DEFAULT_KEYWORD_CONFIG, ...userCfg };
+} catch (e) {
+  warnings.push(`keyword-config.json 读取失败，使用默认配置: ${e.message}`);
+}
+// 怪物数据单独成文件（card-data.js 由车卡器加载，不能把 2MB 怪物数据塞进去），
+// 但锚点注入/互链的注册表需要它 → 用一份额外视图，不污染 cardData。
+const linkifierData = { ...cardData };
+try {
+  linkifierData.monsters = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data/monsters.json'), 'utf8'));
+} catch (e) {
+  warnings.push(`monsters.json 读取失败（怪物锚点将不注入）: ${e.message}`);
+}
+const linkifier = createContentTransformer({ cardData: linkifierData, config: keywordConfig });
+
 // 注入正文页的页内搜索脚本（照抄 5echm 方案：高亮全部命中 + 浮动导航器 + Alt+↑↓）
 const HL_SCRIPT = `<script>
 (function () {
@@ -329,6 +370,32 @@ const HL_SCRIPT = `<script>
 })();
 <\/script>`;
 
+// 关键词互链跳转落点闪烁：锚点本身是空 <a id>，闪它所在的段落/标题。
+// 跨页跳转在 load 后触发、同页跳转在 hashchange 时触发（点击同页 #kw-... 不会重新加载）。
+const WZ_FLASH_SCRIPT = `<script>
+(function () {
+  function flash() {
+    var h = location.hash;
+    if (!h || h.indexOf('#kw-') !== 0) return;
+    var el = null;
+    try { el = document.getElementById(decodeURIComponent(h.slice(1))); } catch (e) { return; }
+    if (!el || !el.closest) return;
+    var box = el.closest('p,h1,h2,h3,h4,h5,h6,li,td');
+    if (!box) return;
+    box.classList.remove('wz-jump-flash');
+    void box.offsetWidth;
+    box.classList.add('wz-jump-flash');
+    setTimeout(function () { box.classList.remove('wz-jump-flash'); }, 1500);
+  }
+  window.addEventListener('hashchange', flash);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(flash, 30); });
+  } else {
+    setTimeout(flash, 30);
+  }
+})();
+<\/script>`;
+
 // ---------- 4. 生成正文页（转码 + 注入导航条） ----------
 function navHtml(page, depth, fromDir) {
   const rel = '../'.repeat(depth);
@@ -360,7 +427,9 @@ function processHtml(html, siteRel, page) {
     out = out.replace(/(<body[^>]*>)/i, (m) => `${m}\n${nav}\n`);
   }
   // 注入壳样式（导航条 wz-* 样式）：此前 body.css 从未被链接，页面内导航条完全无样式
-  const cssHref = '../'.repeat(depth) + 'assets/body.css';
+  // ⚠️ 必须带 ?v=<构建戳>：_headers 给 /assets/* 配了 1 年缓存，不带版本号时新增的
+  //    .wz-kw 链接样式对回访用户不会生效（2026-10-24 加互链时发现）。
+  const cssHref = '../'.repeat(depth) + 'assets/body.css?v=' + buildTs;
   out = out.replace(/(<head[^>]*>)/i, (m) => `${m}\n<link rel="stylesheet" href="${cssHref}">`);
   // 修复 WinCHM/Word 导出的残缺 Content-Type meta（属性值缺闭合引号）：
   // 解析器会把后续整段 HTML 吞进该属性值，导致 <style>、<body>、注入的导航条 div
@@ -371,8 +440,8 @@ function processHtml(html, siteRel, page) {
     .replace(/charset\s*=\s*["']?gbk["']?/i, 'charset=utf-8');
   // 清理 Word 导出的 File-List 残留（指向未复制的 filelist.xml）
   out = out.replace(/<link[^>]*rel\s*=\s*File-List[^>]*>/gi, '');
-  // 注入高亮定位脚本（接收壳的 postMessage，滚动到首个命中词并高亮）
-  out = out.replace(/<\/body>/i, (m) => HL_SCRIPT + '\n' + m);
+  // 注入高亮定位脚本（接收壳的 postMessage，滚动到首个命中词并高亮）+ 互链落点闪烁
+  out = out.replace(/<\/body>/i, (m) => HL_SCRIPT + '\n' + WZ_FLASH_SCRIPT + '\n' + m);
   return out;
 }
 
@@ -388,6 +457,12 @@ for (const rel of diskFiles) {
     htmCount++;
     const page = pageByUrl.get(rel);
     let html = readText(srcFile);
+    // 「超链接索引」：锚点注入 + 关键词互链（只处理正文；排除页在 linkify 内部跳过）
+    try {
+      html = linkifier.transform(html, rel).html;
+    } catch (e) {
+      warnings.push(`关键词互链处理失败: ${rel} (${e.message})`);
+    }
     html = processHtml(html, rel, page);
     if (page) injected++;
     fs.writeFileSync(dest, html, 'utf8');
@@ -405,6 +480,31 @@ for (const [siteRel, html] of aggPages) {
   fs.writeFileSync(dest, out, 'utf8');
 }
 log(`正文页: ${htmCount} | 注入导航: ${injected} | 附件/图片已复制`);
+
+// ---------- 4c. 关键词互链统计 + 门禁 ----------
+// 数字大幅低于基线 ⇒ 关键词注册表/锚点/页面结构出问题（例如 CHM 改版），必须让构建失败，
+// 否则网站会静默退化成「没有任何互链」。基线为 2026-10-24 首次上线实测值。
+{
+  const s = linkifier.stats;
+  const catStr = Object.entries(s.byCat).map(([k, v]) => `${k} ${v}`).join(' / ');
+  log(`关键词互链: ${s.links} 处 / ${s.pagesWithLinks} 页 | ${catStr} | 注册词条 ${linkifier.registry.length} | 注入锚点 ${s.anchors} | HTML +${(s.htmlBytes / 1048576).toFixed(2)} MB`);
+  const errs = [];
+  // 基线 = 2026-10-24 首次上线实测（15,065 链 / 4,571 锚点 / 2,070 注册词条）
+  const MIN_LINKS = 12000, MIN_ANCHORS = 4200, MIN_REGISTRY = 1800, MAX_PAGE_LINKS = 800;
+  if (s.links < MIN_LINKS) errs.push(`互链数 ${s.links} < 下限 ${MIN_LINKS}`);
+  if (s.anchors < MIN_ANCHORS) errs.push(`注入锚点数 ${s.anchors} < 下限 ${MIN_ANCHORS}`);
+  if (linkifier.registry.length < MIN_REGISTRY) errs.push(`关键词注册表 ${linkifier.registry.length} < 下限 ${MIN_REGISTRY}`);
+  const topPages = [...s.pageLinks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (topPages.length) log(`  链接最多的页面: ${topPages.map(([u, n]) => `${u}(${n})`).join(' | ')}`);
+  if (topPages.length && topPages[0][1] > MAX_PAGE_LINKS) {
+    errs.push(`单页链接数 ${topPages[0][1]} > 上限 ${MAX_PAGE_LINKS}（${topPages[0][0]}，可能是排除页遗漏）`);
+  }
+  if (errs.length) {
+    console.error('[build] 关键词互链自检失败：');
+    for (const e of errs) console.error('  ✗ ' + e);
+    process.exit(1);
+  }
+}
 
 // ---------- 5. 搜索倒排索引 ----------
 for (const p of pages) {
@@ -506,7 +606,6 @@ const tocJson = JSON.stringify(tree.map(minifyNode));
 const defaultPage = pages.length ? encodeURI(pages[0].url) : '';
 
 let shell = fs.readFileSync(new URL('./shell.html', import.meta.url), 'utf8');
-const buildTs = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 // 占位符替换（split/join 全量替换，占位符可能出现多次）
 const shellRepl = [
   ['__TITLE__', VERSION ? `5z 规则 ${VERSION} 版` : '5z 规则网页版'],
@@ -524,23 +623,9 @@ for (const f of ['site.css', 'app.js', 'body.css', 'favicon.svg', 'car.js', 'car
   fs.copyFileSync(new URL('./assets/' + f, import.meta.url), path.join(OUT, 'assets', f));
 }
 
-// ---------- 7.5 车卡数据（解析规则书 → assets/card-data/*.json + 合并 js） ----------
+// ---------- 7.5 车卡数据（3.5 步已解析并前移；这里只合并成单个 js + 怪物数据） ----------
 {
-  const r = _spawnSync(process.execPath,
-    [path.resolve('5z_build/parse-card-data.mjs'), OUT],
-    { encoding: 'utf8', timeout: 5 * 60 * 1000 });
-  if (r.stdout) process.stdout.write(r.stdout);
-  if (r.stderr) process.stdout.write(r.stderr);
-  if (r.status !== 0) {
-    console.error('[build] 车卡数据解析失败，中止构建');
-    process.exit(1);
-  }
   // 合并为 script 可加载的单文件（file:// 直开时 fetch 被浏览器禁止，script 标签不受限）
-  const cardData = {};
-  for (const f of ['rules', 'races', 'classes', 'feats', 'spells', 'class-spells', 'maneuvers', 'programs', 'magic-items']) {
-    const key = f === 'magic-items' ? 'magicItems' : f;
-    cardData[key] = JSON.parse(fs.readFileSync(path.join(OUT, 'assets/card-data', f + '.json'), 'utf8'));
-  }
   const dataJs = 'window.__CAR_DATA__ = ' + JSON.stringify(cardData).replace(/</g, '\\u003c') + ';\n';
   fs.writeFileSync(path.join(OUT, 'assets', 'card-data.js'), dataJs, 'utf8');
 

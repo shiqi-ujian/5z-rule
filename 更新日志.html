@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>36</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>8</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>37</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>8</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（36 条）</summary>
+    <summary>✅ 已修复（37 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -405,6 +405,15 @@
       
       
       <div class="cl-detail">侧栏版本行与页脚新增「📜 旧版」入口 → 旧版规则书页。每个历史版本都是该版本发布时的完整站点快照（目录、正文、当时的搜索索引、当时的角色创建器），内容直接取自项目的 Git 历史提交、由 Cloudflare Pages Function 反向代理，不额外占用仓库空间；旧版页面左下角有「📜 旧版存档 vX」徽标可返回列表。以后每次发布新版本，上一版会自动加入旧版列表。</div>
+    </li>
+    <li>
+      <span class="cl-id">#2026-10-24-hyperlink-index</span>
+      <b>新增「超链接索引」：正文关键词自动互链 + 词条级锚点</b>
+      <span class="cl-page">（全站正文 / 词典）</span>
+      <span class="cl-date">2026-10-24</span>
+      
+      
+      <div class="cl-detail">规则书正文由 Word 导出 HTML 构成，原本全站没有任何词条级锚点（正文内链 0 条），词典 5,014 个词条的「📖 规则书原文」只能跳到页顶（3环页 155 个法术共用同一个页顶）。本次分两层改造：① 锚点基建——构建期用「逐字符样式追踪」在正文里定位每个词条的标题（法术=12pt 加粗深红、专长/魔法物品=14pt 加粗棕、套装成员=16pt 加粗、怪物=18–20pt 加粗黑、战技…</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
@@ -490,6 +499,19 @@
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-10-24 · v1.63</span><span class="cl-batch-hint">✅1</span></summary>
+    <p class="cl-release">「超链接索引」上线：规则书正文里的法术/战技/专长/程序名自动标成超链接，点击跳到规则书对应词条（不离开阅读上下文）；词典「规则书原文」从「跳页顶」升级为「精确到词条」。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#2026-10-24-hyperlink-index</span>
+      <b>新增「超链接索引」：正文关键词自动互链 + 词条级锚点</b>
+      <span class="cl-page">（全站正文 / 词典）</span>
+      <div class="cl-detail">规则书正文由 Word 导出 HTML 构成，原本全站没有任何词条级锚点（正文内链 0 条），词典 5,014 个词条的「📖 规则书原文」只能跳到页顶（3环页 155 个法术共用同一个页顶）。本次分两层改造：① 锚点基建——构建期用「逐字符样式追踪」在正文里定位每个词条的标题（法术=12pt 加粗深红、专长/魔法物品=14pt 加粗棕、套装成员=16pt 加粗、怪物=18–20pt 加粗黑、战技=加粗），在标题前注入空锚点 &lt;a id="kw-词条名"&gt;，共 4,571 个词条锚点（法术 1,196 / 魔法物品 1,585 / 怪物 659 / 专长 646 / 战技 253 / 程序 232；已知 18 条回退页顶：17 个特殊命名怪物 + 1 个同条异写程序）；词典六处原文链接改为 url#锚点。② 正文互链——按 keyword-config.json 的类别开关（首版=法术/战技/程序/专长）把正文中出现的词条名包成 &lt;a class="wz-kw" href="目标页#kw-词条"&gt;，共 15,063 条链接 / 576 页（法术 12,691 / 专长 1,556 / 战技 487 / 程序 329）；规则=最长匹配优先、每页每词条只链首次、≥3 字、跳过标题/已有链接/排除页（版本更新、设计师访谈、5z说明、召唤物、私货目录等）。交互：跨页跳转由壳 iframe 导航并在目录/面包屑同步（修复 app.js 不剥 # 的老问题），同页跳转不重新加载；落点所在段落闪一下高亮；链接样式为虚下划线（不改变字号字色），深色模式/打印已适配，body.css 补上 ?v= 构建戳避免被 1 年缓存卡住。门禁：build 校验互链数/锚点数/注册词条数下限与单页上限；check-links 扩展为校验 #fragment 锚点（4 条 CHM 原文遗留坏锚点降级为警告）；card-data 仅新增 anchor 字段、url 不变，骰子侧逐字段兼容。配置在 5z_build/keyword-config.json（可关类别/加排除页）。已知取舍：2 字关键词默认不链（78 个 2 字法术名等，误链风险高，待人工白名单）；魔法物品/怪物本版只有锚点、暂不自动互链；种族专长（158 条数据是种族特性片段）不参与互链。</div>
+    </li></ul>
+    
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-10-22 · v1.63</span><span class="cl-batch-hint">✅1</span></summary>

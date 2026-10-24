@@ -12,6 +12,12 @@ const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
 const esc = Picker.esc;
 const el = Picker.el;
+// 规则书原文链接：带上词条锚点（2026-10-24「超链接索引」P0 起 card-data 有 anchor 字段；
+// 无该字段/锚点缺失时退回页顶，保持旧行为）
+const srcHref = (x) => {
+  const url = (x && x.url) || '#';
+  return esc(url + (x && x.anchor ? '#' + encodeURIComponent(x.anchor) : ''));
+};
 
 /* ---------- 数据预计算（与之前一致） ---------- */
 const LEVELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
@@ -264,7 +270,7 @@ const spellPicker = Picker.create({
         `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
       <div class="pk-d-text">${esc(s.text)}</div>
       ${jobs.length ? `<div class="pk-d-jobs">可用职业：<b>${jobs.map(esc).join('、')}</b></div>` : ''}
-      <a class="pk-d-link" href="${esc(s.url)}" target="_blank">📖 规则书原文 →</a>`;
+      <a class="pk-d-link" href="${srcHref(s)}" target="_blank">📖 规则书原文 →</a>`;
   },
   containers: C,
 });
@@ -286,7 +292,7 @@ const mvPicker = Picker.create({
   detailHtml: (m) => `<div class="pk-d-name">${esc(m.name)}</div>
     <div class="pk-d-sub">${esc(m.style)} · ${esc(m.level)} · ${esc(m.type)}</div>
     ${m.text ? `<div class="pk-d-text">${esc(m.text)}</div>` : '<p class="pk-muted">规则书未收录该战技的独立详述。</p>'}
-    <a class="pk-d-link" href="${esc(m.url)}" target="_blank">📖 规则书原文（${esc(m.style)}）→</a>`,
+    <a class="pk-d-link" href="${srcHref(m)}" target="_blank">📖 规则书原文（${esc(m.style)}）→</a>`,
   containers: C,
 });
 
@@ -314,7 +320,7 @@ const featPicker = Picker.create({
   detailHtml: (f) => `<div class="pk-d-name">${esc(f.name)}</div>
     <div class="pk-d-sub">${esc(f.category)}</div>
     ${f.text ? `<div class="pk-d-text">${esc(f.text)}</div>` : '<p class="pk-muted">规则书未收录该专长的独立详述。</p>'}
-    <a class="pk-d-link" href="${esc(f.url || '#')}" target="_blank">📖 规则书原文 →</a>`,
+    <a class="pk-d-link" href="${srcHref(f)}" target="_blank">📖 规则书原文 →</a>`,
   containers: C,
 });
 
@@ -376,7 +382,7 @@ const pgPicker = Picker.create({
       <div class="f"><span class="k">需要专注</span><span class="v">${p.focus ? '是' : '否'}</span></div>
     </div>
     ${p.text ? `<div class="pk-d-text">${esc(p.text)}</div>` : ''}
-    <a class="pk-d-link" href="${esc(p.url)}" target="_blank">📖 规则书原文（${esc(p.protocol)}协议）→</a>`,
+    <a class="pk-d-link" href="${srcHref(p)}" target="_blank">📖 规则书原文（${esc(p.protocol)}协议）→</a>`,
   containers: C,
 });
 
@@ -440,7 +446,7 @@ const miPicker = Picker.create({
         `<div class="f"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
       ${(i.tables && i.tables.length) ? `<div class="pk-d-table-title">价格表</div>${Picker.tablesHtml(i.tables)}` : ''}
       ${i.text ? `<div class="pk-d-text">${esc(i.text)}</div>` : '<p class="pk-muted">规则书未收录该物品的独立详述。</p>'}
-      <a class="pk-d-link" href="${esc(i.url)}" target="_blank">📖 规则书原文（${esc(i.sub)}）→</a>`;
+      <a class="pk-d-link" href="${srcHref(i)}" target="_blank">📖 规则书原文（${esc(i.sub)}）→</a>`;
   },
   containers: C,
 });
@@ -548,7 +554,7 @@ function monDetailHtml(m) {
     ${m.desc ? `<div class="pk-d-desc"><span class="k">背景</span>${esc(m.desc)}</div>` : ''}
     ${m.extraText ? `<div class="pk-d-text">${esc(m.extraText)}</div>` : ''}
     ${secs.map(s => `<div class="pk-d-sec">${s.name ? `<div class="pk-d-sec-title">${esc(s.name)}</div>` : ''}<div class="pk-d-text">${esc(s.text)}</div></div>`).join('')}
-    <a class="pk-d-link" href="${esc(m.url)}" target="_blank">📖 规则书原文（${esc(m.category)}）→</a>`;
+    <a class="pk-d-link" href="${srcHref(m)}" target="_blank">📖 规则书原文（${esc(m.category)}）→</a>`;
 }
 const monPicker = Picker.create({
   data: MON,

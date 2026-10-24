@@ -1,5 +1,5 @@
 <html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40"><head>
-<link rel="stylesheet" href="../../../assets/body.css"><meta charset="utf-8"><meta name=ProgId  content=Word.Document ><meta name=Generator  content="Microsoft Word 14" ><meta name=Originator  content="Microsoft Word 14" ></head><body><div style="mso-element:header"  id="h0" ><p class=MsoHeader  style="tab-stops:center blank 207.6500pt right blank 415.3000pt ;" ><span style="mso-spacerun:'yes';font-family:等线;mso-bidi-font-family:'Times New Roman';
+<link rel="stylesheet" href="../../../assets/body.css?v=20261024155341"><meta charset="utf-8"><meta name=ProgId  content=Word.Document ><meta name=Generator  content="Microsoft Word 14" ><meta name=Originator  content="Microsoft Word 14" ></head><body><div style="mso-element:header"  id="h0" ><p class=MsoHeader  style="tab-stops:center blank 207.6500pt right blank 415.3000pt ;" ><span style="mso-spacerun:'yes';font-family:等线;mso-bidi-font-family:'Times New Roman';
 font-size:9.0000pt;mso-font-kerning:1.0000pt;" ></span></p><p class=MsoNormal ></p><p class=MsoHeader  style="tab-stops:center blank 207.6500pt right blank 415.3000pt ;" ><span style="mso-spacerun:'yes';font-family:等线;mso-bidi-font-family:'Times New Roman';
 font-size:9.0000pt;mso-font-kerning:1.0000pt;" ><o:p></o:p></span></p></div><div style="mso-element:footer"  id="f0" ><p class=MsoNormal ></p><p class=MsoFooter  style="tab-stops:center blank 207.6500pt right blank 415.3000pt ;" ><span style="mso-spacerun:'yes';font-family:等线;mso-bidi-font-family:'Times New Roman';
 font-size:9.0000pt;mso-font-kerning:1.0000pt;" ></span></p><p class=MsoNormal ></p><p class=MsoFooter  style="tab-stops:center blank 207.6500pt right blank 415.3000pt ;" ><span style="mso-spacerun:'yes';font-family:等线;mso-bidi-font-family:'Times New Roman';
@@ -127,6 +127,29 @@ font-size:9.0000pt;mso-font-kerning:1.0000pt;" ><o:p>&nbsp;</o:p></span></p></di
     else if (d.type === 'wz-nav') jump(d.dir);
     else if (d.type === 'wz-clear') clearHighlights();
   });
+})();
+</script>
+<script>
+(function () {
+  function flash() {
+    var h = location.hash;
+    if (!h || h.indexOf('#kw-') !== 0) return;
+    var el = null;
+    try { el = document.getElementById(decodeURIComponent(h.slice(1))); } catch (e) { return; }
+    if (!el || !el.closest) return;
+    var box = el.closest('p,h1,h2,h3,h4,h5,h6,li,td');
+    if (!box) return;
+    box.classList.remove('wz-jump-flash');
+    void box.offsetWidth;
+    box.classList.add('wz-jump-flash');
+    setTimeout(function () { box.classList.remove('wz-jump-flash'); }, 1500);
+  }
+  window.addEventListener('hashchange', flash);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(flash, 30); });
+  } else {
+    setTimeout(flash, 30);
+  }
 })();
 </script>
 </body></html>
