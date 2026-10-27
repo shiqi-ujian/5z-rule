@@ -33,8 +33,9 @@
 | `assets/card-data/rules.json` | 规则常量（五属性、17 技能、等级表、公式） |
 | `assets/card-data/classes.json` / `races.json` / `feats.json` / `spells.json` / `class-spells.json` / `maneuvers.json` / `programs.json` / `magic-items.json` | 车卡与词典数据 |
 | `assets/card-data/monsters.json` | **怪物词典**（679 只；`name/type/desc/cr/text/page/url` 与骰子侧现有查询数据一致，另含 `ac/hp/speed/abilities/saves/sections/category/size/alignment/crNum` 等结构化字段） |
+| `assets/card-data/features.json` | **职业特性 / 子职特性**（2026-10-27 起；`classFeatures` 227 条含 `levels`，`subclassFeatures` 957 条 / 172 个子职页含 `level`；正文保留表格为 `a｜b` 行。骰子侧 `.5z 职业特性` 查询的数据源，解析口径见 `5z_build/parse-card-data.mjs` 的 `extractClassFeatures` / `extractSubclassFeatures`） |
 
-> 骰子侧（`qq-dice`）构建脚本 `tools/build-5z-data.mjs` 已从 `5z_web/assets/card-data/*.json` 取数；怪物改用 `monsters.json` 后，其 `collectMonsters()` 的行解析（含串页风险）即可删除。
+> 骰子侧（`qq-dice`）构建脚本 `tools/build-5z-data.mjs` 已从 `5z_web/assets/card-data/*.json` 取数；怪物改用 `monsters.json`、职业特性改用 `features.json` 后，其各自的 HTML 解析（含串页/标题粘连风险）均不再由骰子侧维护（单一数据源纪律，见 qq-dice `docs/DECISIONS.md` D-15/D-17）。
 
 ## 目录结构
 
