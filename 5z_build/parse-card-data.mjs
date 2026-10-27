@@ -323,6 +323,174 @@ function parseClasses() {
   return classes.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// ---------- 3.5 职业特性 / 子职特性（2026-10-27，供骰子「职业特性」查询；单点数据源） ----------
+// 规则书里「特性名」是 14pt 棕色加粗段（parsePage 判为 h2），但 Word 原文常见粘连：
+//   1) 标题段里带首段正文：`偷袭\n 第1级起，……`（作者在同一段内换行）
+//   2) 连续多个特性挤进同一段：`强化链接\n 第6级起…\n灼烧烈焰\n 第10级起…`
+// 直接取整段会得到「标题 = 一大段正文」的脏条目，所以按「短名行 + 第N级起正文行」拆开。
+const FEATURE_LEVEL_RE = /^第(\d+)级(?:起|时|，|,)/;
+/** 非特性段：职业页头部（定位/生命值/熟练项/兼职/职业表）、附录、变体职业页的头部小节 */
+const FEATURE_JUNK_RE = /^(定位|生命值|熟练项|兼职|职业表|附录)|职业表$|职业特性替换|^(力量|敏捷|体质|智力|感知|魅力)(（|$)/;
+
+/** 把可能粘连的标题段拆成 [{name, text}]（只拆标题段，不拆已经在正文里的段落） */
+function splitFeatureHeads(text) {
+  const lines = String(text)
+    .split('\n')
+    .map(l => l.replace(/^[\s\u3000]+|[\s\u3000]+$/g, ''))
+    .filter(Boolean);
+  const out = [];
+  let cur = null;
+  for (const line of lines) {
+    // 正文行：「第N级起，……」
+    if (FEATURE_LEVEL_RE.test(line) && cur) {
+      cur.text += (cur.text ? '\n' : '') + line;
+      continue;
+    }
+    // 特性名行：短、且不以句末标点结尾；已有正文时再出现短行 ⇒ 新特性
+    const looksName = line.length <= 20 && !/[。！？]$/.test(line);
+    if (!cur || (looksName && cur.text)) {
+      cur = { name: line, text: '' };
+      out.push(cur);
+    } else {
+      cur.text += (cur.text ? '\n' : '') + line;
+    }
+  }
+  return out
+    .map(x => ({ name: x.name.replace(/[。．\s]+$/g, '').trim(), text: x.text.trim() }))
+    .filter(x => x.name);
+}
+
+/** 表格 → 纯文本行（特性正文里夹带的表格不能丢，用 `a｜b` 单行表示） */
+function tableToLines(rows) {
+  return (rows || [])
+    .filter(r => Array.isArray(r) && r.length)
+    .map(r => r.map(c => String(c).replace(/\s+/g, ' ').trim()).join('｜'))
+    .join('\n');
+}
+
+/**
+ * 职业特性：重解析职业页「职业特性」章节（比 classes.json 里按 h2+p 的粗解析多保留表格），
+ * 等级从职业表「特性」列反推：
+ *   - `专精（2项）` → `专精`；`引导神力：荒野变形` → 归到 `引导神力`（父特性）
+ *   - `子职特性` / `N环`（法术位表头）不是职业特性，跳过
+ * 一个特性可能在多个等级出现（专精 1/6、额外专长 10/16/19），levels 保留全部等级。
+ */
+function extractClassFeatures(classes) {
+  const out = [];
+  for (const c of classes) {
+    const page = path.join(SRC, c.url);
+    if (!fs.existsSync(page)) continue;
+    const flow = parsePage(readText(page));
+    // 原书有个别页把「职业特性」标题写了两次（连排），取最后一个，避免刚进入章节就 break
+    let startIdx = -1;
+    for (let i = 0; i < flow.length; i++) {
+      const b = flow[i];
+      if ((b.type === 'h1' || b.type === 'h2') && /^职业特性$/.test(b.text.trim())) startIdx = i;
+    }
+    if (startIdx < 0) {
+      console.warn(`[parse-card-data] 职业页未找到「职业特性」章节：${c.name}（${c.url}）`);
+      continue;
+    }
+    // 等级映射（来自职业表）
+    const table = c.table || [];
+    const featCol = (table[0] || []).indexOf('特性');
+    const levelMap = new Map();
+    if (featCol >= 0) {
+      for (const row of table.slice(1)) {
+        const lv = Number(String(row[0]).replace(/[^\d]/g, ''));
+        if (!lv) continue;
+        for (const raw of String(row[featCol] || '').split(/[，,、]/)) {
+          const base = String(raw).replace(/[（(][^（()）]*[)）]/g, '').trim();
+          if (!base || /环$/.test(base) || base === '子职特性') continue;
+          const key = base.split('：')[0].trim();
+          if (!key) continue;
+          if (!levelMap.has(key)) levelMap.set(key, []);
+          const arr = levelMap.get(key);
+          if (arr.indexOf(lv) < 0) arr.push(lv);
+        }
+      }
+    }
+    // 章节内按 h2 切特性（附录开始即停，附录数据不是特性）
+    const feats = [];
+    let cur = null;
+    for (let i = startIdx + 1; i < flow.length; i++) {
+      const x = flow[i];
+      if (x.type === 'h1') break; // 下一章
+      if (x.type === 'h2') {
+        if (/^附录/.test(x.text)) break;
+        for (const p of splitFeatureHeads(x.text)) {
+          if (FEATURE_JUNK_RE.test(p.name)) continue;
+          cur = { name: p.name, text: p.text };
+          feats.push(cur);
+        }
+        continue;
+      }
+      if (!cur) continue;
+      if (x.type === 'p' || x.type === 'h3') cur.text += (cur.text ? '\n' : '') + x.text;
+      else if (x.type === 'table') cur.text += (cur.text ? '\n' : '') + tableToLines(x.rows);
+    }
+    for (const f of feats) {
+      const text = String(f.text || '').trim();
+      if (!text) continue;
+      out.push({ cls: c.name, name: f.name, levels: levelMap.get(f.name) || [], text, url: c.url });
+    }
+  }
+  return out;
+}
+
+/**
+ * 子职特性：子职页（职业/<职业>/<子职>.htm）里 14pt 棕色 h2 = 子职特性名，其后 p/h3/表格 = 正文。
+ * 排除项：
+ *   - 「XX（YY变体）」是变体职业页（内含完整职业结构），不是子职；
+ *   - `附录：……` 是数据/法术/怪物附录，不是特性（整段跳过）；
+ *   - 无 h2 的页（无形者/图腾/神力选项/赛博格协议与核心等）没有特性结构，跳过
+ *     （赛博格协议页的内容是「程序」，已在 程序 词典里）。
+ * level 从正文开头「第N级起/时」提取（取第一个），没有标注的记 0。
+ */
+function extractSubclassFeatures(classes) {
+  const out = [];
+  const stats = { pages: 0, skippedVariant: 0, skippedNoFeature: 0 };
+  for (const c of classes) {
+    for (const s of c.subclasses || []) {
+      if (!s.url) continue;
+      if (/（.+变体）$/.test(s.name)) {
+        stats.skippedVariant++;
+        continue;
+      }
+      const page = path.join(SRC, s.url);
+      if (!fs.existsSync(page)) continue;
+      const flow = parsePage(readText(page));
+      const feats = [];
+      let cur = null;
+      for (const x of flow) {
+        if (x.type === 'h2') {
+          if (/^附录/.test(x.text)) { cur = null; continue; }
+          for (const p of splitFeatureHeads(x.text)) {
+            if (FEATURE_JUNK_RE.test(p.name)) continue;
+            cur = { name: p.name, text: p.text };
+            feats.push(cur);
+          }
+          continue;
+        }
+        if (!cur) continue;
+        if (x.type === 'p' || x.type === 'h3') cur.text += (cur.text ? '\n' : '') + x.text;
+        else if (x.type === 'table') cur.text += (cur.text ? '\n' : '') + tableToLines(x.rows);
+      }
+      let kept = 0;
+      for (const f of feats) {
+        const text = String(f.text || '').trim();
+        if (!text) continue;
+        const m = /第(\d+)级(?:起|时|，|,)/.exec(text.slice(0, 120));
+        out.push({ cls: c.name, sub: s.name, name: f.name, level: m ? Number(m[1]) : 0, text, url: s.url });
+        kept++;
+      }
+      if (kept) stats.pages++;
+      else stats.skippedNoFeature++;
+    }
+  }
+  return { features: out, stats };
+}
+
 // ---------- 4. 专长 ----------
 function parseFeats() {
   const feats = [];
@@ -1111,6 +1279,50 @@ const programs = parsePrograms();
 const magicItems = parseMagicItems();
 const monsters = parseMonsters();
 
+// ---------- 职业特性 / 子职特性（骰子「职业特性」查询数据源，2026-10-27） ----------
+// 自检口径：条数下限 + 空正文 + 同键重复 + 每职业覆盖（防止源页结构变化后静默丢条目）。
+const classFeatures = extractClassFeatures(classes);
+const subFeatureResult = extractSubclassFeatures(classes);
+const subclassFeatures = subFeatureResult.features;
+{
+  const errs = [];
+  const dupKey = (list, keyOf) => {
+    const seen = new Set();
+    for (const f of list) {
+      const k = keyOf(f);
+      if (seen.has(k)) errs.push('重复键: ' + k);
+      seen.add(k);
+    }
+  };
+  if (classFeatures.length < 210) errs.push(`职业特性条数 ${classFeatures.length} < 下限 210`);
+  if (subclassFeatures.length < 900) errs.push(`子职特性条数 ${subclassFeatures.length} < 下限 900`);
+  for (const f of classFeatures) {
+    if (!f.name || !f.text) errs.push(`职业特性缺名字/正文：${f.cls}/${f.name}`);
+    if (!Array.isArray(f.levels)) errs.push(`职业特性 levels 非数组：${f.cls}/${f.name}`);
+  }
+  for (const f of subclassFeatures) {
+    if (!f.name || !f.text) errs.push(`子职特性缺名字/正文：${f.cls}/${f.sub}/${f.name}`);
+    if (!(f.level >= 0 && f.level <= 30)) errs.push(`子职特性等级非法：${f.cls}/${f.sub}/${f.name}=${f.level}`);
+  }
+  dupKey(classFeatures, f => f.cls + '|' + f.name);
+  dupKey(subclassFeatures, f => f.cls + '|' + f.sub + '|' + f.name);
+  for (const c of classes) {
+    if (!classFeatures.some(f => f.cls === c.name)) errs.push(`职业无特性：${c.name}`);
+  }
+  if (subFeatureResult.stats.pages < 165) errs.push(`有特性的子职页 ${subFeatureResult.stats.pages} < 下限 165`);
+  if (errs.length) {
+    console.error('[parse-card-data] 职业/子职特性自检失败：');
+    for (const e of errs.slice(0, 30)) console.error('  ✗ ' + e);
+    if (errs.length > 30) console.error(`  … 共 ${errs.length} 条`);
+    process.exit(1);
+  }
+  const noLevel = classFeatures.filter(f => !f.levels.length).length + subclassFeatures.filter(f => !f.level).length;
+  console.log(
+    `[parse-card-data] 特性自检通过：职业特性 ${classFeatures.length} 条（${classFeatures.filter(f => f.levels.length).length} 条可定级）｜` +
+    `子职特性 ${subclassFeatures.length} 条（${subFeatureResult.stats.pages} 页；${noLevel} 条无等级标注；跳过变体页 ${subFeatureResult.stats.skippedVariant}、无特性页 ${subFeatureResult.stats.skippedNoFeature}）`
+  );
+}
+
 // ---------- 怪物数据自检（防静默串页/丢条目） ----------
 // 教训（2026-10-21 骰子侧真实反馈）：聚合页解析最常见的静默错误是「下一项被并入上一项」，
 // 用户看到的是「文本多截了一段」。用结构断言在构建期抓住，不等用户反馈。
@@ -1248,6 +1460,13 @@ write('maneuvers.json', maneuvers);
 write('programs.json', programs);
 write('magic-items.json', magicItems);
 write('monsters.json', monsters);
+// 职业特性 / 子职特性：单独成文件（不进 card-data.js——骰子构建脚本直接读 JSON；体积见 site 仓库）
+write('features.json', {
+  version: version || '',
+  generatedBy: '5z_build/parse-card-data.mjs',
+  classFeatures,
+  subclassFeatures,
+});
 
 console.log(`[parse-card-data] 规则 v${version || '?'}: 种族 ${races.length} | 职业 ${classes.length} | 专长 ${feats.length} | 法术 ${spells.length} | 职业法表 ${classSpells.length} | 战技 ${maneuvers.length} | 程序 ${programs.length} | 魔法物品 ${magicItems.length} | 怪物 ${monsters.length}`);
 console.log(`[parse-card-data] 输出: ${outDir}`);
