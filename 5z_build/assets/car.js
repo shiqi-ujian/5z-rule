@@ -1806,9 +1806,68 @@ function miPrice(i) {
   if (i.price === '价格见下表' || /价格见下?表/.test(i.attr || '')) return null;
   return i.pmin;
 }
+
+/* ---------- 多价位魔法物品展开（反馈 #20261007-110200-0c44） ----------
+ * 规则书里「增强盔甲」「抵抗盔甲」「奥法秘典」这类物品是**一个词条 + 一张按加值分档的价格表**
+ * （+1 400gp / +2 3200gp / +3 16000gp），而购物页原本是「一个词条 ↔ 一个价格」，
+ * 遇到 price=「价格见下表」就整条不计价。这里把档位展开成独立可购买变体：
+ *   增强盔甲 +1（400gp）/ +2（3200gp）/ +3（16000gp）
+ * 其中「+N gp，外加盔甲原价」这类（仅 增强盔甲 / 抵抗盔甲 2 件）标记 plusBase=true：
+ * 档位价照常计入合计，另在界面提示「＋基底盔甲原价」，由玩家自行补上基底价。
+ */
+function expandTierVariants(list) {
+  const out = [];
+  for (const i of list) {
+    const rows = [];
+    for (const t of i.tables || []) {
+      if (!Array.isArray(t)) continue;
+      for (const r of t) {
+        if (!Array.isArray(r) || r.length < 2) continue;
+        const tier = String(r[0] || '').trim();
+        const txt = String(r[1] || '');
+        if (!/^\+/.test(tier)) continue;
+        const m = /(\d[\d,]*(?:\.\d+)?)\s*gp/i.exec(txt);
+        if (!m) continue;
+        rows.push({ tier, gp: Math.round(parseFloat(m[1].replace(/,/g, ''))), plusBase: /外加|加上|另加|原价/.test(txt) });
+      }
+    }
+    if (!rows.length) { out.push(i); continue; }
+    i.hasVariants = true;
+    for (const r of rows) {
+      out.push({
+        ...i,
+        id: `${i.id}#${r.tier}`,
+        name: `${i.name} ${r.tier}`,
+        price: '',
+        attr: String(i.attr || '').replace(/[，,]?\s*价格见下?表\s*/g, ''),
+        pmin: r.gp,
+        pmax: r.gp,
+        tiers: [],
+        span: `${r.gp}gp`,
+        variantOf: i.id,
+        variantTier: r.tier,
+        plusBase: r.plusBase,
+        hasVariants: false,          // 变体自身不是「原多价位词条」，否则会被过滤掉
+        hay: `${i.name} ${r.tier} ${i.hay || ''}`,
+      });
+    }
+  }
+  return out;
+}
+let MI_ALL_CACHE = null;
+function magicItemsAll() {
+  if (!MI_ALL_CACHE) MI_ALL_CACHE = expandTierVariants(enrichMagicItems());
+  return MI_ALL_CACHE;
+}
+function miById(id) {
+  const hit = magicItemsAll().find((m) => m.id === id);
+  if (hit) return hit;
+  // 旧存档兜底：多价位原词条已展开成变体，原 id 仍可用于显示（价格会标为未定）
+  return (DATA.magicItems || []).find((m) => m.id === id) || null;
+}
 function renderShop() {
   const c = state.char;
-  const MI = enrichMagicItems();
+  const MI = magicItemsAll().filter((i) => !i.hasVariants);   // 多价位词条已展开为变体，原条目不再单列
   if (!MI.length) { stage().insertAdjacentHTML('beforeend', '<p class="hint">魔法物品数据未加载。</p>'); return; }
 
   // 预算输入
@@ -1896,7 +1955,7 @@ function renderShop() {
       const sel = (c.equipment || []).some(x => x.id === i.id);
       const price = miPrice(i);
       return `<div class="pk-i-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="pk-tag pk-tag-attune">同调</span>' : ''}</div>
-        <div class="pk-i-sub">${esc(i.sub)} · ${price != null ? price + 'gp' : esc(i.span || i.attr || '未收录价格')}</div>
+        <div class="pk-i-sub">${esc(i.sub)}${i.variantTier ? ` · 档位 ${esc(i.variantTier)}` : ''} · ${price != null ? price + 'gp' : esc(i.span || i.attr || '未收录价格')}${i.plusBase ? ' ＋基底盔甲原价' : ''}</div>
         <div class="pk-i-acts">
           <button type="button" class="nav-btn pk-act" data-act="shop" data-id="${esc(i.id)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '购入'}</button>
         </div>`;
@@ -1906,7 +1965,7 @@ function renderShop() {
       const fields = [
         ['类型行', i.attr || '—'],
         ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
-        ['价格', i.nonsell ? '非卖品' : (price != null ? price + 'gp' : (i.span || '价格见下表'))],
+        ['价格', i.nonsell ? '非卖品' : (price != null ? price + 'gp' + (i.plusBase ? '，外加基底盔甲原价' : '') : (i.span || '价格见下表'))],
         ['价格区间', i.span || '—'],
       ];
       return `<div class="pk-d-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}</div>
@@ -1925,18 +1984,20 @@ function renderShop() {
     const eq = c.equipment || [];
     let total = 0, unpriced = 0;
     const rows = [];
+    let plusBaseCnt = 0;
     for (const x of eq) {
-      const it = MI.find(m => m.id === x.id);
+      const it = miById(x.id);
       const p = miPrice(it);
-      if (p != null) { total += p; rows.push({ id: x.id, name: it ? it.name : x.id, p }); }
-      else { unpriced++; rows.push({ id: x.id, name: it ? it.name : x.id, p: null }); }
+      if (it && it.plusBase) plusBaseCnt++;
+      if (p != null) { total += p; rows.push({ id: x.id, name: it ? it.name : x.id, p, plusBase: !!(it && it.plusBase) }); }
+      else { unpriced++; rows.push({ id: x.id, name: it ? it.name : x.id, p: null, plusBase: !!(it && it.plusBase) }); }
     }
     const budget = c.budget != null && c.budget !== '' ? Math.max(0, parseInt(c.budget, 10) || 0) : null;
     const over = budget != null && total > budget;
-    cnt.innerHTML = `已购 <b>${eq.length}</b> 件 · 合计 <b class="${over ? 'over' : ''}" style="${over ? 'color:var(--bad)' : ''}">${total}gp</b>${unpriced ? ` · ${unpriced} 件价格未定（不计入）` : ''}${budget != null ? ` · 预算 <b>${budget}gp</b>${over ? ' <span style="color:var(--bad)">⚠ 超预算</span>' : ''}` : ''}`;
+    cnt.innerHTML = `已购 <b>${eq.length}</b> 件 · 合计 <b class="${over ? 'over' : ''}" style="${over ? 'color:var(--bad)' : ''}">${total}gp</b>${unpriced ? ` · ${unpriced} 件价格未定（不计入）` : ''}${plusBaseCnt ? ` · 其中 ${plusBaseCnt} 件需另加基底盔甲价` : ''}${budget != null ? ` · 预算 <b>${budget}gp</b>${over ? ' <span style="color:var(--bad)">⚠ 超预算</span>' : ''}` : ''}`;
     selBox.innerHTML = rows.length ? `<div class="sel-box-title">已购清单（<b>${eq.length}</b> 件${budget != null ? ` / 预算 ${budget}gp` : ''}）：</div>
       <div class="sel-groups">` + rows.map(x =>
-        `<button type="button" class="sel-chip" data-id="${esc(x.id)}">${esc(x.name)}${x.p != null ? ` · ${x.p}gp` : ' · 价格未定'} ✕</button>`).join('') + `</div>`
+        `<button type="button" class="sel-chip" data-id="${esc(x.id)}">${esc(x.name)}${x.p != null ? ` · ${x.p}gp` : ' · 价格未定'}${x.plusBase ? '＋基底' : ''} ✕</button>`).join('') + `</div>`
       : `<div class="sel-box-title">已购清单：暂无</div>`;
     selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.id;
@@ -2119,10 +2180,9 @@ function renderSheet() {
 
   // —— 装备（购物） ——
   if ((c.equipment || []).length) {
-    const MI = DATA.magicItems || [];
     let total = 0, unpriced = 0;
     const rows = (c.equipment || []).map(x => {
-      const it = MI.find(m => m.id === x.id);
+      const it = miById(x.id);
       const p = miPrice(it);
       if (p != null) total += p; else unpriced++;
       return `<tr><td><b>${esc(it ? it.name : x.id)}</b></td><td>${it ? esc(it.sub || '') : ''}</td><td>${p != null ? p + 'gp' : '价格未定'}</td>${it && it.attune ? '<td>需同调</td>' : '<td>—</td>'}</tr>`;
@@ -2577,10 +2637,9 @@ function buildSheetExtras() {
   putKV('随身物品', c.items, true);
   // 装备（购物）：魔法物品清单 + 合计
   if ((c.equipment || []).length) {
-    const MI = DATA.magicItems || [];
     let total = 0, unpriced = 0;
     const lines = (c.equipment || []).map(x => {
-      const it = MI.find(m => m.id === x.id);
+      const it = miById(x.id);
       const p = miPrice(it);
       if (p != null) total += p; else unpriced++;
       return `${it ? it.name : x.id}（${it ? it.sub || '' : ''}）${p != null ? p + 'gp' : '价格未定'}`;
@@ -2926,10 +2985,9 @@ function buildDocxBody() {
   // —— 随身物品 / 资源 ——
   b.push(docxSec('随身物品'));
   if ((c.equipment || []).length) {
-    const MI = DATA.magicItems || [];
     let total = 0;
     const lines = (c.equipment || []).map(x => {
-      const it = MI.find(m => m.id === x.id);
+      const it = miById(x.id);
       const p = miPrice(it);
       if (p != null) total += p;
       return `${it ? it.name : x.id}${it && it.sub ? '（' + it.sub + '）' : ''}${p != null ? '　' + p + 'gp' : '　价格未定'}`;
@@ -3112,6 +3170,8 @@ async function boot() {
   window.__CAR_ISSUES__ = () => issueSummary();
   window.__CAR_SETSTEP__ = (n) => setStep(n);
   window.__CAR_REFRESH__ = () => refreshChrome();
+  // 魔法物品（含多价位展开变体）——回归脚本核对档位价格用
+  window.__CAR_MAGIC_ITEMS__ = () => magicItemsAll();
   setStep(state.step);
 }
 boot();

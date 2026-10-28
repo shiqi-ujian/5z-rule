@@ -120,6 +120,11 @@ const MI_TIERS = [
 MI.forEach(i => {
   i.hay = [i.name, i.en || '', i.attr || '', i.text || '', (i.tables || []).map(t => t.flat().join(' ')).join(' ')]
     .join(' ').toLowerCase();
+  // 形态：attr「类型行」里的「XX（形态）」——sub 是规则书的归类，形态才是实物形态
+  // （如 奥法秘典 sub=法器（职业基础）但形态=书本）。词典需两个维度都能命中，见反馈 #20260825-213800-0fd6。
+  const fm = /([^，,（(\s]{1,8})（([^）)]{1,10})）/.exec(String(i.attr || '').trim());
+  i.form = fm ? fm[2] : '';
+  i.formBase = fm ? fm[1] : '';
   const lo = i.pmin, hi = i.pmax == null ? Infinity : i.pmax;
   i.tiers = [];
   if (!i.nonsell && lo != null) {
@@ -137,7 +142,25 @@ MI.sort((a, b) => {
   return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.name.localeCompare(b.name);
 });
 
+// 形态筛选表：按「基类」分组（武器/奇物/服饰/法器/盔甲/弹药/魔药…），组内按出现次数降序。
+// 只收有形态写法的物品；没有形态写法的落到「分类」维度即可。
+const MI_FORM_CT = {};
+const MI_FORM_BY_BASE = {};
+for (const i of MI) {
+  if (!i.form) continue;
+  MI_FORM_CT[i.form] = (MI_FORM_CT[i.form] || 0) + 1;
+  (MI_FORM_BY_BASE[i.formBase] = MI_FORM_BY_BASE[i.formBase] || new Set()).add(i.form);
+}
+const MI_FORMS = Object.keys(MI_FORM_CT).sort((a, b) => MI_FORM_CT[b] - MI_FORM_CT[a] || a.localeCompare(b));
+const MI_FORM_GROUPS = Object.entries(MI_FORM_BY_BASE)
+  .sort((a, b) => b[1].size - a[1].size)
+  .map(([label, set]) => ({
+    label,
+    items: [...set].sort((x, y) => (MI_FORM_CT[y] || 0) - (MI_FORM_CT[x] || 0) || x.localeCompare(y)),
+  }));
+
 /* ---------- 魔法物品字段提炼 ----------
+
  * attr（类型行）实为「[神器], 具体类型(如 武器（标枪）/弹药（箭）/法器（法杖）)，[需XX同调]，价格」揉成一条：
  *   - 具体类型是 sub 之外的细分，值得单列「类型」；
  *   - 「需XX同调」与 attuneText 重复，交给「同调」字段；
@@ -394,6 +417,7 @@ const miPicker = Picker.create({
   placeholder: '搜索物品名、类型、效果…',
   emptyText: '没有匹配的魔法物品。',
   chips: [{ key: 'sub', label: '分类', items: MI_SUBS, groups: MI_GROUPS },
+    { key: 'form', label: '形态', items: MI_FORMS, groups: MI_FORM_GROUPS },
     {
       key: 'pr', label: '价格', items: [...MI_TIERS.map(t => t.k), 'nonsell', 'none'],
       labelFn: (k) => {
@@ -431,12 +455,13 @@ const miPicker = Picker.create({
     bind('.pk-artifact', 'artifact');
   },
   itemHtml: (i) => `<div class="pk-i-name">${esc(i.name)}${i.artifact ? ' <span class="pk-tag pk-tag-artifact">神器</span>' : ''}${i.attune ? ' <span class="pk-tag pk-tag-attune">同调</span>' : ''}</div>
-    <div class="pk-i-sub">${esc(i.sub)}${miListPrice(i) ? ` · ${esc(miListPrice(i))}` : ''}</div>
+    <div class="pk-i-sub">${esc(i.sub)}${(i.form && !String(i.sub).includes(i.form)) ? ` · 形态 ${esc(i.form)}` : ''}${miListPrice(i) ? ` · ${esc(miListPrice(i))}` : ''}</div>
     ${i.text ? `<div class="pk-i-brief">${esc(i.text.split('\n')[0].slice(0, 60))}</div>` : ''}`,
   detailHtml: (i) => {
     // 分类/英文名/神器角标显示在副标题；字段收敛为「类型 / 同调 / 价格」三行，去掉冗余的类型行原文与重复区间
     const fields = [
       ['类型', miType(i)],
+      ['形态', i.form ? `${i.formBase}（${i.form}）` : '—'],
       ['同调', i.attune ? (i.attuneText || '需同调') : '否'],
       ['价格', miPrice(i)],
     ];

@@ -12,7 +12,7 @@
 //   raw.githubusercontent.com → github.com/<repo>/raw/<commit> → cdn.jsdelivr.net/gh
 // ============================================================
 
-const ARCHIVE = {"generatedAt":"2026-10-28T08:46:20.870Z","repo":"shiqi-ujian/5z-rule","versions":[{"version":"1.63","commit":"fec809e15653a7d46444229d79551dd178fd564f","date":"2026-10-20","pages":674},{"version":"1.62","commit":"3aebca10947b0ea9187a84438c7ec3b141ffa1b9","date":"2026-10-03","pages":673},{"version":"1.61","commit":"c39337ddc316647448e12fe660fbf7ce8b645e12","date":"2026-09-17","pages":663},{"version":"1.60","commit":"86aeb3fef6888d4034602c50c3027344f7720007","date":"2026-08-27","pages":668},{"version":"1.59","commit":"acce659f70b331d888e3e731326b0f5030dfe624","date":"2026-08-27","pages":678}]};
+const ARCHIVE = {"generatedAt":"2026-10-28T09:11:02.533Z","repo":"shiqi-ujian/5z-rule","versions":[{"version":"1.63","commit":"fec809e15653a7d46444229d79551dd178fd564f","date":"2026-10-20","pages":674},{"version":"1.62","commit":"3aebca10947b0ea9187a84438c7ec3b141ffa1b9","date":"2026-10-03","pages":673},{"version":"1.61","commit":"c39337ddc316647448e12fe660fbf7ce8b645e12","date":"2026-09-17","pages":663},{"version":"1.60","commit":"86aeb3fef6888d4034602c50c3027344f7720007","date":"2026-08-27","pages":668},{"version":"1.59","commit":"acce659f70b331d888e3e731326b0f5030dfe624","date":"2026-08-27","pages":678}]};
 
 const MIME = {
   '.htm': 'text/html; charset=utf-8',
