@@ -334,10 +334,18 @@ const FEATURE_JUNK_RE = /^(定位|生命值|熟练项|兼职|职业表|附录)|�
 
 /** 把可能粘连的标题段拆成 [{name, text}]（只拆标题段，不拆已经在正文里的段落） */
 function splitFeatureHeads(text) {
-  const lines = String(text)
+  const rawLines = String(text)
     .split('\n')
     .map(l => l.replace(/^[\s\u3000]+|[\s\u3000]+$/g, ''))
     .filter(Boolean);
+  // 1.64 起有页面把「特性名 + 首段正文（第N级起……」并进同一行（如「七星续命 第19级起，…」）
+  // ⇒ 先按「第N级起/时」把这一行拆成「名字行 + 正文行」，再走原来的行级状态机。
+  const lines = [];
+  for (const line of rawLines) {
+    const m = /^(.{1,20}?)\s*(第\d+级(?:起|时|，|,)[\s\S]*)$/.exec(line);
+    if (m && !/[。！？]$/.test(m[1])) lines.push(m[1], m[2]);
+    else lines.push(line);
+  }
   const out = [];
   let cur = null;
   for (const line of lines) {
@@ -532,6 +540,40 @@ function parseFeats() {
 
 // ---------- 5. 法术 / 职业法术列表 / 战技 / 程序 ----------
 // 法术详述页（法术/法术详述/0环.htm … 传奇法术.htm）：红色加粗段 = 法术名，后续 p = 环位/学派/施法信息/描述
+
+/**
+ * 解析法术头部（「N环/戏法/传奇 + 学派」）与仪式标记 / 施法时间。
+ *
+ * 1.64 起源页出现两种新写法（2026-10-28 实测）：
+ *   1) 学派与施法时间并进同一段：`一环 防护施法时间：1分钟（仪式）`（42 条）——
+ *      按「环位后第一个非空白词」取学派会被污染成「防护施法时间：1分钟」。
+ *   2) 「（仪式）」被从学派行移到施法时间行（部分页）——只从学派行判断会漏掉仪式标记（27 条）。
+ * 做法：头部截到第一个「施法时间/施法距离/法术目标/法术成分/持续时间」字段之前（并进头部的
+ * 「施法时间」也随之截掉），学派取环位后的短词；仪式只要头部或施法时间里出现「（仪式）」都算。
+ */
+function spellHeadInfo(text) {
+  const FIELD_LABELS = '施法时间|施法动作|施法距离|法术目标|法术成分|持续时间';
+  const fieldIdx = String(text).search(new RegExp('(?:' + FIELD_LABELS + ')[：:]'));
+  const headRaw = fieldIdx >= 0 ? String(text).slice(0, fieldIdx) : String(text).split('\n')[0];
+  // 环位写法：0-9 环用「N环」；0 环也写「戏法」；传奇法术页写作「传奇法术」/「传奇」
+  const rm = /^\s*(传奇法术|戏法|传奇|([零一二三四五六七八九十百]+)环)\s*([\s\S]*)$/.exec(headRaw);
+  const rest = rm ? rm[3] : headRaw;
+  const school = rest.replace(/（仪式）/g, '').replace(/\s+/g, '').trim();
+  // 个别页把施法时间写成「施法动作：」（源文如此），同样算施法时间字段
+  const cm = /施法(?:时间|动作)[：:]\s*([^\n]+)/.exec(text);
+  const castRaw = cm ? cm[1].replace(/[。．\s]+$/, '').trim() : '';
+  const ring = rm ? rm[1] : '';
+  return {
+    ring,
+    isCantrip: ring === '戏法',
+    isLegendary: ring === '传奇' || ring === '传奇法术',
+    cnRing: rm && rm[2] ? rm[2] : '',
+    school,
+    ritual: /（仪式）/.test(headRaw) || /（仪式）/.test(castRaw),
+    castTime: castRaw.replace(/（仪式）\s*$/, '').trim(),
+  };
+}
+
 function parseSpells() {
   const spells = [];
   const dir = path.join(SRC, '法术', '法术详述');
@@ -552,11 +594,10 @@ function parseSpells() {
           text += (text ? '\n' : '') + flow[j].text;
         }
       }
-      // 学派：text 首段 "戏法 防护" / "三环 塑能" / "传奇 变化"；"（仪式）"是标记不是学派
-      const sm = /^(?:戏法|传奇|[零一二三四五六七八九十百]+环)\s*([^\s]+)/.exec(text);
-      let school = sm ? sm[1] : '';
-      const ritual = /（仪式）/.test(school) || /^仪式$/.test(school);
-      school = school.replace(/（仪式）/, '').trim();
+      // 学派 / 仪式 / 施法时间：见 spellHeadInfo 注释（1.64 起的并段与仪式标记位置变化）
+      const headInfo = spellHeadInfo(text);
+      const school = headInfo.school;
+      const ritual = headInfo.ritual;
       // 结构化属性字段（从文本行提取；提取不到留空）
       const grab = (re) => {
         const m = re.exec(text);
@@ -566,7 +607,7 @@ function parseSpells() {
       spells.push({
         name, level, school, ritual, text,
         url: relUrl(path.join(dir, e.name)),
-        castTime: grab(/施法时间：\s*([^\n]+)/),
+        castTime: headInfo.castTime,
         range: grab(/施法距离：\s*([^\n]+)/),
         target: grab(/法术目标：\s*([^\n]+)/),
         components: grab(/法术成分：\s*([^\n]+)/),
@@ -582,21 +623,28 @@ function parseSpells() {
     const flow = parsePage(readText(file));
     for (let i = 0; i < flow.length; i++) {
       if (!(flow[i].type === 'h3' && flow[i].red)) continue;
-      let name = flow[i].text.replace(/\s*[A-Za-z][A-Za-z\s'’]*$/, '').trim();
+      // 1.64 起该页有条目把「英文名 / 环位学派」并进了红色标题段（如
+      // 「炎缚徽记Flamebound Symbol\n二环 变化」）⇒ 标题按行拆：首行=名字（剥尾部英文），
+      // 其余行里纯英文行丢弃、剩下的当作「N环 学派」行参与解析（2026-10-28 修复）。
+      const headLines = String(flow[i].text).split('\n').map(s => s.trim()).filter(Boolean);
+      const name = (headLines[0] || '').replace(/\s*[A-Za-z][A-Za-z\s'’]*$/, '').trim();
+      const inlineHead = headLines
+        .slice(1)
+        .filter(l => !/^[A-Za-z][A-Za-z\s'’]*$/.test(l))
+        .join('\n');
       if (!name || spells.some(s => s.name === name)) continue; // 详述页已有则跳过
-      let text = '';
+      let text = inlineHead;
       for (let j = i + 1; j < flow.length; j++) {
         if (flow[j].type === 'h3' && flow[j].red) break;
         if (flow[j].type === 'p' && !/^\/\//.test(flow[j].text)) {
           text += (text ? '\n' : '') + flow[j].text;
         }
       }
-      // 环位/学派：首段 "戏法 变化" / "四环 附魔" / "传奇 …"
-      const lm = /^(?:戏法|传奇|([零一二三四五六七八九十百]+)环)\s*([^\s]*)/.exec(text);
-      const level = lm ? (lm[1] ? cnToNum(lm[1]) : (/^戏法/.test(lm[0]) ? 0 : 10)) : 0;
-      let school = lm ? (lm[2] || '') : '';
-      const ritual = /（仪式）/.test(school);
-      school = school.replace(/（仪式）/, '').trim();
+      // 环位/学派/仪式/施法时间：与详述页同一套解析（含 1.64 并段保护）
+      const headInfo = spellHeadInfo(text);
+      const level = headInfo.isCantrip ? 0 : (headInfo.cnRing ? cnToNum(headInfo.cnRing) : (headInfo.isLegendary ? 10 : 0));
+      const school = headInfo.school;
+      const ritual = headInfo.ritual;
       const grabE = (re) => {
         const m = re.exec(text);
         return m ? m[1].replace(/[。．\s]+$/, '').trim() : '';
@@ -605,7 +653,7 @@ function parseSpells() {
       spells.push({
         name, level, school, ritual, text,
         url: relUrl(file),
-        castTime: grabE(/施法时间：\s*([^\n]+)/),
+        castTime: headInfo.castTime,
         range: grabE(/施法距离：\s*([^\n]+)/),
         target: grabE(/法术目标：\s*([^\n]+)/),
         components: grabE(/法术成分：\s*([^\n]+)/),
@@ -1133,6 +1181,9 @@ function parseMonsters() {
     if (!entries.length) {
       const title = parts[parts.length - 1].replace(/\.html?$/i, '');
       const text = lines.join('\n');
+      // 2026-10-28（1.64）：章节导语页（「本章节所有生物都拥有…本质特性」）不是怪物条目。
+      // 1.64 源结构变化后它们被当成「整页模板怪」误收（实测多出「不死生物」「构装生物」2 条假条目）。
+      if (/^本章节所有生物都拥有/.test(text.trim())) continue;
       monsters.push({
         id: rel + '#1', name: title, type: '', desc: '', cr: '', crText: '', crNum: null,
         text, page, category: page, url: rel, sections: [{ name: '', start: 0 }],
@@ -1273,6 +1324,28 @@ const races = parseRaces();
 const classes = parseClasses();
 const feats = parseFeats();
 const spells = parseSpells();
+
+// ---------- 法术数据自检（2026-10-28：1.64 源格式变化的防静默污染门禁） ----------
+// 1.64 实测两类静默污染：① 学派与「施法时间」并段后学派被污染成「防护施法时间：1分钟」（42 条）；
+// ② 「（仪式）」标记被移到施法时间行后漏判（27 条）。源格式再变时这两类错误极易再次静默出现，
+// 所以按结构直接判失败。允许的学派 = 规则书 8 学派（含旧译名）+「任意学派」及「/」组合。
+const SPELL_SCHOOL_RE = /^(?:防护|咒法|预言|惑控|附魔|塑能|幻术|死灵|变化|任意学派)(?:\/(?:防护|咒法|预言|惑控|附魔|塑能|幻术|死灵|变化))*$/;
+{
+  const errs = [];
+  const badSchool = spells.filter(s => !SPELL_SCHOOL_RE.test(s.school));
+  if (badSchool.length) {
+    errs.push(`学派字段异常 ${badSchool.length} 条：` + badSchool.slice(0, 8).map(s => `${s.name}=${JSON.stringify(s.school)}`).join('、'));
+  }
+  const ritualCount = spells.filter(s => s.ritual).length;
+  if (ritualCount < 50) errs.push(`仪式法术只有 ${ritualCount} 条（下限 50，疑似「（仪式）」标记漏判）`);
+  if (errs.length) {
+    console.error('[parse-card-data] 法术自检失败：');
+    for (const e of errs) console.error('  ✗ ' + e);
+    process.exit(1);
+  }
+  console.log(`[parse-card-data] 法术自检通过：${spells.length} 条（仪式 ${ritualCount} 条；学派字段均为合法学派）`);
+}
+
 const classSpells = parseClassSpells();
 const maneuvers = parseManeuvers();
 const programs = parsePrograms();
@@ -1303,6 +1376,8 @@ const subclassFeatures = subFeatureResult.features;
   for (const f of subclassFeatures) {
     if (!f.name || !f.text) errs.push(`子职特性缺名字/正文：${f.cls}/${f.sub}/${f.name}`);
     if (!(f.level >= 0 && f.level <= 30)) errs.push(`子职特性等级非法：${f.cls}/${f.sub}/${f.name}=${f.level}`);
+    // 2026-10-28（1.64）：有页把「第N级起…」并进红色标题段，名字里出现等级句即判失败
+    if (/第\d+级/.test(String(f.name))) errs.push(`子职特性名疑似粘连正文：${f.cls}/${f.sub}/${String(f.name).slice(0, 40)}`);
   }
   dupKey(classFeatures, f => f.cls + '|' + f.name);
   dupKey(subclassFeatures, f => f.cls + '|' + f.sub + '|' + f.name);

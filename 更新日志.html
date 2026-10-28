@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>39</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>9</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>3</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>40</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>9</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（39 条）</summary>
+    <summary>✅ 已修复（40 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -416,6 +416,15 @@
       <div class="cl-detail">规则书正文由 Word 导出 HTML 构成，原本全站没有任何词条级锚点（正文内链 0 条），词典 5,014 个词条的「📖 规则书原文」只能跳到页顶（3环页 155 个法术共用同一个页顶）。本次分两层改造：① 锚点基建——构建期用「逐字符样式追踪」在正文里定位每个词条的标题（法术=12pt 加粗深红、专长/魔法物品=14pt 加粗棕、套装成员=16pt 加粗、怪物=18–20pt 加粗黑、战技…</div>
     </li>
     <li>
+      <span class="cl-id">#2026-10-28-164-source-format-parse-fix</span>
+      <b>1.64 源格式变化导致的解析回退（法术学派/仪式、子职特性标题、怪物章节导语、法术名粘连）</b>
+      <span class="cl-page">（词典（法术/怪物/子职）/ 骰子查询数据源 assets/card-data）</span>
+      <span class="cl-date">2026-10-28</span>
+      
+      
+      <div class="cl-detail">背景：1.64 CHM（2026-10-28 自动更新）改了若干 Word 段落结构，card-data 解析器按 1.63 结构写的启发式静默错位，词典与骰子查询数据同时受影响（骰子侧读同一份 JSON）。四类回退：① 42 个仪式法术把「学派」段与「施法时间」段并成一段（如「一环 防护施法时间：1分钟（仪式）」）⇒ 学派字段被污染成「防护施法时间：1分钟」，词典与群里查询都会显示错字段；② 2…</div>
+    </li>
+    <li>
       <span class="cl-id">#20261028-152500-e64a</span>
       <b>造物素材计算·怪物类型移除已取消的「巨人」</b>
       <span class="cl-page">（calculator.html 辅助计算器 · 怪物素材获得计算）</span>
@@ -520,39 +529,25 @@
     </li></ul>
   </details>
   <details id="board-open" class="board-sec">
-    <summary>🆕 待处理（3 条 · 每 60 分钟自动巡检）</summary>
-    <ul class="st-list">
-    <li>
-      <span class="cl-id">#20261007-110200-0c44</span>
-      <b>物品购买分类</b>
-      <span class="cl-page">（车卡）</span>
-      
-      <span class="cl-date">2026-10-07</span>
-      
-      
-    </li>
-    <li>
-      <span class="cl-id">#20261028-152400-ab36</span>
-      <b>怪物cr不合适</b>
-      <span class="cl-page">（战斗遭遇计算）</span>
-      
-      <span class="cl-date">2026-10-28</span>
-      
-      
-    </li>
-    <li>
-      <span class="cl-id">#20261028-152500-e64a</span>
-      <b>巨人没删干净</b>
-      <span class="cl-page">（造物素材计算器）</span>
-      
-      <span class="cl-date">2026-10-28</span>
-      
-      
-    </li></ul>
+    <summary>🆕 待处理（0 条 · 每 60 分钟自动巡检）</summary>
+    <p class="st-empty">当前没有待处理反馈。</p>
   </details>
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-10-28 · v1.64</span><span class="cl-batch-hint">✅1</span></summary>
+    <p class="cl-release">修复 1.64 规则书源格式变化引起的词典数据解析回退：法术「学派」被并进施法时间（42 条）、「（仪式）」标记漏判（27 条）、子职特性标题粘连（七星续命等）、怪物章节导语被误当条目（+2 假怪物），并修复「炎缚徽记」标题粘连与「传奇法术」环位识别。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#2026-10-28-164-source-format-parse-fix</span>
+      <b>1.64 源格式变化导致的解析回退（法术学派/仪式、子职特性标题、怪物章节导语、法术名粘连）</b>
+      <span class="cl-page">（词典（法术/怪物/子职）/ 骰子查询数据源 assets/card-data）</span>
+      <div class="cl-detail">背景：1.64 CHM（2026-10-28 自动更新）改了若干 Word 段落结构，card-data 解析器按 1.63 结构写的启发式静默错位，词典与骰子查询数据同时受影响（骰子侧读同一份 JSON）。四类回退：① 42 个仪式法术把「学派」段与「施法时间」段并成一段（如「一环 防护施法时间：1分钟（仪式）」）⇒ 学派字段被污染成「防护施法时间：1分钟」，词典与群里查询都会显示错字段；② 27 个法术的「（仪式）」标记从学派行移到施法时间行 ⇒ ritual=false，仪式标签消失；③ 星辰结社「七星续命」把特性名与「第19级起…」正文并进同一段 ⇒ 子职特性名变成整段正文（书士会「神识显现」同理，此前直接从清单丢失）；④ 怪物「不死生物」「构装生物」的章节导语页（「本章节所有生物都拥有…本质特性」）在 1.64 结构下被当成整页模板怪，怪物数 679→681 混入 2 条假条目。顺带修复三处旧缺陷：法术「炎缚徽记」的英文名+环位并进红色标题段（名字带换行与「二环 变化」）；传奇法术页环位写作「传奇法术」未被识别（天辰等 8 条学派读成「法术塑能」）；「幸存者」施法时间写作「施法动作」被漏读。修法：新增 spellHeadInfo() 统一解析法术头部（头部截到首个字段行；学派在「施法时间/施法动作」处截断；仪式从头部或施法时间任一处识别；兼容「传奇法术」环位写法）；splitFeatureHeads() 增加「特性名 + 第N级起」同行拆分；怪物「整页模板怪」回退分支跳过章节导语；其它职业/反派专用法术页标题按行拆（首行=名字、纯英文行丢弃、其余行当环位/学派行）。新增构建门禁：法术自检（学派必须是合法学派之一，否则构建失败；仪式法术数下限 50）与子职特性名不得含「第N级」；锚点/条数/串页门禁照旧全绿。结果：学派污染 42→0、仪式 63 条、怪物 679 条（假条目清零）、子职特性 950→951（七星续命与神识显现恢复）、法术 1194 条与 1.64 源一致；qq-dice 骰子查询包从同一份数据重建。</div>
+    </li></ul>
+    
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-10-28 · v1.64</span><span class="cl-batch-hint">✅2 / ⏳1</span></summary>
