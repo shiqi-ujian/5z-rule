@@ -10,7 +10,7 @@
 - 面包屑、上一页/下一页导航、深色模式、移动端抽屉式侧栏
 - 附件（角色卡 docx、计算器 xlsx、法术词典）在线下载
 - 🧙 角色创建器（`car.html`，**测试版·半成品**）：向导式车卡（种族→职业→属性→背景→技能→专长→法术→战技→程序），派生数值自动计算，网页角色卡可打印，支持 localStorage 存档与 JSON 导入导出、**Word（.docx）角色卡导出**（仿社区 `5z空白角色卡.docx` 骨架，数据自动填入+留粘贴区，可在 Word 继续编辑）与 Excel 数据表导出。⚠ 数据来自规则书自动解析，数值计算与交互细节仍在打磨，可能存在 bug，请以规则书原文为准
-- 📖 法术/战技/专长/程序/魔法物品词典（`dict.html`）：浏览/搜索/筛选全部 **1196 个法术**（含完整属性与全文、职业法表反查、规则书原文链接）、**253 个战技**（流派×级别×类型）、**804 个专长**（类别筛选）、**233 个程序**（协议层级×模块）、**1585 个魔法物品**（分类/同调/神器/**价格分级**/内嵌价格表、原文链接），数据与车卡同源（构建时从规则书自动解析），永远与规则书同步
+- 📖 法术/战技/专长/程序/魔法物品词典（`dict.html`）：浏览/搜索/筛选全部 **1194 个法术**（含完整属性与全文、职业法表反查、规则书原文链接）、**253 个战技**（流派×级别×类型）、**802 个专长**（类别筛选）、**233 个程序**（协议层级×模块）、**1593 个魔法物品**（分类/同调/神器/**价格分级**/内嵌价格表、原文链接），数据与车卡同源（构建时从规则书自动解析），永远与规则书同步
 - 🐉 怪物词典（`dict.html` → 怪物 Tab）：浏览/搜索/筛选 **679 只怪物**（按生物类型、体型、阵营、挑战等级分级筛选），详情展示 AC/HP/速度/五属性/豁免/技能/伤害与状态免疫/感官/语言/熟练加值/挑战等级，以及特性、动作、附赠动作、反应、传奇动作等分节全文，并可跳转规则书原文。数据同时以 `assets/card-data/monsters.json` 提供（字段 `name/type/desc/cr/text/page/url` 与骰子机器人的查询数据同语义，便于骰子侧直接改用本文件、不再各自解析规则书）
 - 🔗 **关键词互链（超链接索引）**：正文里的**法术/战技/专长/程序名自动标成超链接**，点击跳到规则书对应词条（`#kw-*` 锚点，同页/跨页都支持，跨页跳转后左侧目录与面包屑同步、落点段落闪一下高亮）；词典的「📖 规则书原文」也从「跳页顶」升级为**精确到词条**。参与互链的类别、排除页与开关都在 `5z_build/keyword-config.json`，改完重跑构建即可；构建期自带「互链数/锚点数下限 + 单页上限」门禁与坏锚点检查
 - 📜 旧版规则书（`旧版规则.html`）：按版本浏览历史规则书。每个历史版本都是**该版本发布时的完整站点快照**（目录、正文、当时的搜索索引、当时的角色创建器），入口在侧栏版本行/页脚「📜 旧版」。旧版内容不复制进仓库，而是由 Cloudflare Pages Function 从项目 Git 历史提交实时取回（`/v/<版本>/…`），所以仓库体积零增长；以后每次发布新版本，上一版会自动加入旧版列表
@@ -33,7 +33,7 @@
 | `assets/card-data/rules.json` | 规则常量（五属性、17 技能、等级表、公式） |
 | `assets/card-data/classes.json` / `races.json` / `feats.json` / `spells.json` / `class-spells.json` / `maneuvers.json` / `programs.json` / `magic-items.json` | 车卡与词典数据 |
 | `assets/card-data/monsters.json` | **怪物词典**（679 只；`name/type/desc/cr/text/page/url` 与骰子侧现有查询数据一致，另含 `ac/hp/speed/abilities/saves/sections/category/size/alignment/crNum` 等结构化字段） |
-| `assets/card-data/features.json` | **职业特性 / 子职特性**（2026-10-27 起；`classFeatures` 227 条含 `levels`，`subclassFeatures` 957 条 / 172 个子职页含 `level`；正文保留表格为 `a｜b` 行。骰子侧 `.5z 职业特性` 查询的数据源，解析口径见 `5z_build/parse-card-data.mjs` 的 `extractClassFeatures` / `extractSubclassFeatures`） |
+| `assets/card-data/features.json` | **职业特性 / 子职特性**（2026-10-27 起；`classFeatures` 227 条含 `levels`，`subclassFeatures` 951 条 / 172 个子职页含 `level`；正文保留表格为 `a｜b` 行。骰子侧 `.5z 职业特性` 查询的数据源，解析口径见 `5z_build/parse-card-data.mjs` 的 `extractClassFeatures` / `extractSubclassFeatures`） |
 
 > 骰子侧（`qq-dice`）构建脚本 `tools/build-5z-data.mjs` 已从 `5z_web/assets/card-data/*.json` 取数；怪物改用 `monsters.json`、职业特性改用 `features.json` 后，其各自的 HTML 解析（含串页/标题粘连风险）均不再由骰子侧维护（单一数据源纪律，见 qq-dice `docs/DECISIONS.md` D-15/D-17）。
 
