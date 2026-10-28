@@ -114,8 +114,10 @@
   });
 
   /* ---------- 怪物素材获得计算 ---------- */
-  // 素材 = 类型系数 × CR² × 数量（系数来自 5z计算器.xlsx 后台计算 G61:J74，14 类生物类型）
+  // 素材 = 类型系数 × CR² × 数量（系数来自 5z计算器.xlsx 后台计算 G61:J74）
   // 泥怪 CR6×1 实测：0.6×36=21.6 / 0.4×36=14.4 / 0.2×36=7.2，与 Excel 缓存一致。
+  // 生物类型取 13 类：5z 1.64 起取消「巨人」顶层类型（规则书「怪物修改与创作」：巨人类怪物改为类人生物/巨人子类），
+  // 故不再单列「巨人」（反馈 #20261028-152500-e64a）。
   const MON_CREATURES = [
     ['异怪', 0.3, 0.4, 0.6],
     ['野兽', 0, 0.5, 0],
@@ -127,7 +129,6 @@
     ['元素生物', 0.7, 0, 0.3],
     ['精类', 0.4, 0.3, 0.3],
     ['邪魔', 0.2, 0.6, 0.7],
-    ['巨人', 0.3, 0.6, 0.3],
     ['类人生物', 0, 0.6, 0.2],
     ['怪兽', 0.4, 0.4, 0.4],
     ['泥怪', 0.6, 0.4, 0.2],
@@ -176,6 +177,19 @@
     { cr: 0, origin: '万色卷轴', qty: 0 },
   ];
 
+  // 合法 CR 阶梯：0、1/8、1/4、1/2、1..30 —— 5z/5e 只存在这些 CR，
+  // 因此 CR 的上下调节必须在阶梯上跳转，而不是每次 ±0.125（反馈 #20261028-152400-ab36）。
+  const CR_LADDER = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
+  function crStep(cur, dir) {
+    const v = Number(cur) || 0;
+    if (dir > 0) {
+      for (const x of CR_LADDER) if (x > v + 1e-9) return x;
+      return CR_LADDER[CR_LADDER.length - 1];
+    }
+    for (let i = CR_LADDER.length - 1; i >= 0; i--) if (CR_LADDER[i] < v - 1e-9) return CR_LADDER[i];
+    return CR_LADDER[0];
+  }
+
   // 取个体分值：精确命中表中 CR；否则向下就近（避免非表内 CR 报错）
   function crScore(cr, origin) {
     const t = ORIGINS[origin] || ORIGINS['5z'];
@@ -195,7 +209,7 @@
       row.className = 'enc-mon-row';
       row.innerHTML =
         `<span class="enc-mon-name">怪物${i + 1}</span>` +
-        `<label class="enc-field">CR<input type="number" class="in" min="0" step="0.125" data-i="${i}" data-k="cr" value="${m.cr}"></label>` +
+        `<label class="enc-field">CR<input type="number" class="in" min="0" step="any" data-i="${i}" data-k="cr" value="${m.cr}"></label>` +
         `<label class="enc-field">出处<select class="in" data-i="${i}" data-k="origin">${originOpts}</select></label>` +
         `<label class="enc-field">数量<input type="number" class="in" min="0" step="1" data-i="${i}" data-k="qty" value="${m.qty}"></label>`;
       box.appendChild(row);
@@ -208,6 +222,18 @@
     if (k === 'cr') encMon[i].cr = parseFloat(el.value) || 0;
     else if (k === 'qty') encMon[i].qty = parseFloat(el.value) || 0;
     else if (k === 'origin') encMon[i].origin = el.value;
+    encCalc();
+  });
+  // CR 输入框的上下箭头：按合法 CR 阶梯跳转（0/0.125/0.25/0.5/1..30），不再用原生 step。
+  $('#enc-monsters').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    const el = e.target.closest('[data-k="cr"]');
+    if (!el) return;
+    e.preventDefault();
+    const i = +el.dataset.i;
+    const next = crStep(encMon[i].cr, e.key === 'ArrowUp' ? 1 : -1);
+    encMon[i].cr = next;
+    el.value = String(next);
     encCalc();
   });
 

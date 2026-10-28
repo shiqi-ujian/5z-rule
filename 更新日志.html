@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>37</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>8</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>39</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>9</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>3</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（37 条）</summary>
+    <summary>✅ 已修复（39 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -414,10 +414,28 @@
       
       
       <div class="cl-detail">规则书正文由 Word 导出 HTML 构成，原本全站没有任何词条级锚点（正文内链 0 条），词典 5,014 个词条的「📖 规则书原文」只能跳到页顶（3环页 155 个法术共用同一个页顶）。本次分两层改造：① 锚点基建——构建期用「逐字符样式追踪」在正文里定位每个词条的标题（法术=12pt 加粗深红、专长/魔法物品=14pt 加粗棕、套装成员=16pt 加粗、怪物=18–20pt 加粗黑、战技…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261028-152500-e64a</span>
+      <b>造物素材计算·怪物类型移除已取消的「巨人」</b>
+      <span class="cl-page">（calculator.html 辅助计算器 · 怪物素材获得计算）</span>
+      <span class="cl-date">2026-10-28</span>
+      
+      
+      <div class="cl-detail">规则书 1.64 起取消「巨人」顶层生物类型（「怪物修改与创作」：巨人类怪物改为类人生物/巨人子类），但「怪物素材获得计算」的类型下拉仍保留「巨人」。现已从类型表移除该项，生物类型由 14 类收敛为 13 类。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261028-152400-ab36</span>
+      <b>遭遇难度计算·CR 上下调节改按合法 CR 阶梯跳转</b>
+      <span class="cl-page">（calculator.html 辅助计算器 · 遭遇难度计算）</span>
+      <span class="cl-date">2026-10-28</span>
+      
+      
+      <div class="cl-detail">原先 CR 输入框用原生 step="0.125"，怪物 CR 大于 1 时按上下箭头仍是 ±0.125（如 1 → 1.125），而实际只存在 0、1/8、1/4、1/2 与 1–30 的整数 CR。现改为阶梯跳转：0 → 0.125 → 0.25 → 0.5 → 1 → 2 → … → 30，上下箭头逐档移动并在两端夹紧。</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
-    <summary>⏳ 待确认 / 待决策（8 条）</summary>
+    <summary>⏳ 待确认 / 待决策（9 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
@@ -490,15 +508,75 @@
       
       <div class="cl-detail">根因：magic-items.json 的 sub 归为「法器（职业基础）」，而物品实际形态见 attr「法器（书本）」等，词典按 sub 过滤导致书本类下找不到。需让物品可同时命中其形态子类（按 sub + attr 形态双标签）。属分类增强，待专门一轮。本批决定暂不实现、另行排期（已按用户指令在更新日志标注）：magic-items.json 的 sub 归为「法器（职业基础）」而物品实际形态见 attr「法器（书本）」，按 sub 过滤导致「法器（书本）」下找不到（约 1553 件中 662 件 attr 形态 ≠ sub，奥法秘典/奥法大全即此类）。</div>
       
+    </li>
+    <li>
+      <span class="cl-id">#20261007-110200-0c44</span>
+      <b>车卡·多价位魔法物品（如增强盔甲 +1/+2/+3）无法自动计价</b>
+      
+      <span class="cl-date">2026-10-28</span>
+      
+      <div class="cl-detail">「增强盔甲」「抵抗盔甲」等物品在规则书里是同一词条下按加值分档定价（+1 1600gp、+2 3200gp…），而车卡购物页按词条只取价格区间下限，无法选档计价。需把这类多价位词条按价位拆分为独立购买项（名称带加值/档位、价格取该档精确值），涉及 magic-items 数据展开与购物页去重，属专门一轮改造。</div>
+      
     </li></ul>
   </details>
   <details id="board-open" class="board-sec">
-    <summary>🆕 待处理（0 条 · 每 60 分钟自动巡检）</summary>
-    <p class="st-empty">当前没有待处理反馈。</p>
+    <summary>🆕 待处理（3 条 · 每 60 分钟自动巡检）</summary>
+    <ul class="st-list">
+    <li>
+      <span class="cl-id">#20261007-110200-0c44</span>
+      <b>物品购买分类</b>
+      <span class="cl-page">（车卡）</span>
+      
+      <span class="cl-date">2026-10-07</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20261028-152400-ab36</span>
+      <b>怪物cr不合适</b>
+      <span class="cl-page">（战斗遭遇计算）</span>
+      
+      <span class="cl-date">2026-10-28</span>
+      
+      
+    </li>
+    <li>
+      <span class="cl-id">#20261028-152500-e64a</span>
+      <b>巨人没删干净</b>
+      <span class="cl-page">（造物素材计算器）</span>
+      
+      <span class="cl-date">2026-10-28</span>
+      
+      
+    </li></ul>
   </details>
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-10-28 · v1.64</span><span class="cl-batch-hint">✅2 / ⏳1</span></summary>
+    <p class="cl-release">辅助计算器两处反馈修复（问题来源：收集表 #20261028-152500-e64a、#20261028-152400-ab36）。</p>
+    <h3>✅ 已修复（2）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20261028-152500-e64a</span>
+      <b>造物素材计算·怪物类型移除已取消的「巨人」</b>
+      <span class="cl-page">（calculator.html 辅助计算器 · 怪物素材获得计算）</span>
+      <div class="cl-detail">规则书 1.64 起取消「巨人」顶层生物类型（「怪物修改与创作」：巨人类怪物改为类人生物/巨人子类），但「怪物素材获得计算」的类型下拉仍保留「巨人」。现已从类型表移除该项，生物类型由 14 类收敛为 13 类。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20261028-152400-ab36</span>
+      <b>遭遇难度计算·CR 上下调节改按合法 CR 阶梯跳转</b>
+      <span class="cl-page">（calculator.html 辅助计算器 · 遭遇难度计算）</span>
+      <div class="cl-detail">原先 CR 输入框用原生 step="0.125"，怪物 CR 大于 1 时按上下箭头仍是 ±0.125（如 1 → 1.125），而实际只存在 0、1/8、1/4、1/2 与 1–30 的整数 CR。现改为阶梯跳转：0 → 0.125 → 0.25 → 0.5 → 1 → 2 → … → 30，上下箭头逐档移动并在两端夹紧。</div>
+    </li></ul>
+    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
+    <li class="cl-pend">
+      <span class="cl-id">#20261007-110200-0c44</span>
+      <b>车卡·多价位魔法物品（如增强盔甲 +1/+2/+3）无法自动计价</b>
+      <div class="cl-detail">⏳ 「增强盔甲」「抵抗盔甲」等物品在规则书里是同一词条下按加值分档定价（+1 1600gp、+2 3200gp…），而车卡购物页按词条只取价格区间下限，无法选档计价。需把这类多价位词条按价位拆分为独立购买项（名称带加值/档位、价格取该档精确值），涉及 magic-items 数据展开与购物页去重，属专门一轮改造。</div>
+    </li></ul>
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-10-24 · v1.63</span><span class="cl-batch-hint">✅1</span></summary>
