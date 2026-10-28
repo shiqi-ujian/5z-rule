@@ -1,0 +1,95 @@
+[
+  {
+    "rel": "基础/掷骰.htm",
+    "outFile": "基础/掷骰.md",
+    "stats": {
+      "tables": 0,
+      "gfm": 0,
+      "htmlTables": 0,
+      "headings": {
+        "1": 1,
+        "2": 2,
+        "3": 3
+      },
+      "lists": 1,
+      "paras": 27,
+      "images": 0,
+      "srcChars": 3050,
+      "mdChars": 3046
+    },
+    "title": "骰子"
+  },
+  {
+    "rel": "职业/法师/原初魔力.htm",
+    "outFile": "职业/法师/原初魔力.md",
+    "stats": {
+      "tables": 1,
+      "gfm": 0,
+      "htmlTables": 1,
+      "headings": {
+        "3": 1
+      },
+      "lists": 0,
+      "paras": 7,
+      "images": 0,
+      "srcChars": 919,
+      "mdChars": 919
+    },
+    "title": "原初魔力"
+  },
+  {
+    "rel": "法术/法术详述/3环.htm",
+    "outFile": "法术/法术详述/3环.md",
+    "stats": {
+      "tables": 1,
+      "gfm": 0,
+      "htmlTables": 1,
+      "headings": {
+        "3": 156
+      },
+      "lists": 93,
+      "paras": 1719,
+      "images": 0,
+      "srcChars": 51910,
+      "mdChars": 51339
+    },
+    "title": "操纵死尸Animate Dead"
+  },
+  {
+    "rel": "装备/魔法物品/武器/武器（近战）.htm",
+    "outFile": "装备/魔法物品/武器/武器（近战）.md",
+    "stats": {
+      "tables": 3,
+      "gfm": 0,
+      "htmlTables": 3,
+      "headings": {
+        "3": 44,
+        "4": 108
+      },
+      "lists": 57,
+      "paras": 966,
+      "images": 0,
+      "srcChars": 46027,
+      "mdChars": 45651
+    },
+    "title": "磨刀石"
+  },
+  {
+    "rel": "怪物/不死生物/亡灵（CR0-7）.htm",
+    "outFile": "怪物/不死生物/亡灵（CR0-7）.md",
+    "stats": {
+      "tables": 0,
+      "gfm": 0,
+      "htmlTables": 0,
+      "headings": {
+        "1": 8
+      },
+      "lists": 6,
+      "paras": 165,
+      "images": 0,
+      "srcChars": 4158,
+      "mdChars": 4117
+    },
+    "title": "摄魂怪"
+  }
+]

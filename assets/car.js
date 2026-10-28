@@ -87,13 +87,26 @@ let DATA = null; // {rules, races, classes, feats}
 let state = {
   step: 1,
   char: null, // 见 newChar()
+  settings: { strict: true }, // 严格模式：必填项未完成时拦截「下一步」/导出（可顶部切换）
 };
+const SETTINGS_KEY = '5z-car-settings-v1';
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) state.settings = Object.assign({ strict: true }, JSON.parse(raw) || {});
+  } catch (e) { /* 忽略损坏设置 */ }
+}
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); } catch (e) {}
+}
+function strictOn() { return !!state.settings.strict; }
 let rollBuf = null; // 随机骰临时数组
 
 function newChar() {
   return {
     name: '', player: '', level: 1, portrait: '',
     raceId: null, classId: null, subclass: '', raceTraining: '', subrace: '',
+    raceChoice: { mode: '', a: '', b: '', c: '' }, // 种族属性加值的选择型分配（如人类/精灵）
     majorAttr: '力量',
     buyMethod: 'points',
     base: { 力量: 8, 敏捷: 8, 体质: 8, 智力: 8, 感知: 8 },
@@ -123,13 +136,23 @@ function load() {
     if (raw) {
       const saved = JSON.parse(raw);
       state.char = Object.assign(newChar(), saved.char || {});
-      state.step = Math.min(7, Math.max(1, saved.step || 1));
+      if (!state.char.raceChoice) state.char.raceChoice = { mode: '', a: '', b: '', c: '' };
+      state.step = Math.min(11, Math.max(1, saved.step || 1)); // 11 步向导；旧版曾误钳到 7
+      if (state.step > 1) setTimeout(() => toast(`已恢复上次进度（第 ${state.step} 步）`), 500);
     }
   } catch (e) { /* 忽略损坏存档 */ }
   if (!state.char) state.char = newChar();
 }
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ step: state.step, char: state.char })); } catch (e) {}
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      v: 2,
+      step: state.step,
+      rulesVersion: (DATA && DATA.rules && DATA.rules.version) || '',
+      char: state.char,
+    }));
+  } catch (e) { /* localStorage 容量满/隐私模式：静默失败 */ }
+  try { refreshChrome(); } catch (e) { /* 页面尚未渲染 */ }
 }
 
 /* ---------- 摘要工具（种族/职业/专长卡片） ---------- */
@@ -170,7 +193,67 @@ function levelUpBonus(attr) {
   return attr === state.char.majorAttr ? row[2] : row[3];
 }
 function finalAttr(attr) {
-  return state.char.base[attr] + (state.char.manual[attr] || 0) + levelUpBonus(attr);
+  return state.char.base[attr] + (state.char.manual[attr] || 0) + levelUpBonus(attr) + raceBonus(attr);
+}
+
+/* ---------- 种族属性加值（自动/半自动） ----------
+ * 规则书种族特性里写作「属性值加成：你的感知+2，敏捷+1」；
+ * 人类/精灵为「一项属性值+2，另一项属性值+1；或三项属性值+1」需玩家分配。
+ */
+function raceAbilityText(r) {
+  if (!r) return '';
+  const traits = r.traits || [];
+  const t = traits.find(x => /属性值加成/.test(x.name || '')) ||
+    traits.find(x => /属性值加成/.test(x.text || ''));
+  return t ? String(t.text || '') : '';
+}
+function raceBonusPlan(r) {
+  const text = raceAbilityText(r);
+  const plan = { raw: text, fixed: {}, choice: null, parsed: false };
+  if (!text) return plan;
+  const re = /(力量|敏捷|体质|智力|感知)\s*[+＋加]\s*(\d+)/g;
+  let m;
+  while ((m = re.exec(text))) plan.fixed[m[1]] = (plan.fixed[m[1]] || 0) + (+m[2]);
+  const has21 = /一项属性值\s*[+＋加]\s*2/.test(text) && /另一项属性值\s*[+＋加]\s*1/.test(text);
+  const has111 = /三项属性值\s*[+＋加]\s*1/.test(text);
+  if (has21 && has111) plan.choice = '2/1or1/1/1';
+  else if (has21) plan.choice = '2/1';
+  else if (has111) plan.choice = '1/1/1';
+  plan.parsed = !!Object.keys(plan.fixed).length || !!plan.choice;
+  return plan;
+}
+function raceChoiceValid(r) {
+  const plan = raceBonusPlan(r);
+  if (!plan.choice) return true;
+  const ch = state.char.raceChoice || {};
+  const distinct = (...xs) => xs.every(Boolean) && new Set(xs).size === xs.length;
+  if (ch.mode === '2/1') return distinct(ch.a, ch.b);
+  if (ch.mode === '1/1/1') return distinct(ch.a, ch.b, ch.c);
+  return false;
+}
+function raceBonus(attr) {
+  const r = race();
+  if (!r) return 0;
+  const plan = raceBonusPlan(r);
+  let v = plan.fixed[attr] || 0;
+  const ch = state.char.raceChoice || {};
+  if (ch.mode === '2/1') {
+    if (ch.a === attr) v += 2;
+    if (ch.b === attr) v += 1;
+  } else if (ch.mode === '1/1/1') {
+    for (const k of ['a', 'b', 'c']) if (ch[k] === attr) v += 1;
+  }
+  return v;
+}
+function raceBonusText(r) {
+  const plan = raceBonusPlan(r);
+  if (!plan.parsed) return '';
+  const parts = ATTRS.filter(a => plan.fixed[a]).map(a => `${a} +${plan.fixed[a]}`);
+  return parts.join('、');
+}
+// 购点已花费（32 点表）
+function pointBuySpent() {
+  return ATTRS.reduce((s, a) => s + (rules().buyTable[state.char.base[a]] || 0), 0);
 }
 function finalMod(attr) { return abilityMod(finalAttr(attr)); }
 function profBonus() { return levelRow()[4]; }
@@ -302,6 +385,53 @@ function maxSlotLevel() {
   return max;
 }
 
+/* ---------- 职业表配额 / 专长先决条件 ---------- */
+function classLevelRow() {
+  const k = klass();
+  if (!k) return null;
+  return k.table.find(r => r[0] === String(state.char.level)) || null;
+}
+// 从职业表当前等级行取数量列（「已知戏法」「已知环法」「已知法术」等）
+function classTableCount(re) {
+  const k = klass(), row = classLevelRow();
+  if (!k || !row) return null;
+  const idx = k.table[0].findIndex(h => re.test(h));
+  if (idx < 0) return null;
+  const v = row[idx];
+  if (v == null || v === '' || v === '—' || isNaN(+v)) return null;
+  return +v;
+}
+function spellQuotaInfo() {
+  return { cantrips: classTableCount(/已知戏法/), known: classTableCount(/已知环法|已知法术/) };
+}
+function selectedSpellObjs() {
+  return (state.char.spells || []).map(n => DATA.spells.find(s => s.name === n)).filter(Boolean);
+}
+function featPrereqLine(f) {
+  const lines = String(f.text || '').split('\n');
+  return lines.find(l => /^先决条件/.test(l)) || '';
+}
+// 只对「能确定的先决条件」做判断：属性值、等级、前置专长；武器/护甲熟练等未知项不误杀
+function featPrereqStatus(f) {
+  const line = featPrereqLine(f);
+  if (!line) return { blocked: false, reasons: [], line: '' };
+  const body = line.replace(/^先决条件[：:]\s*/, '');
+  const reasons = [];
+  const re = /(力量|敏捷|体质|智力|感知)\s*(\d+)/g;
+  let m;
+  while ((m = re.exec(body))) {
+    const need = +m[2], have = finalAttr(m[1]);
+    if (have < need) reasons.push(`${m[1]}需 ${need}（当前 ${have}）`);
+  }
+  const lm = /(\d+)\s*级/.exec(body);
+  if (lm && state.char.level < +lm[1]) reasons.push(`需 ${+lm[1]} 级`);
+  const known = state.char.feats || [];
+  for (const p of body.split(/[，,；;、]/).map(s => s.trim()).filter(Boolean)) {
+    if (DATA.feats.some(x => x.name === p) && !known.includes(p)) reasons.push(`需先选「${p}」`);
+  }
+  return { blocked: reasons.length > 0, reasons, line };
+}
+
 /* ---------- 数据加载 ---------- */
 // 加载顺序：car.html 已通过 <script> 引入 card-data.js（file:// 直开可用）。
 // 若数据缺失（如浏览器缓存了旧版 car.html），动态注入数据脚本兜底；
@@ -360,17 +490,238 @@ const STEP_HINTS = {
   11: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。',
 };
 
+/* ============================================================
+ * 校验 / 步骤守卫 / 待补清单 / 顶部问题徽标
+ * ============================================================ */
+function stepIssues(n) {
+  const c = state.char, k = klass(), r = race();
+  const issues = [];
+  const err = (msg) => issues.push({ level: 'error', step: n, msg });
+  const warn = (msg) => issues.push({ level: 'warn', step: n, msg });
+  switch (n) {
+    case 1:
+      if (!c.raceId) err('尚未选择种族');
+      else if (r) {
+        const plan = raceBonusPlan(r);
+        if (plan.choice && !raceChoiceValid(r)) err('种族属性加值尚未分配（需选择 +2/+1 或三项 +1）');
+        else if (!plan.parsed && plan.raw) warn('种族属性加值未自动识别，请在属性步「额外加值」手动填写');
+      }
+      break;
+    case 2:
+      if (!c.classId) err('尚未选择职业');
+      break;
+    case 3:
+      if (!(c.level >= 1 && c.level <= 20)) err('角色等级需在 1–20 之间');
+      if (c.buyMethod === 'points') {
+        ATTRS.forEach(a => {
+          if (c.base[a] < 8 || c.base[a] > 16) err(`${a} 基础值需在 8–16（当前 ${c.base[a]}）`);
+        });
+        const spent = pointBuySpent();
+        if (spent > rules().buyPoints) err(`购点超支：已花 ${spent} / ${rules().buyPoints} 点`);
+        else if (spent < rules().buyPoints) warn(`购点未用完：已花 ${spent} / ${rules().buyPoints} 点`);
+      }
+      break;
+    case 5: {
+      if (!k) { err('请先完成第 2 步：选择职业'); break; }
+      const chosen = skillChosen(), quota = skillQuota();
+      if (chosen < quota) err(`技能熟练未选满：${chosen} / ${quota}`);
+      else if (chosen > quota) err(`技能熟练超出配额：${chosen} / ${quota}`);
+      break;
+    }
+    case 6: {
+      if (!k) { err('请先完成第 2 步：选择职业'); break; }
+      const max = featQuota();
+      if (c.feats.length < max) err(`专长未选满：${c.feats.length} / ${max}`);
+      else if (c.feats.length > max) err(`专长超出配额：${c.feats.length} / ${max}`);
+      for (const fn of c.feats) {
+        const f = DATA.feats.find(x => x.name === fn);
+        if (!f) { warn(`专长「${fn}」在规则数据中不存在（可能已更名）`); continue; }
+        const st = featPrereqStatus(f);
+        if (st.blocked) warn(`专长「${fn}」前置未满足：${st.reasons.join('；')}`);
+      }
+      break;
+    }
+    case 7: {
+      if (!k) { err('请先完成第 2 步：选择职业'); break; }
+      if (!classSpellList()) break;
+      const maxL = maxSlotLevel();
+      const selected = selectedSpellObjs();
+      const over = selected.filter(sp => sp.level > maxL);
+      if (over.length) err(`有 ${over.length} 个法术超过当前最高环阶（${maxL || 0} 环）：${over.slice(0, 4).map(s => s.name).join('、')}${over.length > 4 ? '…' : ''}`);
+      const q = spellQuotaInfo();
+      const lv0 = selected.filter(sp => sp.level === 0).length;
+      const lvN = selected.filter(sp => sp.level >= 1).length;
+      if (q.cantrips != null) {
+        if (lv0 > q.cantrips) err(`戏法超出配额：${lv0} / ${q.cantrips}`);
+        else if (lv0 < q.cantrips) err(`戏法未选满：${lv0} / ${q.cantrips}`);
+      }
+      if (q.known != null) {
+        if (lvN > q.known) err(`已知法术超出配额：${lvN} / ${q.known}`);
+        else if (lvN < q.known) err(`已知法术未选满：${lvN} / ${q.known}`);
+      }
+      const pr = preparedRule();
+      if (pr && !pr.balls) {
+        const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
+        if (prepN < preparedLimit()) warn(`已准备法术 ${prepN} / ${preparedLimit()}（可准备至上限）`);
+      }
+      if (!c.spells.length) warn('尚未选择任何法术');
+      break;
+    }
+    case 8:
+      if (!k) err('请先完成第 2 步：选择职业');
+      else if (c.maneuvers.length && !c.maneuverStyle) warn('已选战技但未选择流派');
+      break;
+    case 9:
+      if (!k) err('请先完成第 2 步：选择职业');
+      else if (k.name === '赛博格' && !c.programs.length) warn('赛博格尚未选择程序');
+      break;
+    default: break;
+  }
+  return issues;
+}
+function allIssues() {
+  let out = [];
+  for (let i = 1; i <= 11; i++) out = out.concat(stepIssues(i));
+  return out;
+}
+function issueSummary() {
+  const all = allIssues();
+  return {
+    all,
+    errors: all.filter(x => x.level === 'error'),
+    warns: all.filter(x => x.level === 'warn'),
+  };
+}
+
+/* ---------- 顶部徽标 / 问题面板 / 守卫条 ---------- */
+function renderIssuePanel() {
+  const panel = $('#issue-panel');
+  if (!panel) return;
+  const sum = issueSummary();
+  const byStep = {};
+  sum.all.forEach(i => { (byStep[i.step] = byStep[i.step] || []).push(i); });
+  const steps = Object.keys(byStep).map(Number).sort((a, b) => a - b);
+  panel.innerHTML = `<div class="issue-head">
+      <b>待补清单</b><span>${sum.errors.length} 个错误 · ${sum.warns.length} 个提醒</span>
+      <button type="button" class="issue-close" title="关闭">✕</button>
+    </div>
+    <div class="issue-body">${steps.length ? steps.map(n =>
+      `<div class="issue-group"><div class="issue-step">第 ${n} 步 · ${esc(STEP_TITLES[n])}</div>` +
+      byStep[n].map(i => `<div class="issue-item ${i.level}"><span>${esc(i.msg)}</span><button type="button" data-goto="${n}">前往</button></div>`).join('') +
+      `</div>`).join('') : '<p class="muted" style="padding:12px 0">没有待补项，可以导出角色了。</p>'}</div>`;
+  panel.querySelector('.issue-close').onclick = () => { panel.hidden = true; };
+  panel.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => { panel.hidden = true; setStep(+b.dataset.goto); });
+}
+function openIssuePanel() {
+  let panel = $('#issue-panel');
+  if (!panel) {
+    panel = el('div', 'issue-panel');
+    panel.id = 'issue-panel';
+    panel.hidden = true;
+    document.body.appendChild(panel);
+  }
+  panel.hidden = false;
+  renderIssuePanel();
+}
+function hideGuard() {
+  const g = $('#guard-bar');
+  if (g) g.hidden = true;
+}
+function showGuard(errors) {
+  let g = $('#guard-bar');
+  if (!g) {
+    g = el('div', 'guard-bar');
+    g.id = 'guard-bar';
+    document.body.appendChild(g);
+  }
+  g.innerHTML = `<div class="guard-msg">本步还有 <b>${errors.length}</b> 项未完成：${esc(errors[0].msg)}${errors.length > 1 ? ` 等 ${errors.length} 项` : ''}</div>
+    <div class="guard-acts">
+      <button type="button" class="nav-btn" data-issues>查看待补</button>
+      <button type="button" class="nav-btn" data-bypass>仍要继续</button>
+    </div>`;
+  g.hidden = false;
+  g.querySelector('[data-issues]').onclick = () => { hideGuard(); openIssuePanel(); };
+  g.querySelector('[data-bypass]').onclick = () => { hideGuard(); setStep(Math.min(11, state.step + 1)); };
+}
+// 刷新步骤条完成状态、问题徽标、面板（若打开）
+function refreshChrome() {
+  if (!DATA) return;
+  $$('.step').forEach(b => {
+    const n = +b.dataset.step;
+    const list = stepIssues(n);
+    let errs = list.filter(x => x.level === 'error');
+    const warns = list.filter(x => x.level === 'warn');
+    // 角色卡/购物：前面步骤还有错误时也标记为未完成（不重复计入待补总数）
+    if (n >= 10) {
+      for (let i = 1; i < n; i++) errs = errs.concat(stepIssues(i).filter(x => x.level === 'error'));
+    }
+    b.classList.toggle('active', n === state.step);
+    b.classList.toggle('complete', errs.length === 0 && warns.length === 0);
+    b.classList.toggle('warn', errs.length === 0 && warns.length > 0);
+    b.classList.toggle('incomplete', errs.length > 0);
+    b.title = (errs.length || warns.length)
+      ? (errs.length ? `待补 ${errs.length} 项：` : '待确认：') + errs.concat(warns).map(e => e.msg).join('；')
+      : '已完成';
+  });
+  // 当前步的问题已修好时自动收起守卫条
+  const g = $('#guard-bar');
+  if (g && !g.hidden && !stepIssues(state.step).some(x => x.level === 'error')) hideGuard();
+  const sum = issueSummary();
+  const badge = $('#issue-badge');
+  if (badge) {
+    const pending = sum.errors.length + sum.warns.length;
+    badge.textContent = `⚠ 待补 ${pending}`;
+    badge.classList.toggle('has-error', sum.errors.length > 0);
+    badge.title = sum.all.length ? sum.all.map(x => x.msg).join('\n') : '没有待补项';
+  }
+  const panel = $('#issue-panel');
+  if (panel && !panel.hidden) renderIssuePanel();
+}
+// 顶部注入：严格模式开关 + 待补徽标（不改 car.html，构建后自动生效）
+function injectChrome() {
+  const acts = $('.car-top-actions');
+  if (acts && !$('#issue-badge')) {
+    const strict = el('label', 'strict-toggle');
+    strict.title = '严格模式：必填项未完成时阻止「下一步」和导出；关闭后只提示';
+    strict.innerHTML = `<input type="checkbox" id="strict-mode"> 严格`;
+    acts.insertBefore(strict, acts.firstChild);
+    const badge = el('button', 'issue-badge-btn');
+    badge.id = 'issue-badge';
+    badge.type = 'button';
+    badge.textContent = '⚠ 待补 0';
+    acts.insertBefore(badge, acts.firstChild);
+    badge.onclick = openIssuePanel;
+    $('#strict-mode').checked = strictOn();
+    $('#strict-mode').onchange = (e) => {
+      state.settings.strict = e.target.checked;
+      saveSettings();
+      toast(e.target.checked ? '严格模式：未完成必填项将阻止前进/导出' : '自由模式：只提示，不阻止');
+      refreshChrome();
+    };
+  }
+}
+// 导出前检查：严格模式有错误则阻止；自由模式仅提醒
+function exportGuard() {
+  const sum = issueSummary();
+  if (sum.errors.length && strictOn()) {
+    openIssuePanel();
+    toast(`严格模式：还有 ${sum.errors.length} 项待补，已打开清单（也可在顶部关闭严格模式）`);
+    return false;
+  }
+  if (sum.errors.length) toast(`注意：导出时仍有 ${sum.errors.length} 项待补`);
+  else if (sum.warns.length) toast(`提醒：还有 ${sum.warns.length} 项待确认`);
+  return true;
+}
+
 function setStep(n) {
   state.step = n;
+  hideGuard();
   save();
-  $$('.step').forEach(b => {
-    b.classList.toggle('active', +b.dataset.step === n);
-    b.classList.toggle('done', +b.dataset.step < n);
-  });
-  $('#btn-prev').disabled = n <= 1;
-  $('#btn-next').textContent = n >= 11 ? '完成 ✓' : '下一步 →';
-  $('#btn-next').disabled = false;
   render();
+  const prev = $('#btn-prev'), next = $('#btn-next');
+  if (prev) prev.disabled = n <= 1;
+  if (next) { next.textContent = n >= 11 ? '完成 ✓' : '下一步 →'; next.disabled = false; }
+  refreshChrome();
 }
 
 function render() {
@@ -402,10 +753,10 @@ function renderRace() {
   const cats = [...new Set(DATA.races.map(r => r.category))].sort((a, b) => a.localeCompare(b));
   const catSel = $('#race-cat', q);
   cats.forEach(c => catSel.insertAdjacentHTML('beforeend', `<option>${esc(c)}</option>`));
+  const detailHost = el('div', 'race-detail');
+  wrap.appendChild(detailHost);
   const grid = el('div', 'grid');
   wrap.appendChild(grid);
-  const detailHost = el('div');
-  wrap.appendChild(detailHost);
   const paintDetail = () => {
     detailHost.innerHTML = '';
     const r = race();
@@ -416,6 +767,65 @@ function renderRace() {
         `<div class="dl-row"><span class="k">${esc(t.name)}</span><span>${esc(t.text)}</span></div>`).join('') +
       `<p class="muted">完整页面：<a href="${esc(r.url)}" target="_blank">${esc(r.name)}（规则书）</a></p>`;
     detailHost.appendChild(d);
+    // —— 种族属性加值：自动解析 / 选择型分配 ——
+    const plan = raceBonusPlan(r);
+    if (plan.parsed) {
+      const box = el('div', 'field race-bonus');
+      const ch = state.char.raceChoice || (state.char.raceChoice = { mode: '', a: '', b: '', c: '' });
+      if (plan.choice && !ch.mode) ch.mode = plan.choice === '1/1/1' ? '1/1/1' : '2/1';
+      const fixedTxt = ATTRS.filter(a => plan.fixed[a]).map(a => `${a} +${plan.fixed[a]}`).join('、');
+      box.innerHTML = `<label>种族属性加值</label>
+        ${fixedTxt ? `<div class="f-hint race-auto"><b>已自动计入：</b>${esc(fixedTxt)}</div>` : ''}
+        ${plan.choice ? `<div class="race-choice">
+          ${plan.choice === '2/1or1/1/1' ? `<div class="seg-mini">
+            <button type="button" data-mode="2/1">两项：+2 / +1</button>
+            <button type="button" data-mode="1/1/1">三项：+1 / +1 / +1</button>
+          </div>` : ''}
+          <div class="race-choice-slots"></div>
+          <div class="f-hint">${plan.choice === '2/1' ? '选择 +2 与 +1 的属性（不能重复）' : '选择分配方式与具体属性（不能重复）'}</div>
+          <div class="f-hint race-choice-total"></div>
+        </div>` : ''}
+        ${!plan.choice ? `<div class="f-hint">原文：${esc(plan.raw.slice(0, 120))}</div>` : ''}`;
+      detailHost.appendChild(box);
+      const slots = $('.race-choice-slots', box);
+      const totalEl = $('.race-choice-total', box);
+      const selOpts = (cur, dis, ph) =>
+        `<option value=""${cur ? '' : ' selected'}>${ph}</option>` +
+        ATTRS.map(a => `<option value="${a}"${cur === a ? ' selected' : ''}${dis.includes(a) ? ' disabled' : ''}>${a}</option>`).join('');
+      const paintSlots = () => {
+        if (!slots) return;
+        if (ch.mode === '1/1/1') {
+          slots.innerHTML = ['a', 'b', 'c'].map((k, i) => {
+            const others = ['a', 'b', 'c'].filter(x => x !== k).map(x => ch[x]).filter(Boolean);
+            return `<select data-k="${k}" title="+1 属性 ${i + 1}">${selOpts(ch[k], others, '选择 +1 属性')}</select>`;
+          }).join('<span class="plus">+1</span>');
+        } else {
+          slots.innerHTML = `<select data-k="a" title="+2 属性">${selOpts(ch.a, [], '选择 +2 属性')}</select><span class="plus">+2</span>
+            <select data-k="b" title="+1 属性">${selOpts(ch.b, [ch.a].filter(Boolean), '选择 +1 属性')}</select><span class="plus">+1</span>`;
+        }
+        if (totalEl) {
+          const got = ATTRS.filter(a => raceBonus(a)).map(a => `${a} +${raceBonus(a)}`).join('、');
+          totalEl.innerHTML = got ? `<b>当前加值：</b>${esc(got)}（已自动计入属性）` : '尚未选择，属性不会获得种族加值';
+        }
+        slots.querySelectorAll('select').forEach(s => s.addEventListener('change', () => {
+          ch[s.dataset.k] = s.value;
+          state.char.raceChoice = ch;
+          save(); paintSlots(); renderLive();
+        }));
+      };
+      box.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+        ch.mode = b.dataset.mode;
+        ch.a = ch.b = ch.c = '';
+        state.char.raceChoice = ch;
+        box.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('sel', x.dataset.mode === ch.mode));
+        save(); paintSlots(); renderLive();
+      }));
+      box.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('sel', x.dataset.mode === ch.mode));
+      paintSlots();
+    } else if (plan.raw) {
+      detailHost.insertAdjacentHTML('beforeend',
+        `<div class="f-hint">种族属性加值：${esc(plan.raw.slice(0, 120))}（未自动识别，请在属性步「额外加值」手动填写）</div>`);
+    }
     // 种族「训练/选项」类选择（如人类的资本/社交/知识/斥候/民兵/法术训练）
     const opts = r.traits.filter(t => /^·/.test(t.name));
     const hasChoice = r.traits.some(t => /^训练/.test(t.name)) && opts.length;
@@ -484,7 +894,17 @@ function renderRace() {
       card.innerHTML = `<div class="ci-name">${esc(r.name)}</div>
         <div class="ci-sub">${esc(r.category)}${bio ? ' · ' + esc(bio.slice(0, 26)) : ''}</div>
         <div class="ci-desc">${esc(traitSummary(r, 90))}</div>`;
-      card.onclick = () => { state.char.raceId = r.id; save(); paint(); renderLive(); };
+      card.onclick = () => {
+        if (state.char.raceId !== r.id) {
+          state.char.raceId = r.id;
+          state.char.raceChoice = { mode: '', a: '', b: '', c: '' };
+        }
+        save(); paint(); renderLive();
+        // 选中后把详情/加值选择器滚到可见位置（58 个种族卡片很长）
+        const rect = detailHost.getBoundingClientRect();
+        const vh = window.innerHeight || 800;
+        if (rect.top < 0 || rect.bottom > vh) detailHost.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      };
       grid.appendChild(card);
     }
     paintDetail();
@@ -508,7 +928,18 @@ function renderClass() {
     card.innerHTML = `<div class="ci-name">${esc(c.name)}</div>
       <div class="ci-sub">${esc(hd)}豁免：${esc(c.core.saves || '—')}</div>
       <div class="ci-desc">${esc(roleText || (c.core.skills ? '技能：' + c.core.skills : '') || '')}</div>`;
-    card.onclick = () => { state.char.classId = c.id; state.char.keyAttr = keyAttrHint(); save(); paint(); renderLive(); };
+    card.onclick = () => {
+      state.char.classId = c.id;
+      state.char.keyAttr = keyAttrHint();
+      save(); render(); renderLive();
+      // 详情（职业表/子职选择）在卡片列表上方，选中后滚回可见
+      const d = $('#stage .detail-box');
+      if (d) {
+        const rect = d.getBoundingClientRect();
+        const vh = window.innerHeight || 800;
+        if (rect.top < 0 || rect.bottom > vh) d.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+    };
     grid.appendChild(card);
   }
   const paint = () => {
@@ -608,29 +1039,42 @@ function renderAttr() {
 
   const paint = () => {
     // 购点余额
-    const spent = ATTRS.reduce((s, a) => s + (rules().buyTable[c.base[a]] || 0), 0);
+    const spent = pointBuySpent();
     const remain = rules().buyPoints - spent;
     const arr = rules().standardArrays;
     const arrLabel = { arrayA: arr[0], arrayB: arr[1], arrayC: arr[2] };
+    const rbTxt = raceBonusText(race());
+    const rbNote = rbTxt ? `<div class="f-hint race-auto"><b>种族属性加值已自动计入：</b>${esc(rbTxt)}</div>` : '';
     if (c.buyMethod === 'points') {
-      info.innerHTML = `已花费 <b>${spent}</b> / ${rules().buyPoints} 点，剩余 <b class="${remain < 0 ? 'over' : ''}">${remain}</b> 点。
+      info.innerHTML = `${rbNote}已花费 <b>${spent}</b> / ${rules().buyPoints} 点，剩余 <b class="${remain < 0 ? 'over' : ''}">${remain}</b> 点。
         属性值 8~16（种族调整前），单项上限 16。`;
     } else if (arrLabel[c.buyMethod]) {
-      info.innerHTML = `${esc(arrLabel[c.buyMethod].name)}：${arrLabel[c.buyMethod].values.join('、')}。
+      info.innerHTML = `${rbNote}${esc(arrLabel[c.buyMethod].name)}：${arrLabel[c.buyMethod].values.join('、')}。
         点击属性卡片的数值可微调（上下箭头）。`;
     } else if (c.buyMethod === 'roll') {
-      info.innerHTML = `掷 5 次 4d6 去最低。可点击"重新掷骰"。`;
+      info.innerHTML = `${rbNote}掷 5 次 4d6 去最低。可点击"重新掷骰"。`;
     }
     grid.innerHTML = '';
     for (const a of ATTRS) {
       const card = el('div', 'attr-card');
       const final = finalAttr(a);
       const up = levelUpBonus(a);
-      card.innerHTML = `<h3>${a}</h3>
-        <input type="number" id="base-${a}" min="1" max="30" value="${c.base[a]}" data-attr="${a}">
+      const rb = raceBonus(a);
+      const parts = [
+        `基础 ${c.base[a]}`,
+        (c.manual[a] || 0) ? `额外 ${(c.manual[a] || 0) > 0 ? '+' : ''}${c.manual[a]}` : '',
+        rb ? `种族 +${rb}` : '',
+        up ? `升级 +${up}` : '',
+      ].filter(Boolean).join(' + ');
+      const lo = c.buyMethod === 'points' ? 8 : 1;
+      const hi = c.buyMethod === 'points' ? 16 : 30;
+      card.dataset.attr = a;
+      card.innerHTML = `<h3>${a}${rb ? `<span class="race-badge">种族 +${rb}</span>` : ''}</h3>
+        <input type="number" id="base-${a}" min="${lo}" max="${hi}" value="${c.base[a]}" data-attr="${a}">
         <span class="attr-mod">调整值 ${finalMod(a) >= 0 ? '+' : ''}${finalMod(a)}</span>
-        <div class="attr-score">${final}</div>
-        <div class="attr-adj">手动调整（种族/专长等）：<input type="number" id="man-${a}" min="-10" max="10" value="${c.manual[a] || 0}" data-attr="${a}" style="width:56px">
+        <details class="attr-calc"><summary class="attr-score" title="点击查看算式">${final}</summary>
+          <div class="attr-formula">${esc(parts)} = <b>${final}</b></div></details>
+        <div class="attr-adj">额外加值（专长/物品等）：<input type="number" id="man-${a}" min="-10" max="10" value="${c.manual[a] || 0}" data-attr="${a}" style="width:56px">
         ${up ? `<br>升级提升：+${up}` : ''}</div>`;
       grid.appendChild(card);
     }
@@ -663,39 +1107,49 @@ function renderAttr() {
       info.appendChild(document.createTextNode(' '));
       info.appendChild(rb);
     }
+    if (c.buyMethod === 'points') {
+      let changed = false;
+      ATTRS.forEach(a => {
+        const v = Math.max(8, Math.min(16, c.base[a]));
+        if (v !== c.base[a]) { c.base[a] = v; changed = true; }
+      });
+      if (changed) toast('已切到 32 点购点，属性值规范到 8–16');
+    }
     save(); paint();
   });
   grid.addEventListener('input', (e) => {
     const t = e.target;
     if (!t.dataset.attr) return;
     const attr = t.dataset.attr;
-    // 输入中允许为空（不立即被回退值弹回）；非空则即时截断并回写（反馈 #20260822-152400）
-    if (t.id.startsWith('base-')) {
-      const v = t.value.trim();
-      if (v === '' || isNaN(+v)) return;
-      c.base[attr] = Math.max(1, Math.min(30, Math.round(+v)));
-      t.value = String(c.base[attr]);
-    } else if (t.id.startsWith('man-')) {
-      const v = t.value.trim();
-      if (v === '' || isNaN(+v)) return;
-      c.manual[attr] = Math.max(-10, Math.min(10, Math.round(+v)));
-      t.value = String(c.manual[attr]);
-    }
-    save(); paint();
+    // 输入过程中允许为空/中间值；只更新状态与右侧预览，不重绘本步（避免丢焦点）
+    const v = t.value.trim();
+    if (v === '' || isNaN(+v)) return;
+    if (t.id.startsWith('base-')) c.base[attr] = Math.round(+v);
+    else if (t.id.startsWith('man-')) c.manual[attr] = Math.round(+v);
+    save(); renderLive();
   });
   grid.addEventListener('change', (e) => {
-    // 失焦/回车：空值保持原值
+    // 失焦/回车：空值回填原值；按当前方式夹取范围；点购模式检查 32 点预算
     const t = e.target;
     if (!t.dataset.attr) return;
     const attr = t.dataset.attr;
+    const raw = t.value.trim();
     if (t.id.startsWith('base-')) {
-      const v = t.value.trim();
-      if (v === '' || isNaN(+v)) t.value = String(c.base[attr] != null ? c.base[attr] : 8);
+      let v = raw === '' || isNaN(+raw) ? (c.base[attr] != null ? c.base[attr] : 8) : Math.round(+raw);
+      const lo = c.buyMethod === 'points' ? 8 : 1;
+      const hi = c.buyMethod === 'points' ? 16 : 30;
+      v = Math.max(lo, Math.min(hi, v));
+      const old = c.base[attr];
+      c.base[attr] = v;
+      if (c.buyMethod === 'points' && pointBuySpent() > rules().buyPoints) {
+        c.base[attr] = old;
+        toast(`购点不足（${rules().buyPoints} 点已用完），已恢复为 ${old}`);
+      }
     } else if (t.id.startsWith('man-')) {
-      const v = t.value.trim();
-      if (v === '' || isNaN(+v)) t.value = String(c.manual[attr] || 0);
+      let v = raw === '' || isNaN(+raw) ? (c.manual[attr] || 0) : Math.round(+raw);
+      c.manual[attr] = Math.max(-10, Math.min(10, v));
     }
-    save(); paint();
+    save(); paint(); renderLive();
   });
   $('#lvl-in').addEventListener('change', (e) => {
     c.level = Math.max(1, Math.min(20, +e.target.value || 1));
@@ -755,7 +1209,8 @@ function renderSkills() {
     const chosen = skillChosen();
     const quota = skillQuota();
     count.innerHTML = `已选熟练 <b class="${chosen > quota ? 'over' : ''}">${chosen}</b> / ${quota} 项
-      <span style="color:var(--sub)">（职业 ${k ? k.core.skillsCount || 0 : 0} + 背景 2 + 智力额外 ${Math.max(0, quota - 2 - (k ? k.core.skillsCount || 0 : 0))}）</span>`;
+      <span style="color:var(--sub)">（职业 ${k ? k.core.skillsCount || 0 : 0} + 背景 2 + 智力额外 ${Math.max(0, quota - 2 - (k ? k.core.skillsCount || 0 : 0))}）</span>
+      ${chosen < quota ? `<span class="warn" style="margin-left:8px">还需选 ${quota - chosen} 项</span>` : chosen === quota ? `<span class="good" style="margin-left:8px">已选满 ✓</span>` : ''}`;
     list.innerHTML = '';
     for (const s of DATA.rules.skills) {
       const lv = c.skills[s.name] || 0;
@@ -795,76 +1250,101 @@ function renderSkills() {
 /* ---------- 步骤6 专长 ---------- */
 function renderFeats() {
   const c = state.char;
-  const q = el('div', 'search-bar');
-  q.innerHTML = `<input type="search" id="feat-q" placeholder="搜索专长…">
-    <select id="feat-cat"><option value="">全部分类</option></select>`;
-  stage().appendChild(q);
-  const cats = [...new Set(DATA.feats.map(f => f.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const catSel = $('#feat-cat', q);
-  cats.forEach(cat => catSel.insertAdjacentHTML('beforeend', `<option>${esc(cat)}</option>`));
   const quota = el('div', 'feat-quota');
   stage().appendChild(quota);
-  const extra = el('div', 'field');
-  extra.innerHTML = `<label>额外专长数量（来自独狼、和平誓言、"获得专长的专长"等能力）</label>
-    <input type="number" id="feat-extra" min="0" max="20" value="${c.extraFeats || 0}" style="width:90px">
-    <div class="f-hint">基础配额按等级自动计算（1级2个、每3级+1），此处可补充特殊来源获得的额外专长。</div>`;
-  stage().appendChild(extra);
-  $('#feat-extra').addEventListener('input', (e) => {
-    c.extraFeats = Math.max(0, Math.min(20, +e.target.value || 0));
-    save(); paint();
-  });
-  const list = el('div');
-  stage().appendChild(list);
-  // 已选专长面板：选择后即时可见，可点击 ✕ 移除
-  const selBox = el('div', 'sel-box');
+  const tools = el('div', 'feat-tools');
+  tools.innerHTML = `<label class="f-check"><input type="checkbox" id="feat-only-ok"> 仅显示当前可选</label>
+    <span class="f-hint">额外专长数量（来自独狼、和平誓言、"获得专长的专长"等能力）</span>
+    <input type="number" id="feat-extra" min="0" max="20" value="${c.extraFeats || 0}" style="width:80px">`;
+  stage().appendChild(tools);
+  const selBox = el('div', 'sel-box sticky');
   stage().appendChild(selBox);
-
-  const paint = () => {
-    const max = featQuota();
-    const base = featBaseQuota();
-    quota.innerHTML = `本等级基础专长 <b>${base}</b> 个${c.extraFeats ? ` + 额外 <b>${c.extraFeats}</b>` : ''}，共 <b>${max}</b> 个，已选 <b>${c.feats.length}</b> 个。`;
+  const pk = el('div', 'pk-car feat-pk');
+  const pkToolbar = el('div', 'pk-toolbar');
+  const pkChips = el('div', 'pk-chips');
+  const pkList = el('div', 'pk-list');
+  const pkDetail = el('div', 'pk-detail');
+  const pkPager = el('div', 'pk-pager');
+  pkPager.hidden = true;
+  pk.append(pkToolbar, pkChips, pkList, pkDetail, pkPager);
+  stage().appendChild(pk);
+  const cats = [...new Set(DATA.feats.map(f => f.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  let onlyOk = false;
+  const picker = Picker.create({
+    data: DATA.feats,
+    selKey: 'name',
+    pageSize: 60,
+    placeholder: '搜索专长名或描述…',
+    emptyText: '没有匹配的专长。',
+    chips: [{ key: 'category', label: '分类', items: cats }],
+    hay: (f) => f.name + ' ' + (f.text || ''),
+    filter: (f) => !onlyOk || !featPrereqStatus(f).blocked,
+    containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
+    itemHtml: (f) => {
+      const selected = c.feats.includes(f.name);
+      const st = featPrereqStatus(f);
+      const desc = String(f.text || '').split('\n').filter(l => !/^先决条件/.test(l)).join(' ').slice(0, 90);
+      return `<div class="pk-i-name">${esc(f.name)}${selected ? ' <span class="pk-tag pk-tag-sel">已选</span>' : ''}</div>
+        <div class="pk-i-sub">${esc(f.category || '')}${f.sub ? ' · ' + esc(f.sub) : ''}</div>
+        ${st.line ? `<div class="pk-i-prereq${st.blocked ? ' bad' : ''}">${esc(st.line)}${st.blocked ? '（未满足：' + esc(st.reasons.join('；')) + '）' : ''}</div>` : ''}
+        <div class="pk-i-desc">${esc(desc)}</div>
+        <div class="pk-i-acts"><button type="button" class="nav-btn pk-act" data-act="sel" data-name="${esc(f.name)}" style="padding:3px 12px;font-size:12px">${selected ? '移除' : '选择'}</button></div>`;
+    },
+    detailHtml: (f) => {
+      const prereq = featPrereqLine(f);
+      return `<div class="pk-d-name">${esc(f.name)}</div>
+        <div class="pk-d-sub">${esc(f.category || '')}${f.sub ? ' · ' + esc(f.sub) : ''}</div>
+        ${prereq ? `<div class="pk-d-fields"><div class="f"><span class="k">先决条件</span><span class="v">${esc(prereq.replace(/^先决条件[：:]\s*/, ''))}</span></div></div>` : ''}
+        <div class="pk-d-text">${esc(f.text || '')}</div>
+        ${f.url ? `<a class="pk-d-link" href="${esc(f.url)}" target="_blank">📖 规则书原文 →</a>` : ''}`;
+    },
+  });
+  const paintSel = () => {
+    const max = featQuota(), base = featBaseQuota();
+    quota.innerHTML = `本等级基础专长 <b>${base}</b> 个${c.extraFeats ? ` + 额外 <b>${c.extraFeats}</b>` : ''}，共 <b>${max}</b> 个，已选 <b class="${c.feats.length > max ? 'over' : ''}">${c.feats.length}</b> 个。`;
     selBox.innerHTML = c.feats.length
       ? `<div class="sel-box-title">已选专长（<b>${c.feats.length}</b> 个）：</div>
          <div class="sel-chips">${c.feats.map(fn =>
            `<button type="button" class="sel-chip" data-f="${esc(fn)}">${esc(fn)} ✕</button>`).join('')}</div>`
-      : `<div class="sel-box-title">已选专长：暂无</div>`;
+      : `<div class="sel-box-title">已选专长：暂无（本等级需要选 ${max} 个）</div>`;
     selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
+      const st = pkList.scrollTop;
       c.feats = c.feats.filter(x => x !== b.dataset.f);
-      save(); paint();
+      save(); paintSel(); picker.paint();
+      pkList.scrollTop = st;
     }));
-    const kw = ($('#feat-q', q) || {}).value || '';
-    const cat = ($('#feat-cat', q) || {}).value || '';
-    list.innerHTML = '';
-    for (const f of DATA.feats) {
-      if (cat && f.category !== cat) continue;
-      if (kw && !(f.name.includes(kw) || f.text.includes(kw))) continue;
-      const sel = c.feats.includes(f.name);
-      const item = el('div', 'feat-item' + (sel ? ' sel' : ''));
-      const lines = f.text.split('\n');
-      const prereq = lines.find(l => /^先决条件/.test(l)) || '';
-      const desc = lines.filter(l => !/^先决条件/.test(l)).join('\n');
-      item.innerHTML = `<div class="fi-head">
-          <span class="fi-name">${esc(f.name)}</span>
-          <span class="fi-cat">${esc(f.category || '')}${f.sub ? ' · ' + esc(f.sub) : ''}</span>
-          <button type="button" class="nav-btn" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
-        </div>
-        ${prereq ? `<div class="fi-text" style="color:var(--warn)">${esc(prereq)}</div>` : ''}
-        <div class="fi-text">${esc(desc.length > 200 ? desc.slice(0, 200) + '…' : desc)}</div>`;
-      item.querySelector('button').addEventListener('click', () => {
-        if (sel) {
-          c.feats = c.feats.filter(x => x !== f.name);
-        } else {
-          if (c.feats.length >= max) { toast(`专长数量已达上限（${max} 个）；若有额外来源可在上方"额外专长数量"中补充`); return; }
-          c.feats.push(f.name);
-        }
-        save(); paint();
-      });
-      list.appendChild(item);
-    }
   };
-  q.addEventListener('input', paint);
-  q.addEventListener('change', paint);
-  paint();
+  // 列表内按钮：事件委托（选择/移除）
+  pkList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pk-act');
+    if (!btn) return;
+    const name = btn.dataset.name;
+    const st = pkList.scrollTop;
+    if (c.feats.includes(name)) {
+      c.feats = c.feats.filter(x => x !== name);
+    } else {
+      const max = featQuota();
+      if (c.feats.length >= max) { toast(`专长数量已达上限（${max} 个）；若有额外来源可在上方"额外专长数量"中补充`); return; }
+      const f = DATA.feats.find(x => x.name === name);
+      const ps = f ? featPrereqStatus(f) : { blocked: false, reasons: [] };
+      if (ps.blocked) toast(`注意：前置未满足（${ps.reasons.join('；')}），仍已加入`);
+      c.feats.push(name);
+    }
+    save(); paintSel(); picker.paint();
+    pkList.scrollTop = st;
+  });
+  $('#feat-extra', tools).addEventListener('input', (e) => {
+    c.extraFeats = Math.max(0, Math.min(20, +e.target.value || 0));
+    save(); paintSel(); picker.paint();
+  });
+  $('#feat-only-ok', tools).addEventListener('change', (e) => {
+    onlyOk = e.target.checked;
+    picker.state.page = 1;
+    picker.paint(true);
+  });
+  picker.paint();
+  picker.initialDetail();
+  paintSel();
 }
 
 /* ---------- 步骤7 法术 ---------- */
@@ -1009,7 +1489,14 @@ function renderSpells() {
   const paintSel = () => {
     const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
     const lvSum = spellLevelSummary();
-    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${spells.length} 个可选）${lvSum ? `：${lvSum}` : ''}${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
+    const q = spellQuotaInfo();
+    const lv0 = selectedSpellObjs().filter(sp => sp.level === 0).length;
+    const lvN = selectedSpellObjs().filter(sp => sp.level >= 1).length;
+    const quotaTxt = [
+      q.cantrips != null ? `戏法 <b class="${lv0 > q.cantrips ? 'over' : lv0 < q.cantrips ? 'warn' : 'good'}">${lv0}</b> / ${q.cantrips}` : '',
+      q.known != null ? `已知法术 <b class="${lvN > q.known ? 'over' : lvN < q.known ? 'warn' : 'good'}">${lvN}</b> / ${q.known}` : '',
+    ].filter(Boolean).join(' · ');
+    cnt.innerHTML = `已选法术 <b>${c.spells.length}</b> 个（共 ${spells.length} 个可选）${lvSum ? `：${lvSum}` : ''}${quotaTxt ? ` ｜ 配额：${quotaTxt}` : ''}${prepRule ? ` · 已准备 <b class="${prepRule.balls ? '' : (prepN > preparedLimit() ? 'over' : '')}">${prepN}</b> / ${prepRule.balls ? '不限' : preparedLimit()} 个` : ''}。`;
     if (c.spells.length) {
       const groups = {};
       for (const n of c.spells) {
@@ -1046,6 +1533,12 @@ function renderSpells() {
         c.spells = c.spells.filter(x => x !== n);
         c.prepared = (c.prepared || []).filter(x => x !== n);
       } else {
+        const sp = DATA.spells.find(x => x.name === n);
+        const maxL = maxSlotLevel();
+        if (sp && sp.level > maxL) {
+          toast(`「${n}」是 ${sp.level} 环法术，超过当前等级可获得的最高 ${maxL || 0} 环法术位`);
+          return;
+        }
         c.spells.push(n);
       }
     } else if (act === 'prep') {
@@ -1477,10 +1970,21 @@ function renderSheet() {
     <p class="muted">${esc(c.player ? '玩家：' + c.player : '')}${c.level ? ' · ' + c.level + ' 级' : ''}${k ? ' · ' + esc(k.name) : ''}${c.subclass ? '（' + esc(c.subclass) + '）' : ''}${r ? ' · ' + esc(r.name) : ''}</p>
     ${c.portrait ? `<img class="portrait" src="${esc(c.portrait)}" alt="立绘" onerror="this.style.display='none'">` : ''}`;
 
+  // —— 待补清单（完整性检查，可点击跳转） ——
+  const _sum = issueSummary();
+  if (_sum.all.length) {
+    sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec pending-box">
+      <h3>待补清单（${_sum.errors.length} 个错误 / ${_sum.warns.length} 个提醒）</h3>
+      <div class="pending-list">${_sum.all.map(i =>
+        `<button type="button" class="pending-item ${i.level}" data-goto="${i.step}">第 ${i.step} 步 · ${esc(i.msg)}</button>`).join('')}</div>
+      ${strictOn() ? '<p class="muted" style="margin-top:6px">严格模式：有错误时导出会被阻止；可在顶部关闭严格模式。</p>' : ''}
+    </div>`);
+  }
+
   // —— 属性 ——
   const saveRows = ATTRS.map(a => {
     const prof = k && k.core.saveList.includes(a);
-    return `<tr><td>${a}</td><td>${c.base[a]}</td><td>${c.manual[a] || 0}</td>
+    return `<tr><td>${a}</td><td>${c.base[a]}</td><td>${(c.manual[a] || 0) + raceBonus(a)}</td>
       <td>${levelUpBonus(a) ? '+' + levelUpBonus(a) : '0'}</td><td><b>${finalAttr(a)}</b></td>
       <td>${finalMod(a) >= 0 ? '+' : ''}${finalMod(a)}</td>
       <td>${prof ? '有' : '无'}</td><td>${saveMod(a) >= 0 ? '+' : ''}${saveMod(a)}</td></tr>`;
@@ -1649,6 +2153,7 @@ function renderSheet() {
   </div>`);
 
   s.appendChild(sheet);
+  sheet.querySelectorAll('.pending-item').forEach(b => b.addEventListener('click', () => setStep(+b.dataset.goto)));
   // —— 基本信息编辑（姓名/玩家/立绘） ——
   const info = el('div', 'field');
   info.innerHTML = `<label>基本信息</label>
@@ -1731,6 +2236,8 @@ function renderLive() {
   const r = race();
   const k = klass();
   let h = `<h3>👤 角色预览</h3>`;
+  const _is = issueSummary();
+  if (_is.errors.length) h += `<div class="live-pending">还有 <b>${_is.errors.length}</b> 项待补（点顶部「待补」查看）</div>`;
   h += `<div class="live-section">
     <div class="live-row"><span>姓名</span><b>${esc(c.name || '未命名')}</b></div>
     <div class="live-row"><span>等级</span><b>${c.level} 级</b></div>
@@ -2108,6 +2615,7 @@ function buildSheetExtras() {
 function exportExcel() {
   if (typeof fflate === 'undefined') { toast('缺少 zip 组件，无法导出'); return; }
   const c = state.char;
+  if (!exportGuard()) return;
   if (!c.raceId && !c.classId) { toast('请先完成种族/职业选择'); return; }
   toast('正在生成 Excel…');
   try {
@@ -2484,6 +2992,7 @@ function buildDocx() {
 function exportWord() {
   if (typeof fflate === 'undefined') { toast('缺少 zip 组件，无法导出'); return; }
   const c = state.char;
+  if (!exportGuard()) return;
   if (!c.raceId && !c.classId) { toast('请先完成种族/职业选择'); return; }
   toast('正在生成 Word 角色卡…');
   try {
@@ -2539,10 +3048,11 @@ function importChar() {
         const data = JSON.parse(rd.result);
         const ch = data.char || data;
         state.char = Object.assign(newChar(), ch);
-        state.step = 7;
+        if (!state.char.raceChoice) state.char.raceChoice = { mode: '', a: '', b: '', c: '' };
+        state.step = 10;
         save();
-        setStep(7);
-        toast('已导入角色');
+        setStep(10);
+        toast('已导入角色（可在任意步骤继续修改）');
       } catch (e) { toast('导入失败：文件格式不正确'); }
     };
     rd.readAsText(f);
@@ -2571,15 +3081,24 @@ async function boot() {
       <br>3. 若仍失败，请通过 http 服务访问本网站（如 GitHub Pages），或重新构建网站。</p>`;
     return;
   }
+  loadSettings();
   load();
   // 数据版本显示（与词典页一致，便于核对数据是否随规则书更新）
   const verEl = $('#car-ver');
   if (verEl && DATA.rules) verEl.textContent = 'v' + DATA.rules.version + ' · 规则书数据';
+  injectChrome();
   // 事件
   $$('.step').forEach(b => b.addEventListener('click', () => setStep(+b.dataset.step)));
   $('#btn-prev').addEventListener('click', () => setStep(Math.max(1, state.step - 1)));
   $('#btn-next').addEventListener('click', () => {
-    if (state.step >= 11) { render(); return; }
+    if (state.step >= 11) {
+      const sum = issueSummary();
+      if (sum.errors.length || sum.warns.length) openIssuePanel();
+      else toast('角色已完成，可以导出角色卡 ✓');
+      return;
+    }
+    const errors = stepIssues(state.step).filter(i => i.level === 'error');
+    if (strictOn() && errors.length) { showGuard(errors); return; }
     setStep(state.step + 1);
   });
   $('#btn-export').addEventListener('click', exportChar);
@@ -2588,6 +3107,11 @@ async function boot() {
   $('#btn-import').addEventListener('click', importChar);
   $('#btn-new').addEventListener('click', newCharAction);
   window.addEventListener('beforeunload', save);
+  // 测试/调试钩子（回归脚本用）
+  window.__CAR_STATE__ = () => state;
+  window.__CAR_ISSUES__ = () => issueSummary();
+  window.__CAR_SETSTEP__ = (n) => setStep(n);
+  window.__CAR_REFRESH__ = () => refreshChrome();
   setStep(state.step);
 }
 boot();

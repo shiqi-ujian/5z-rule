@@ -363,3 +363,166 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
   .chip.sel { background: #1a2f4d; }
   .sub-input input { background: var(--panel); color: var(--ink); }
 }
+
+/* ============================================================
+ * v2 交互改造（2026-10）：步骤状态 / 待补清单 / 守卫条 / 种族加值 / 专长 Picker / 算式
+ * ============================================================ */
+/* 步骤条真实完成态（原来的 .done 只是「序号在前」，不再使用） */
+.step.complete { border-color: var(--good); color: var(--good); }
+.step.incomplete { border-color: #d97706; color: #b45309; }
+
+/* 顶部：严格模式开关 + 待补徽标 */
+.strict-toggle {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #fff;
+  opacity: .95; cursor: pointer; padding: 5px 8px; border: 1px solid rgba(255,255,255,.4); border-radius: 8px;
+}
+.strict-toggle input { accent-color: #fff; }
+.issue-badge-btn {
+  background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.4);
+  border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+.issue-badge-btn.has-error { background: #b91c1c; border-color: #b91c1c; }
+@media (max-width: 720px) { .strict-toggle { padding: 4px 6px; font-size: 11.5px; } }
+
+/* 待补清单面板 */
+.issue-panel {
+  position: fixed; right: 20px; top: 74px; z-index: 80;
+  width: min(440px, calc(100vw - 24px)); max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: var(--panel, #fff); border: 1px solid var(--line, #dbe3ef);
+  border-radius: 12px; box-shadow: 0 12px 40px rgba(15, 23, 42, .25); overflow: hidden;
+}
+.issue-head {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  background: #eef4ff; border-bottom: 1px solid var(--line, #dbe3ef); font-size: 13.5px;
+}
+.issue-head span { color: var(--sub, #64748b); font-size: 12px; flex: 1; }
+.issue-close { border: none; background: transparent; cursor: pointer; font-size: 15px; color: var(--sub, #64748b); }
+.issue-body { overflow: auto; padding: 4px 14px 12px; }
+.issue-group { margin-top: 6px; }
+.issue-step { font-weight: 700; font-size: 12.5px; color: var(--acc, #6366f1); margin: 8px 0 4px; }
+.issue-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px;
+  font-size: 12.5px; background: #fff7ed; border: 1px solid #fed7aa; margin-bottom: 5px;
+}
+.issue-item.warn { background: #fffbeb; border-color: #fde68a; }
+.issue-item span { flex: 1; }
+.issue-item button {
+  flex-shrink: 0; border: 1px solid var(--line, #dbe3ef); background: #fff;
+  border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px;
+}
+
+/* 「下一步」守卫条 */
+.guard-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 82px; z-index: 70;
+  display: flex; align-items: center; gap: 12px;
+  max-width: min(760px, calc(100vw - 24px));
+  background: #fff7ed; border: 1px solid #fdba74;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .18); border-radius: 10px; padding: 10px 14px; font-size: 13px;
+}
+.guard-bar[hidden] { display: none; }
+.guard-msg { flex: 1; color: #7c2d12; }
+.guard-msg b { color: #b91c1c; }
+.guard-acts { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* 种族属性加值 */
+.race-auto { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+.race-choice { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.seg-mini { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg-mini button {
+  border: 1px solid var(--line, #dbe3ef); background: #fff; border-radius: 8px;
+  padding: 6px 10px; cursor: pointer; font-size: 12.5px;
+}
+.seg-mini button.sel { border-color: var(--acc); color: var(--acc); background: #eef6ff; font-weight: 600; }
+.race-choice-slots { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.race-choice-slots select { padding: 6px 8px; border: 1px solid var(--line, #dbe3ef); border-radius: 8px; background: #fff; font-size: 13px; flex: 0 1 180px; min-width: 110px; }
+.race-choice-slots .plus { color: var(--sub, #64748b); font-size: 12.5px; }
+.race-badge {
+  margin-left: 8px; font-size: 11.5px; font-weight: 600; color: #065f46;
+  background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 6px; padding: 2px 6px; vertical-align: middle;
+}
+
+/* 属性算式（点击数值展开） */
+.attr-calc { display: inline-block; margin: 2px 0; }
+.attr-calc > summary { list-style: none; cursor: pointer; }
+.attr-calc > summary::-webkit-details-marker { display: none; }
+.attr-calc .attr-formula {
+  font-size: 12px; color: var(--sub, #64748b); background: #f8fafc;
+  border: 1px dashed var(--line, #dbe3ef); border-radius: 8px; padding: 4px 8px; margin-top: 4px;
+}
+
+/* 专长步骤（Picker） */
+.feat-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; font-size: 12.5px; color: var(--sub, #64748b); }
+.f-check { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.sel-box.sticky { position: sticky; top: 8px; z-index: 20; box-shadow: 0 6px 16px rgba(15, 23, 42, .08); }
+.pk-i-prereq { font-size: 12px; color: var(--warn, #b45309); margin-top: 3px; white-space: pre-wrap; }
+.pk-i-prereq.bad { color: var(--bad, #b91c1c); }
+.pk-i-desc { font-size: 12.5px; color: var(--sub, #64748b); margin-top: 3px; line-height: 1.55; }
+.pk-tag-sel { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+
+/* 实时预览 / 角色卡待补 */
+.live-pending {
+  font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 8px; padding: 6px 8px; margin: 4px 0 8px;
+}
+.pending-box { border-color: #fdba74 !important; background: #fffdf7 !important; }
+.pending-list { display: flex; flex-direction: column; gap: 5px; }
+.pending-item {
+  text-align: left; border: 1px solid #fed7aa; background: #fff7ed; color: #7c2d12;
+  border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer;
+}
+.pending-item.warn { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+
+@media (max-width: 720px) {
+  .issue-panel { right: 8px; top: 64px; }
+  .guard-bar { bottom: 76px; padding: 8px 10px; font-size: 12px; }
+  .guard-msg { max-width: 46vw; }
+  .sel-box.sticky { top: 4px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .issue-panel { background: #16233a; border-color: #2c4a7a; }
+  .issue-head { background: #1a2f4d; border-color: #2c4a7a; color: #dbe7ff; }
+  .issue-item { background: #3a2a1a; border-color: #7c5a2a; color: #fcd9a8; }
+  .issue-item.warn { background: #332b12; border-color: #7c6a2a; }
+  .issue-item button { background: #1a2f4d; color: #dbe7ff; border-color: #2c4a7a; }
+  .guard-bar { background: #3a2a1a; border-color: #7c5a2a; color: #fcd9a8; }
+  .guard-msg { color: #fcd9a8; }
+  .race-auto { background: #10301f; border-color: #166534; color: #bbf7d0; }
+  .race-badge { background: #10301f; border-color: #166534; color: #bbf7d0; }
+  .race-choice-slots select, .seg-mini button { background: #1a2637; color: #dbe7ff; border-color: #2c4a7a; }
+  .seg-mini button.sel { background: #1a2f4d; }
+  .attr-calc .attr-formula { background: #1a2637; border-color: #2c4a7a; color: #8fa8cc; }
+  .pk-tag-sel { background: #10301f; border-color: #166534; color: #bbf7d0; }
+  .live-pending { background: #332b12; border-color: #7c6a2a; color: #fcd9a8; }
+  .pending-box { background: #1a2637 !important; border-color: #7c5a2a !important; }
+  .pending-item { background: #3a2a1a; border-color: #7c5a2a; color: #fcd9a8; }
+  .pending-item.warn { background: #332b12; border-color: #7c6a2a; }
+}
+
+/* v2.1 布局修正 */
+.step.warn { border-color: #d97706; color: #b45309; }
+.attr-calc { display: block; margin: 2px 0 6px; }
+.attr-calc > summary { display: block; width: max-content; }
+.attr-calc .attr-formula { display: block; width: max-content; max-width: 100%; }
+.attr-card .attr-adj { margin-top: 8px; }
+
+/* 移动端头部：按钮改为单行横向滚动，避免把页面撑宽 */
+@media (max-width: 720px) {
+  .car-top-inner { padding: 8px 10px 10px; gap: 8px 10px; }
+  .car-top h1 { font-size: 16px; flex: 1 1 100%; }
+  .car-home { font-size: 12.5px; padding: 4px 8px; }
+  .dict-ver { font-size: 11px; }
+  .car-top-actions {
+    width: 100%; overflow-x: auto; flex-wrap: nowrap; gap: 6px;
+    padding-bottom: 2px; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+  }
+  .car-top-actions button, .car-top-actions .strict-toggle, .car-top-actions .issue-badge-btn {
+    flex: 0 0 auto; padding: 5px 8px; font-size: 12px;
+  }
+  .car-top-actions::-webkit-scrollbar { height: 4px; }
+  /* 步骤条单行横向滚动，省出首屏高度 */
+  .steps { flex-wrap: nowrap; overflow-x: auto; padding: 8px 10px 4px; -webkit-overflow-scrolling: touch; }
+  .steps .step { flex: 0 0 auto; }
+  .beta-banner { margin: 4px 10px 8px; padding: 8px 10px; font-size: 12px; line-height: 1.55; }
+}
