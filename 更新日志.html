@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>42</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>6</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>43</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>8</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>1</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（42 条）</summary>
+    <summary>✅ 已修复（43 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -459,10 +459,19 @@
       
       
       <div class="cl-detail">原先 CR 输入框用原生 step="0.125"，怪物 CR 大于 1 时按上下箭头仍是 ±0.125（如 1 → 1.125），而实际只存在 0、1/8、1/4、1/2 与 1–30 的整数 CR。现改为阶梯跳转：0 → 0.125 → 0.25 → 0.5 → 1 → 2 → … → 30，上下箭头逐档移动并在两端夹紧。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261104-170700-3b58-a</span>
+      <b>车卡器「准备施法者」的准备入口改为醒目提示</b>
+      <span class="cl-page">（car.html 车卡 · 步骤7 法术）</span>
+      <span class="cl-date">2026-11-04</span>
+      
+      
+      <div class="cl-detail">原先只有一行浅色说明，玩家容易忽略「选完法术还要逐个标记已准备」。现改为琥珀色提示框，明确写出「点法术右侧的『⚑ 准备』按钮」；法术列表里的准备按钮也加了琥珀描边加粗，未准备时显示「⚑ 准备」，标记后显示「✓ 已准备」。</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
-    <summary>⏳ 待确认 / 待决策（6 条）</summary>
+    <summary>⏳ 待确认 / 待决策（8 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
@@ -517,15 +526,65 @@
       
       <div class="cl-detail">导出 Word(.docx) 与 Excel 已上线；缺「txt 导出」与「word/excel/txt 导入」。导入（尤其按导出格式解析回填）属较大功能，与既有「Excel 角色卡导入」d73b 待办重叠，待专门一轮统一设计实现。</div>
       
+    </li>
+    <li>
+      <span class="cl-id">#20261104-170700-3b58-b</span>
+      <b>车卡器未应用「亚种」属性加成（如丘陵矮人 感知+1、山地矮人 力量+2）</b>
+      
+      <span class="cl-date">2026-11-04</span>
+      
+      <div class="cl-detail">种族数据（races.json）只收录基础种族，亚种仅在「亚种」特性文本里列出名字（丘陵矮人/山地矮人/灰矮人…），其属性加成与特性（丘陵矮人 感知+1 与「矮人刚毅」HP+等级；山地矮人 力量+2 与矮人护甲训练；灰矮人另有加成）没有结构化数据，因此车卡的种族加值只算基础种族（矮人=体质+2）。修复需在 parse-card-data.mjs 里解析亚种块并输出 subraces，再让车卡按所选亚种叠加加值与特性，属专门一轮。</div>
+      
+    </li>
+    <li>
+      <span class="cl-id">#20261104-170700-3b58-c</span>
+      <b>专长「魔法学徒」未提供额外戏法/1环法术的选择</b>
+      
+      <span class="cl-date">2026-11-04</span>
+      
+      <div class="cl-detail">魔法学徒专长文本为「从指定职业法术列表习得两个戏法，并额外习得一个1环法术（每两次长休可免法术位施放一次）」，车卡器目前没有专长授予法术的选择入口（car.js 无相关实现）。需在专长步骤或法术步骤增加「专长法术」选择（2 戏法 + 1 一环），并计入角色卡与导出，属专门一轮。</div>
+      
     </li></ul>
   </details>
   <details id="board-open" class="board-sec">
-    <summary>🆕 待处理（0 条 · 每 60 分钟自动巡检）</summary>
-    <p class="st-empty">当前没有待处理反馈。</p>
+    <summary>🆕 待处理（1 条 · 每 60 分钟自动巡检）</summary>
+    <ul class="st-list">
+    <li>
+      <span class="cl-id">#20261104-170700-3b58</span>
+      <b>老大老大这应该不是我是笨蛋导致的吧</b>
+      <span class="cl-page">（5z角色创建器）</span>
+      
+      <span class="cl-date">2026-11-04</span>
+      
+      
+    </li></ul>
   </details>
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-11-04 · v1.64</span><span class="cl-batch-hint">✅1 / ⏳2</span></summary>
+    <p class="cl-release">车卡器反馈处理（问题来源：收集表 #20261104-170700-3b58）：准备法术入口改为醒目提示；亚种属性加成与魔法学徒额外法术列入待办。</p>
+    <h3>✅ 已修复（1）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20261104-170700-3b58-a</span>
+      <b>车卡器「准备施法者」的准备入口改为醒目提示</b>
+      <span class="cl-page">（car.html 车卡 · 步骤7 法术）</span>
+      <div class="cl-detail">原先只有一行浅色说明，玩家容易忽略「选完法术还要逐个标记已准备」。现改为琥珀色提示框，明确写出「点法术右侧的『⚑ 准备』按钮」；法术列表里的准备按钮也加了琥珀描边加粗，未准备时显示「⚑ 准备」，标记后显示「✓ 已准备」。</div>
+    </li></ul>
+    <h3>⏳ 待确认 / 暂缓（2）</h3><ul>
+    <li class="cl-pend">
+      <span class="cl-id">#20261104-170700-3b58-b</span>
+      <b>车卡器未应用「亚种」属性加成（如丘陵矮人 感知+1、山地矮人 力量+2）</b>
+      <div class="cl-detail">⏳ 种族数据（races.json）只收录基础种族，亚种仅在「亚种」特性文本里列出名字（丘陵矮人/山地矮人/灰矮人…），其属性加成与特性（丘陵矮人 感知+1 与「矮人刚毅」HP+等级；山地矮人 力量+2 与矮人护甲训练；灰矮人另有加成）没有结构化数据，因此车卡的种族加值只算基础种族（矮人=体质+2）。修复需在 parse-card-data.mjs 里解析亚种块并输出 subraces，再让车卡按所选亚种叠加加值与特性，属专门一轮。</div>
+    </li>
+    <li class="cl-pend">
+      <span class="cl-id">#20261104-170700-3b58-c</span>
+      <b>专长「魔法学徒」未提供额外戏法/1环法术的选择</b>
+      <div class="cl-detail">⏳ 魔法学徒专长文本为「从指定职业法术列表习得两个戏法，并额外习得一个1环法术（每两次长休可免法术位施放一次）」，车卡器目前没有专长授予法术的选择入口（car.js 无相关实现）。需在专长步骤或法术步骤增加「专长法术」选择（2 戏法 + 1 一环），并计入角色卡与导出，属专门一轮。</div>
+    </li></ul>
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-10-28 · v1.64</span><span class="cl-batch-hint">✅3</span></summary>

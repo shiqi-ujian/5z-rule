@@ -1416,8 +1416,9 @@ function renderSpells() {
     }
   }
   if (prepRule) {
-    gHtml += `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #c9daf5">
-      <b>准备施法者：</b>本职业需从已选法术中标记「已准备」才能当日施放。
+    gHtml += `<div class="prep-notice" style="margin-top:8px;padding:10px 12px;border:1px solid #f0b429;border-left:4px solid #f0b429;border-radius:8px;background:rgba(240,180,41,.10)">
+      <b>⚑ 准备施法者：本职业选完法术后，还需要逐个标记「已准备」才能当日施放。</b><br>
+      操作：在下方法术列表中，把要准备的法术右侧的「<b>准备</b>」按钮点一下（按钮会变成「✓ 已准备」）。<br>
       可准备上限 = <b>${esc(preparedLimitText())}</b>；只能准备已获得法术位的法术（当前最高 <b>${maxSlotLevel()} 环</b>）。</div>`;
   }
   g.innerHTML = gHtml;
@@ -1465,7 +1466,7 @@ function renderSpells() {
         <div class="pk-i-sub">${lvLabel(s.level)} · ${esc(schoolLabel(s))}</div>
         <div class="pk-i-acts">
           <button type="button" class="nav-btn pk-act" data-act="sel" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px">${sel ? '移除' : '选择'}</button>
-          ${canPrep ? `<button type="button" class="nav-btn pk-act${isPrep ? ' on' : ''}" data-act="prep" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px" ${isPrep ? 'disabled' : ''}>${isPrep ? '✓ 已准备' : '准备'}</button>` : ''}
+          ${canPrep ? `<button type="button" class="nav-btn pk-act${isPrep ? ' on' : ''}" data-act="prep" data-name="${esc(s.name)}" style="padding:3px 12px;font-size:12px;${isPrep ? '' : 'border:1px solid #f0b429;color:#8a5a00;font-weight:600'}" ${isPrep ? 'disabled' : ''}>${isPrep ? '✓ 已准备' : '⚑ 准备'}</button>` : ''}
         </div>`;
     },
     detailHtml: (s) => {
