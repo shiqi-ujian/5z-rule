@@ -481,6 +481,46 @@ for (const [siteRel, html] of aggPages) {
 }
 log(`正文页: ${htmCount} | 注入导航: ${injected} | 附件/图片已复制`);
 
+// ---------- 4b-2. 清理指向「已删除词条」的悬空 #kw- 链接 ----------
+// CHM 源本身会残留旧链接：1.65 删除了约 30 个法术（舞光术/援助术/防护毒素/物质重塑/授予技能…），
+// 但 法术/职业法术列表/奇械师机关术.htm 仍链接到这些词条。锚点已不可能存在，
+// 这里统一把「目标页不存在该锚点」的内部 #kw- 链接降级为纯文字，避免 404 与链接检查失败。
+{
+  const walkHtml = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(d, e.name);
+    if (e.isDirectory()) return walkHtml(full);
+    return /\.html?$/i.test(e.name) ? [full] : [];
+  });
+  const files = walkHtml(OUT);
+  const anchorsOf = new Map();
+  for (const f of files) {
+    const t = fs.readFileSync(f, 'utf8');
+    const ids = new Set();
+    for (const m of t.matchAll(/\sid="(kw-[^"]*)"/g)) ids.add(m[1]);
+    anchorsOf.set(path.resolve(f), ids);
+  }
+  let dropped = 0;
+  for (const f of files) {
+    let t = fs.readFileSync(f, 'utf8');
+    if (!t.includes('#kw-')) continue;
+    const next = t.replace(/<a\b([^>]*?)href="([^"]*?)#(kw-[^"]*)"([^>]*)>([\s\S]*?)<\/a>/gi,
+      (whole, pre, hrefPath, anchorRaw, post, inner) => {
+        let anchorId = anchorRaw;
+        try { anchorId = decodeURIComponent(anchorRaw); } catch (e) { /* 保留原样 */ }
+        const target = hrefPath && !/^[a-z]+:/i.test(hrefPath) ? hrefPath : '';
+        const targetPath = target
+          ? path.resolve(path.dirname(f), target.split('/').join(path.sep))
+          : path.resolve(f);
+        const ids = anchorsOf.get(targetPath);
+        if (ids && ids.has(anchorId)) return whole;   // 有效链接，保留
+        dropped++;
+        return inner;                                  // 降级为纯文字
+      });
+    if (next !== t) fs.writeFileSync(f, next, 'utf8');
+  }
+  if (dropped) log(`悬空 #kw- 链接已降级为文字: ${dropped} 处`);
+}
+
 // ---------- 4c. 关键词互链统计 + 门禁 ----------
 // 数字大幅低于基线 ⇒ 关键词注册表/锚点/页面结构出问题（例如 CHM 改版），必须让构建失败，
 // 否则网站会静默退化成「没有任何互链」。基线为 2026-10-24 首次上线实测值。
