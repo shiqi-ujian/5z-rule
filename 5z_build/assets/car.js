@@ -411,23 +411,38 @@ function featPrereqLine(f) {
   const lines = String(f.text || '').split('\n');
   return lines.find(l => /^先决条件/.test(l)) || '';
 }
-// 只对「能确定的先决条件」做判断：属性值、等级、前置专长；武器/护甲熟练等未知项不误杀
+// 只对「能确定的先决条件」做判断：属性值、等级、前置专长；武器/护甲熟练等未知项不误杀。
+// 支持「或」：同一子句内用「或/、」并列的可选项，满足任一即通过（反馈 4498-c）。
 function featPrereqStatus(f) {
   const line = featPrereqLine(f);
   if (!line) return { blocked: false, reasons: [], line: '' };
-  const body = line.replace(/^先决条件[：:]\s*/, '');
+  const body = line.replace(/^先决条件[：:]\s*/, '').trim();
   const reasons = [];
-  const re = /(力量|敏捷|体质|智力|感知)\s*(\d+)/g;
-  let m;
-  while ((m = re.exec(body))) {
-    const need = +m[2], have = finalAttr(m[1]);
-    if (have < need) reasons.push(`${m[1]}需 ${need}（当前 ${have}）`);
-  }
-  const lm = /(\d+)\s*级/.exec(body);
-  if (lm && state.char.level < +lm[1]) reasons.push(`需 ${+lm[1]} 级`);
   const known = state.char.feats || [];
-  for (const p of body.split(/[，,；;、]/).map(s => s.trim()).filter(Boolean)) {
-    if (DATA.feats.some(x => x.name === p) && !known.includes(p)) reasons.push(`需先选「${p}」`);
+  // 单条原子条件 → { ok, why } ；无法判定返回 null（不误杀）
+  const atom = (s) => {
+    const t = String(s || '').trim();
+    if (!t) return null;
+    const am = /(力量|敏捷|体质|智力|感知)\s*(?:值)?\s*(?:至少)?\s*(\d+)/.exec(t);
+    if (am) {
+      const need = +am[2], have = finalAttr(am[1]);
+      return { ok: have >= need, why: `${am[1]}需 ${need}（当前 ${have}）` };
+    }
+    const lm = /(\d+)\s*级/.exec(t);
+    if (lm) return { ok: state.char.level >= +lm[1], why: `需 ${+lm[1]} 级` };
+    const cleaned = t.replace(/^(拥有|已获得|获得|学会)\s*/, '').replace(/专长$/, '').trim();
+    const hit = DATA.feats.find((x) => x.name === cleaned || x.name === t);
+    if (hit) return { ok: known.includes(hit.name), why: `需先选「${hit.name}」` };
+    return null;
+  };
+  // 子句 = 逗号/分号分隔；子句内部若含「或」则视为可选项（任一满足即可）
+  const clauses = body.split(/[，,；;]/).map((s) => s.trim()).filter(Boolean);
+  for (const clause of clauses) {
+    const alts = clause.split(/\s*或\s*|[、]/).map((s) => s.trim()).filter(Boolean);
+    const results = alts.map(atom).filter((r) => r !== null);
+    if (!results.length) continue;                 // 全是无法判定的条件 → 跳过
+    if (results.some((r) => r.ok)) continue;       // 任一满足 → 该子句通过
+    reasons.push(results.length > 1 ? results.map((r) => r.why).join(' 或 ') : results[0].why);
   }
   return { blocked: reasons.length > 0, reasons, line };
 }
@@ -784,6 +799,7 @@ function renderRace() {
           <div class="race-choice-slots"></div>
           <div class="f-hint">${plan.choice === '2/1' ? '选择 +2 与 +1 的属性（不能重复）' : '选择分配方式与具体属性（不能重复）'}</div>
           <div class="f-hint race-choice-total"></div>
+          <div class="race-choice-actions"><button type="button" class="nav-btn race-clear">清除加值选择</button></div>
         </div>` : ''}
         ${!plan.choice ? `<div class="f-hint">原文：${esc(plan.raw.slice(0, 120))}</div>` : ''}`;
       detailHost.appendChild(box);
@@ -821,6 +837,16 @@ function renderRace() {
         save(); paintSlots(); renderLive();
       }));
       box.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('sel', x.dataset.mode === ch.mode));
+      // 清除按钮：把种族属性加值选择整个解绑（反馈 4498-a）
+      const clearBtn = $('.race-clear', box);
+      if (clearBtn) clearBtn.addEventListener('click', () => {
+        ch.mode = '';
+        ch.a = ch.b = ch.c = '';
+        state.char.raceChoice = ch;
+        box.querySelectorAll('[data-mode]').forEach(x => x.classList.remove('sel'));
+        save(); paintSlots(); renderLive();
+        try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
+      });
       paintSlots();
     } else if (plan.raw) {
       detailHost.insertAdjacentHTML('beforeend',
@@ -863,7 +889,7 @@ function renderRace() {
       const pick = el('div', 'field');
       pick.innerHTML = `<label>亚种选择（种族特性「亚种」）</label>
         <div class="sub-chips">${chips.map(s =>
-          `<button type="button" class="chip${state.char.subrace === s ? ' sel' : ''}" data-sub="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+          `<button type="button" class="chip${state.char.subrace === s ? ' sel' : ''}" data-sub="${esc(s)}">${esc(s)}</button>`).join('')}${state.char.subrace ? '<button type="button" class="chip sub-clear">清除</button>' : ''}</div>
         <div class="sub-input"><input type="text" id="race-sub" placeholder="${chips.length ? '或手动输入其它亚种名（如 日精灵）' : '输入亚种名（如 丘陵矮人）'}" value="${esc(state.char.subrace)}" maxlength="20"></div>
         <div class="f-hint">${esc(subTrait.text.slice(0, 120))}${subTrait.text.length > 120 ? '…' : ''}</div>`;
       const setSub = (v, fromInput) => {
@@ -876,7 +902,12 @@ function renderRace() {
         }
         renderLive();
       };
-      pick.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => setSub(c.dataset.sub)));
+      pick.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+        // 再点一次已选项 = 取消（解绑亚种，反馈 4498-a）
+        setSub(state.char.subrace === c.dataset.sub ? '' : c.dataset.sub);
+      }));
+      const subClear = pick.querySelector('.sub-clear');
+      if (subClear) subClear.addEventListener('click', () => setSub(''));
       pick.querySelector('#race-sub').addEventListener('input', (e) => setSub(e.target.value.trim(), true));
       detailHost.appendChild(pick);
     }
@@ -1154,6 +1185,7 @@ function renderAttr() {
   $('#lvl-in').addEventListener('change', (e) => {
     c.level = Math.max(1, Math.min(20, +e.target.value || 1));
     save(); paint(); renderLive();
+    try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }   // 等级变化后重算待补清单（反馈 4498-d）
   });
   $('#major-sel').addEventListener('change', (e) => { c.majorAttr = e.target.value; save(); paint(); renderLive(); });
   $('#key-sel').addEventListener('change', (e) => { c.keyAttr = e.target.value; save(); renderLive(); });
@@ -1312,6 +1344,7 @@ function renderFeats() {
       c.feats = c.feats.filter(x => x !== b.dataset.f);
       save(); paintSel(); picker.paint();
       pkList.scrollTop = st;
+      try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }   // 专长变化后重算待补清单（反馈 4498-d）
     }));
   };
   // 列表内按钮：事件委托（选择/移除）
@@ -1332,10 +1365,12 @@ function renderFeats() {
     }
     save(); paintSel(); picker.paint();
     pkList.scrollTop = st;
+    try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }   // 专长变化后重算待补清单（反馈 4498-d）
   });
   $('#feat-extra', tools).addEventListener('input', (e) => {
     c.extraFeats = Math.max(0, Math.min(20, +e.target.value || 0));
     save(); paintSel(); picker.paint();
+    try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
   });
   $('#feat-only-ok', tools).addEventListener('change', (e) => {
     onlyOk = e.target.checked;
@@ -3173,6 +3208,11 @@ async function boot() {
   window.__CAR_REFRESH__ = () => refreshChrome();
   // 魔法物品（含多价位展开变体）——回归脚本核对档位价格用
   window.__CAR_MAGIC_ITEMS__ = () => magicItemsAll();
+  // 专长先决条件判定——回归脚本核对「或/与」逻辑用（反馈 4498-c）
+  window.__CAR_FEATPREREQ__ = (name) => {
+    const f = DATA.feats.find((x) => x.name === name);
+    return f ? featPrereqStatus(f) : null;
+  };
   setStep(state.step);
 }
 boot();
