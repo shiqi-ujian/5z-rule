@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>46</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>10</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>50</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（46 条）</summary>
+    <summary>✅ 已修复（50 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -495,10 +495,46 @@
       
       
       <div class="cl-detail">种族属性分配（+2/+1 或 +1/+1/+1）新增「清除加值选择」按钮，一键把分配方式与所选属性全部重置；亚种选项改为「再点一次取消」，并在已选亚种时显示「清除」按钮。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261104-170700-3b58-b</span>
+      <b>车卡按所选亚种叠加属性加成与 HP 加成</b>
+      <span class="cl-page">（car.html 车卡 · 步骤1 种族）</span>
+      <span class="cl-date">2026-11-04</span>
+      
+      
+      <div class="cl-detail">解析器新从种族页正文中提取「亚种块」（亚种名 + 属性值加成 + 特性），如 丘陵矮人 感知+1、矮人刚毅（最大生命值 +等级）、山地矮人 力量+2、灰矮人 感知+1。车卡选定亚种后即刻计入属性与最大生命值，并在种族详情里显示「亚种加成已计入：…」；亚种候选按钮改为直接取自解析数据。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261104-223900-4498-b</span>
+      <b>修复「灵晶」等种族拿不到属性加成</b>
+      <span class="cl-page">（car.html 车卡 · 步骤1 种族）</span>
+      <span class="cl-date">2026-11-04</span>
+      
+      
+      <div class="cl-detail">灵晶种族页的特性标题未被识别成小标题，导致「属性值加成。你的智力+3」整条丢失、车卡拿不到任何加值。解析器新增兜底：traits 中找不到「属性值加成」时直接从正文抽取补齐。实测灵晶现显示「已自动计入：智力 +3」。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261104-223900-4498-e</span>
+      <b>专长授予的额外法术位参与最高环阶计算</b>
+      <span class="cl-page">（car.html 车卡 · 步骤7 法术）</span>
+      <span class="cl-date">2026-11-04</span>
+      
+      
+      <div class="cl-detail">解析器现会保留专长自带表格（如「进阶法术位」的 1~7 环法术位表）。车卡据此把所选专长的法术位合并进 maxSlotLevel()，15 级灵能武士选「进阶法术位」后可正常选择 5 环法术。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261104-170700-3b58-c</span>
+      <b>专长「魔法学徒」可选取 2 戏法 + 1 一环法术</b>
+      <span class="cl-page">（car.html 车卡 · 步骤6 专长）</span>
+      <span class="cl-date">2026-11-04</span>
+      
+      
+      <div class="cl-detail">在专长步骤选中「魔法学徒」后，出现专长法术选择区：先选职业（吟游诗人/牧师/德鲁伊/契术师/法师/灵能师等），再从该职业列表里选 2 个戏法与 1 个一环法术；角色卡新增「专长法术（魔法学徒 · 职业）」小节，并提示该一环法术每两次长休可免位施展一次。</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
-    <summary>⏳ 待确认 / 待决策（10 条）</summary>
+    <summary>⏳ 待确认 / 待决策（4 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260821-160900-aa65</span>
@@ -535,60 +571,6 @@
       
       <div class="cl-detail">用户标注「可无视之」，并提到已有爱好者手册可向管理人员索取。站长如有文件可提供，再做排版上架。</div>
       
-    </li>
-    <li>
-      <span class="cl-id">#20260821-184700-d73b</span>
-      <b>车卡器支持 Excel 角色卡导入</b>
-      
-      <span class="cl-date">2026-08-22</span>
-      
-      <div class="cl-detail">已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
-      
-    </li>
-    <li>
-      <span class="cl-id">#20260825-085800-8f97</span>
-      <b>车卡器支持多格式导出/导入（word/excel/txt）</b>
-      
-      <span class="cl-date">2026-08-25</span>
-      
-      <div class="cl-detail">导出 Word(.docx) 与 Excel 已上线；缺「txt 导出」与「word/excel/txt 导入」。导入（尤其按导出格式解析回填）属较大功能，与既有「Excel 角色卡导入」d73b 待办重叠，待专门一轮统一设计实现。</div>
-      
-    </li>
-    <li>
-      <span class="cl-id">#20261104-170700-3b58-b</span>
-      <b>车卡器未应用「亚种」属性加成（如丘陵矮人 感知+1、山地矮人 力量+2）</b>
-      
-      <span class="cl-date">2026-11-04</span>
-      
-      <div class="cl-detail">种族数据（races.json）只收录基础种族，亚种仅在「亚种」特性文本里列出名字（丘陵矮人/山地矮人/灰矮人…），其属性加成与特性（丘陵矮人 感知+1 与「矮人刚毅」HP+等级；山地矮人 力量+2 与矮人护甲训练；灰矮人另有加成）没有结构化数据，因此车卡的种族加值只算基础种族（矮人=体质+2）。修复需在 parse-card-data.mjs 里解析亚种块并输出 subraces，再让车卡按所选亚种叠加加值与特性，属专门一轮。</div>
-      
-    </li>
-    <li>
-      <span class="cl-id">#20261104-170700-3b58-c</span>
-      <b>专长「魔法学徒」未提供额外戏法/1环法术的选择</b>
-      
-      <span class="cl-date">2026-11-04</span>
-      
-      <div class="cl-detail">魔法学徒专长文本为「从指定职业法术列表习得两个戏法，并额外习得一个1环法术（每两次长休可免法术位施放一次）」，车卡器目前没有专长授予法术的选择入口（car.js 无相关实现）。需在专长步骤或法术步骤增加「专长法术」选择（2 戏法 + 1 一环），并计入角色卡与导出，属专门一轮。</div>
-      
-    </li>
-    <li>
-      <span class="cl-id">#20261104-223900-4498-b</span>
-      <b>选择「灵晶」种族时不显示属性加成</b>
-      
-      <span class="cl-date">2026-11-04</span>
-      
-      <div class="cl-detail">规则书《种族/构装生物/灵晶》明确写着「属性值加成。你的智力+3。」，但 races.json 里灵晶的 traits 只有 3 条空名风味段、无「属性值加成」条目 —— 解析器对该页结构漏抓，导致车卡拿不到任何种族加值。需修 parse-card-data.mjs 的种族特性提取。</div>
-      
-    </li>
-    <li>
-      <span class="cl-id">#20261104-223900-4498-e</span>
-      <b>15 级灵能武士选「进阶法术位」后 5 环法术仍不能选</b>
-      
-      <span class="cl-date">2026-11-04</span>
-      
-      <div class="cl-detail">maxSlotLevel() 只按职业表的「法术位」列推导最高环阶，未计入专长额外授予的法术位；而「进阶法术位」这类专长的法术位表在 feats.json 里没有结构化数据（tables 缺失，只有「详见下表」文本），因此修复需先用 parse-card-data.mjs 解析专长页表格，再让 maxSlotLevel() 合并计算 —— 属数据层一轮。</div>
-      
     </li></ul>
   </details>
   <details id="board-open" class="board-sec">
@@ -600,9 +582,16 @@
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-11-04 · v1.64</span><span class="cl-batch-hint">✅4 / ⏳4</span></summary>
+    <summary><span class="cl-title">2026-11-05 · v1.64</span></summary>
+    <p class="cl-release">📌 公告：Excel 角色卡「导出/导入」与角色卡文件导入（Excel/Word/TXT）暂不实现，相关反馈 #d73b、#8f97 就此关闭。原因：这两项都要把整张角色卡与多种文件格式双向映射（版本兼容、格式漂移、字段回填校验），工作量与维护成本都远大于其它功能，现阶段维持「Word 角色卡导出」这一条路径。</p>
+    
+    
+  </details>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-11-04 · v1.64</span><span class="cl-batch-hint">✅8</span></summary>
     <p class="cl-release">车卡器反馈处理（问题来源：收集表 #20261104-170700-3b58）：准备法术入口改为醒目提示；亚种属性加成与魔法学徒额外法术列入待办。</p>
-    <h3>✅ 已修复（4）</h3><ul>
+    <h3>✅ 已修复（8）</h3><ul>
     <li class="cl-fix">
       <span class="cl-id">#20261104-170700-3b58-a</span>
       <b>车卡器「准备施法者」的准备入口改为醒目提示</b>
@@ -626,28 +615,32 @@
       <b>种族属性加值/亚种可「解绑」清除</b>
       <span class="cl-page">（car.html 车卡 · 步骤1 种族）</span>
       <div class="cl-detail">种族属性分配（+2/+1 或 +1/+1/+1）新增「清除加值选择」按钮，一键把分配方式与所选属性全部重置；亚种选项改为「再点一次取消」，并在已选亚种时显示「清除」按钮。</div>
-    </li></ul>
-    <h3>⏳ 待确认 / 暂缓（4）</h3><ul>
-    <li class="cl-pend">
+    </li>
+    <li class="cl-fix">
       <span class="cl-id">#20261104-170700-3b58-b</span>
-      <b>车卡器未应用「亚种」属性加成（如丘陵矮人 感知+1、山地矮人 力量+2）</b>
-      <div class="cl-detail">⏳ 种族数据（races.json）只收录基础种族，亚种仅在「亚种」特性文本里列出名字（丘陵矮人/山地矮人/灰矮人…），其属性加成与特性（丘陵矮人 感知+1 与「矮人刚毅」HP+等级；山地矮人 力量+2 与矮人护甲训练；灰矮人另有加成）没有结构化数据，因此车卡的种族加值只算基础种族（矮人=体质+2）。修复需在 parse-card-data.mjs 里解析亚种块并输出 subraces，再让车卡按所选亚种叠加加值与特性，属专门一轮。</div>
+      <b>车卡按所选亚种叠加属性加成与 HP 加成</b>
+      <span class="cl-page">（car.html 车卡 · 步骤1 种族）</span>
+      <div class="cl-detail">解析器新从种族页正文中提取「亚种块」（亚种名 + 属性值加成 + 特性），如 丘陵矮人 感知+1、矮人刚毅（最大生命值 +等级）、山地矮人 力量+2、灰矮人 感知+1。车卡选定亚种后即刻计入属性与最大生命值，并在种族详情里显示「亚种加成已计入：…」；亚种候选按钮改为直接取自解析数据。</div>
     </li>
-    <li class="cl-pend">
-      <span class="cl-id">#20261104-170700-3b58-c</span>
-      <b>专长「魔法学徒」未提供额外戏法/1环法术的选择</b>
-      <div class="cl-detail">⏳ 魔法学徒专长文本为「从指定职业法术列表习得两个戏法，并额外习得一个1环法术（每两次长休可免法术位施放一次）」，车卡器目前没有专长授予法术的选择入口（car.js 无相关实现）。需在专长步骤或法术步骤增加「专长法术」选择（2 戏法 + 1 一环），并计入角色卡与导出，属专门一轮。</div>
-    </li>
-    <li class="cl-pend">
+    <li class="cl-fix">
       <span class="cl-id">#20261104-223900-4498-b</span>
-      <b>选择「灵晶」种族时不显示属性加成</b>
-      <div class="cl-detail">⏳ 规则书《种族/构装生物/灵晶》明确写着「属性值加成。你的智力+3。」，但 races.json 里灵晶的 traits 只有 3 条空名风味段、无「属性值加成」条目 —— 解析器对该页结构漏抓，导致车卡拿不到任何种族加值。需修 parse-card-data.mjs 的种族特性提取。</div>
+      <b>修复「灵晶」等种族拿不到属性加成</b>
+      <span class="cl-page">（car.html 车卡 · 步骤1 种族）</span>
+      <div class="cl-detail">灵晶种族页的特性标题未被识别成小标题，导致「属性值加成。你的智力+3」整条丢失、车卡拿不到任何加值。解析器新增兜底：traits 中找不到「属性值加成」时直接从正文抽取补齐。实测灵晶现显示「已自动计入：智力 +3」。</div>
     </li>
-    <li class="cl-pend">
+    <li class="cl-fix">
       <span class="cl-id">#20261104-223900-4498-e</span>
-      <b>15 级灵能武士选「进阶法术位」后 5 环法术仍不能选</b>
-      <div class="cl-detail">⏳ maxSlotLevel() 只按职业表的「法术位」列推导最高环阶，未计入专长额外授予的法术位；而「进阶法术位」这类专长的法术位表在 feats.json 里没有结构化数据（tables 缺失，只有「详见下表」文本），因此修复需先用 parse-card-data.mjs 解析专长页表格，再让 maxSlotLevel() 合并计算 —— 属数据层一轮。</div>
+      <b>专长授予的额外法术位参与最高环阶计算</b>
+      <span class="cl-page">（car.html 车卡 · 步骤7 法术）</span>
+      <div class="cl-detail">解析器现会保留专长自带表格（如「进阶法术位」的 1~7 环法术位表）。车卡据此把所选专长的法术位合并进 maxSlotLevel()，15 级灵能武士选「进阶法术位」后可正常选择 5 环法术。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20261104-170700-3b58-c</span>
+      <b>专长「魔法学徒」可选取 2 戏法 + 1 一环法术</b>
+      <span class="cl-page">（car.html 车卡 · 步骤6 专长）</span>
+      <div class="cl-detail">在专长步骤选中「魔法学徒」后，出现专长法术选择区：先选职业（吟游诗人/牧师/德鲁伊/契术师/法师/灵能师等），再从该职业列表里选 2 个戏法与 1 个一环法术；角色卡新增「专长法术（魔法学徒 · 职业）」小节，并提示该一环法术每两次长休可免位施展一次。</div>
     </li></ul>
+    
   </details>
 
   <details class="cl-entry">
@@ -805,7 +798,7 @@
   </details>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">✅2 / ⏳1</span></summary>
+    <summary><span class="cl-title">2026-08-25 · v1.59</span><span class="cl-batch-hint">✅2</span></summary>
     <p class="cl-release">反馈批处理（问题来源：收集表 3 条，20260825 批次，1 条待确认）。</p>
     <h3>✅ 已修复（2）</h3><ul>
     <li class="cl-fix">
@@ -820,12 +813,7 @@
       <span class="cl-page">（car.html 角色创建器）</span>
       <div class="cl-detail">① 法术缺失根因：规则书里法术名后的英文别名含弯引号（如「心之宁静 Heart’s Ease」），名称解析正则只认直引号，在弯引号处中断，留下「心之宁静Heart’」这类错误名，导致法术表搜不到。修复正则支持弯引号，一次性修正 69 个法术名（心之宁静、皇帝的新衣、猎人印记 等），现法术表可正常看到「心之宁静」。② 购物页新增自定义价格区间（最低/最高 gp）筛选 + 列表默认按价格下限升序，粗档次之外可直接定位任意价位装备。</div>
     </li></ul>
-    <h3>⏳ 待确认 / 暂缓（1）</h3><ul>
-    <li class="cl-pend">
-      <span class="cl-id">#20260825-085800-8f97</span>
-      <b>车卡器支持多格式导出/导入（word/excel/txt）</b>
-      <div class="cl-detail">⏳ 导出 Word(.docx) 与 Excel 已上线；缺「txt 导出」与「word/excel/txt 导入」。导入（尤其按导出格式解析回填）属较大功能，与既有「Excel 角色卡导入」d73b 待办重叠，待专门一轮统一设计实现。</div>
-    </li></ul>
+    
   </details>
 
   <details class="cl-entry">
@@ -868,7 +856,7 @@
   </details>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-08-22 · v1.59</span><span class="cl-batch-hint">✅5 / ⏳5</span></summary>
+    <summary><span class="cl-title">2026-08-22 · v1.59</span><span class="cl-batch-hint">✅5 / ⏳4</span></summary>
     <p class="cl-release">反馈批处理（问题来源：收集表 10 条，20260821-22 批次）。</p>
     <h3>✅ 已修复（5）</h3><ul>
     <li class="cl-fix">
@@ -901,7 +889,7 @@
       <span class="cl-page">（calculator.html 辅助计算器）</span>
       <div class="cl-detail">新增「🧮 辅助计算器」页（侧栏入口）：① 属性计算——按规则书 32 点购点表实时计算已用点数与调整值，支持标准属性组一键应用与随机掷骰（5 次 4d6 去最低）；② 造物素材计算——按物品/生物类型（魔药/卷轴/法器/武器/护甲/服饰/奇物/攻城装置/载具/类人/怪兽/泥怪 等 14 类）与造物造价，输出无机/有机/魔晶素材量及工艺费用（造价×20%），数据取自 5z计算器.xlsx 素材系数表。遭遇难度计算因原表公式引用外部工作簿（dnd5z人物卡模板.xlsx）且表中缺失对应区域，暂缓实现（待提供原模板或确认规则书模型）。</div>
     </li></ul>
-    <h3>⏳ 待确认 / 暂缓（5）</h3><ul>
+    <h3>⏳ 待确认 / 暂缓（4）</h3><ul>
     <li class="cl-pend">
       <span class="cl-id">#20260821-160900-aa65</span>
       <b>种族增加「混血儿」「定制血统」自定义选项</b>
@@ -921,11 +909,6 @@
       <span class="cl-id">#20260821-163300-bbdc</span>
       <b>各职业攻略手册（娱乐向建议）</b>
       <div class="cl-detail">⏳ 用户标注「可无视之」，并提到已有爱好者手册可向管理人员索取。站长如有文件可提供，再做排版上架。</div>
-    </li>
-    <li class="cl-pend">
-      <span class="cl-id">#20260821-184700-d73b</span>
-      <b>车卡器支持 Excel 角色卡导入</b>
-      <div class="cl-detail">⏳ 已有 json 导入/导出与 excel 导出，缺 excel 导入。需按导出模板格式解析回填，待排期。</div>
     </li></ul>
   </details>
 

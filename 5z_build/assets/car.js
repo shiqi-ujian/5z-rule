@@ -207,18 +207,30 @@ function raceAbilityText(r) {
     traits.find(x => /属性值加成/.test(x.text || ''));
   return t ? String(t.text || '') : '';
 }
+// 当前所选亚种（种族页解析出的 subraces：{name, bonus, hpPerLevel, text}）
+function subraceObj(r) {
+  const n = state.char.subrace;
+  if (!r || !n || !Array.isArray(r.subraces)) return null;
+  return r.subraces.find((s) => s.name === n) || null;
+}
 function raceBonusPlan(r) {
   const text = raceAbilityText(r);
   const plan = { raw: text, fixed: {}, choice: null, parsed: false };
-  if (!text) return plan;
-  const re = /(力量|敏捷|体质|智力|感知)\s*[+＋加]\s*(\d+)/g;
-  let m;
-  while ((m = re.exec(text))) plan.fixed[m[1]] = (plan.fixed[m[1]] || 0) + (+m[2]);
-  const has21 = /一项属性值\s*[+＋加]\s*2/.test(text) && /另一项属性值\s*[+＋加]\s*1/.test(text);
-  const has111 = /三项属性值\s*[+＋加]\s*1/.test(text);
-  if (has21 && has111) plan.choice = '2/1or1/1/1';
-  else if (has21) plan.choice = '2/1';
-  else if (has111) plan.choice = '1/1/1';
+  if (text) {
+    const re = /(力量|敏捷|体质|智力|感知)\s*[+＋加]\s*(\d+)/g;
+    let m;
+    while ((m = re.exec(text))) plan.fixed[m[1]] = (plan.fixed[m[1]] || 0) + (+m[2]);
+    const has21 = /一项属性值\s*[+＋加]\s*2/.test(text) && /另一项属性值\s*[+＋加]\s*1/.test(text);
+    const has111 = /三项属性值\s*[+＋加]\s*1/.test(text);
+    if (has21 && has111) plan.choice = '2/1or1/1/1';
+    else if (has21) plan.choice = '2/1';
+    else if (has111) plan.choice = '1/1/1';
+  }
+  // 亚种加成（如丘陵矮人 感知+1）叠加到固定加值上（反馈 3b58-b）
+  const sr = subraceObj(r);
+  if (sr && sr.bonus) {
+    for (const k of Object.keys(sr.bonus)) plan.fixed[k] = (plan.fixed[k] || 0) + sr.bonus[k];
+  }
   plan.parsed = !!Object.keys(plan.fixed).length || !!plan.choice;
   return plan;
 }
@@ -261,7 +273,10 @@ function hitDie() { return klass() ? klass().core.hitDie : 8; }
 function hpMax() {
   if (!klass()) return 0;
   const exp = Math.ceil((hitDie() + 1) / 2);
-  return 10 + state.char.level * (exp + finalMod('体质'));
+  // 亚种 HP 加成（如丘陵矮人「矮人刚毅」：最大生命值 + 等级）
+  const sr = subraceObj(race());
+  const srHp = sr && sr.hpPerLevel ? sr.hpPerLevel * state.char.level : 0;
+  return 10 + state.char.level * (exp + finalMod('体质')) + srHp;
 }
 function acValue() {
   const prof = profBonus();
@@ -366,23 +381,53 @@ function preparedLimitText() {
   return `${attr}调整值 + ${k.name}${half}（当前 ${preparedLimit()} 个，最少 1 个）`;
 }
 // 当前等级拥有的最高法术位环阶（0 = 无法术位）
-function maxSlotLevel() {
-  const k = klass();
-  if (!k) return 0;
-  const lvRow = k.table.find(r => r[0] === String(state.char.level));
-  const headRow = k.table[0];
-  if (!lvRow) return 0;
-  const slotIdx = headRow.findIndex(h => /法术位/.test(h));
-  if (slotIdx < 0) return 0;
+// 除职业表「法术位」列外，还要合并「专长授予的额外法术位」（如 进阶法术位 的法术位表），反馈 4498-e。
+function featSlotMaxLevel() {
   let max = 0;
-  for (let i = slotIdx; i < lvRow.length; i++) {
-    const v = lvRow[i];
-    if (v && v !== '—' && !isNaN(+v) && +v > 0) {
-      const lv = i - slotIdx + 1;
-      if (lv > max) max = lv;
+  for (const fn of state.char.feats || []) {
+    const f = DATA.feats.find((x) => x.name === fn);
+    for (const t of (f && f.tables) || []) {
+      if (!Array.isArray(t) || t.length < 3) continue;
+      const headIdx = t.findIndex((r) => Array.isArray(r) && r.some((c) => /法术位/.test(String(c))));
+      if (headIdx < 0) continue;
+      const ringRow = t[headIdx + 1] || [];
+      const lvRow = t.find((r, i) => i > headIdx + 1 && Array.isArray(r) && String(r[0]).replace(/[^\d]/g, '') === String(state.char.level));
+      if (!lvRow) continue;
+      for (let i = 1; i < lvRow.length; i++) {
+        const v = lvRow[i];
+        if (v == null || v === '' || v === '—') continue;
+        if (!isNaN(+v) && +v > 0 && i > max) max = i;
+      }
+      // 环阶标签行若更长（1环/2环…），按标签校正
+      if (ringRow.length > 1) {
+        for (let i = 1; i < Math.min(ringRow.length, lvRow.length); i++) {
+          const lv = +(String(ringRow[i] || '').replace(/[^\d]/g, '') || 0);
+          if (lv > max && lvRow[i] && lvRow[i] !== '—' && +lvRow[i] > 0) max = lv;
+        }
+      }
     }
   }
   return max;
+}
+function maxSlotLevel() {
+  const k = klass();
+  let max = 0;
+  if (k) {
+    const lvRow = k.table.find(r => r[0] === String(state.char.level));
+    const headRow = k.table[0];
+    if (!lvRow) return featSlotMaxLevel();
+    const slotIdx = headRow.findIndex(h => /法术位/.test(h));
+    if (slotIdx >= 0) {
+      for (let i = slotIdx; i < lvRow.length; i++) {
+        const v = lvRow[i];
+        if (v && v !== '—' && !isNaN(+v) && +v > 0) {
+          const lv = i - slotIdx + 1;
+          if (lv > max) max = lv;
+        }
+      }
+    }
+  }
+  return Math.max(max, featSlotMaxLevel());
 }
 
 /* ---------- 职业表配额 / 专长先决条件 ---------- */
@@ -884,14 +929,28 @@ function renderRace() {
     };
     const subTrait = r.traits.find(t => t.name === '亚种');
     if (subTrait) {
-      const chips = [...new Set(Object.entries(SUBRACE_CAND)
-        .filter(([en]) => subTrait.text.includes(en)).map(([, cn]) => cn))];
+      // 候选亚种：优先用解析出的 subraces（带属性加成），再补硬编码英文名映射
+      const parsedNames = (r.subraces || []).map((s) => s.name);
+      const dictNames = Object.entries(SUBRACE_CAND)
+        .filter(([en]) => subTrait.text.includes(en)).map(([, cn]) => cn);
+      const chips = [...new Set([...parsedNames, ...dictNames])];
       const pick = el('div', 'field');
       pick.innerHTML = `<label>亚种选择（种族特性「亚种」）</label>
         <div class="sub-chips">${chips.map(s =>
           `<button type="button" class="chip${state.char.subrace === s ? ' sel' : ''}" data-sub="${esc(s)}">${esc(s)}</button>`).join('')}${state.char.subrace ? '<button type="button" class="chip sub-clear">清除</button>' : ''}</div>
         <div class="sub-input"><input type="text" id="race-sub" placeholder="${chips.length ? '或手动输入其它亚种名（如 日精灵）' : '输入亚种名（如 丘陵矮人）'}" value="${esc(state.char.subrace)}" maxlength="20"></div>
+        <div class="f-hint sub-bonus" style="color:#8a5a00"></div>
         <div class="f-hint">${esc(subTrait.text.slice(0, 120))}${subTrait.text.length > 120 ? '…' : ''}</div>`;
+      const hintEl = pick.querySelector('.sub-bonus');
+      // 亚种加成提示（属性加值与 HP 加成会真正计入角色数值，反馈 3b58-b）
+      const paintSubBonus = () => {
+        if (!hintEl) return;
+        const sr = subraceObj(r);
+        if (!sr) { hintEl.innerHTML = ''; return; }
+        const bt = Object.keys(sr.bonus || {}).map((k) => `${k} +${sr.bonus[k]}`).join('、');
+        hintEl.innerHTML = `<b>亚种加成已计入：</b>${esc(bt || '无属性加值')}` +
+          (sr.hpPerLevel ? `；最大生命值 +${sr.hpPerLevel * state.char.level}（等级 × ${sr.hpPerLevel}）` : '');
+      };
       const setSub = (v, fromInput) => {
         state.char.subrace = v;
         save();
@@ -900,7 +959,9 @@ function renderRace() {
           const inp = pick.querySelector('#race-sub');
           if (inp) inp.value = v;
         }
+        paintSubBonus();
         renderLive();
+        try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
       };
       pick.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
         // 再点一次已选项 = 取消（解绑亚种，反馈 4498-a）
@@ -909,6 +970,7 @@ function renderRace() {
       const subClear = pick.querySelector('.sub-clear');
       if (subClear) subClear.addEventListener('click', () => setSub(''));
       pick.querySelector('#race-sub').addEventListener('input', (e) => setSub(e.target.value.trim(), true));
+      paintSubBonus();
       detailHost.appendChild(pick);
     }
   };
@@ -1380,6 +1442,39 @@ function renderFeats() {
   picker.paint();
   picker.initialDetail();
   paintSel();
+  // —— 专长「魔法学徒」授予的法术：2 个戏法 + 1 个一环法术（反馈 3b58-c）——
+  if (c.feats.includes('魔法学徒')) {
+    const allClasses = [...new Set((DATA['class-spells'] || []).map((x) => x.class))].filter((x) => x !== '非职业法术');
+    const listsFor = (cls) => {
+      const cs = (DATA['class-spells'] || []).find((x) => x.class === cls);
+      return cs ? cs.lists : {};
+    };
+    const box = el('div', 'field mi-spells');
+    const paintMi = () => {
+      const cls = c.miClass || allClasses[0] || '';
+      const lists = listsFor(cls);
+      const opt = (arr, sel, ph) => `<option value=""${sel ? '' : ' selected'}>${ph}</option>` +
+        (arr || []).map((n) => `<option value="${esc(n)}"${n === sel ? ' selected' : ''}>${esc(n)}</option>`).join('');
+      const cur = Array.isArray(c.featSpells) ? c.featSpells : [];
+      box.innerHTML = `<label>魔法学徒法术（专长授予：2 个戏法 + 1 个一环法术）</label>
+        <div class="sub-input"><select id="mi-class">${allClasses.map((x) => `<option value="${esc(x)}"${x === cls ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+        <div class="sub-chips">
+          <select id="mi-c1" title="戏法 1">${opt(lists['0'], cur[0], '选择戏法 1')}</select>
+          <select id="mi-c2" title="戏法 2">${opt(lists['0'], cur[1], '选择戏法 2')}</select>
+          <select id="mi-l1" title="一环法术">${opt(lists['1'], cur[2], '选择一环法术')}</select>
+        </div>
+        <div class="f-hint">这些法术来自所选职业列表；每两次长休之间可免法术位施展那个一环法术，施法关键属性按职业（智力/感知）。</div>`;
+      box.querySelectorAll('select').forEach((s) => s.addEventListener('change', () => {
+        if (s.id === 'mi-class') { c.miClass = s.value; c.featSpells = []; save(); paintMi(); renderLive(); return; }
+        c.miClass = $('#mi-class', box).value;
+        c.featSpells = [$('#mi-c1', box).value, $('#mi-c2', box).value, $('#mi-l1', box).value].filter(Boolean);
+        if (c.featSpells.length !== new Set(c.featSpells).size) toast('魔法学徒的三个法术不能重复');
+        save(); renderLive();
+      }));
+    };
+    paintMi();
+    stage().appendChild(box);
+  }
 }
 
 /* ---------- 步骤7 法术 ---------- */
@@ -2192,6 +2287,17 @@ function renderSheet() {
           <td>${(c.prepared || []).includes(sp.name) ? '✓ 是' : '—'}</td><td>${esc(schoolLabel(sp))}</td>
           <td class="t-text">${esc((sp.text || '').split('\n').slice(1).join('\n').slice(0, 80))}</td></tr>`).join('')).join('')}
       </table></div>`);
+  }
+
+  // —— 专长授予的法术（魔法学徒） ——
+  if (Array.isArray(c.featSpells) && c.featSpells.length) {
+    sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>专长法术（魔法学徒${c.miClass ? ' · ' + esc(c.miClass) : ''}）</h3>
+      <table><tr><th>环阶</th><th>名称</th><th>来源</th></tr>
+      ${c.featSpells.map((n, i) => {
+        const sp = DATA.spells.find((s) => s.name === n);
+        return `<tr><td>${i < 2 ? '戏法' : '1环'}</td><td><b>${esc(n)}</b></td><td>魔法学徒专长</td></tr>`;
+      }).join('')}</table>
+      <p class="muted" style="margin-top:6px">每两次长休之间可免法术位施展该 1 环法术一次。</p></div>`);
   }
 
   // —— 战技 ——

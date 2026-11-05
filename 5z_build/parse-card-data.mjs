@@ -173,9 +173,50 @@ function parseRaces() {
             traits.push({ name: '', text: x.text });
           }
         }
+        // 页面全文（供缺失特性的兜底提取 / 亚种块解析）
+        const flat = flow.map((x) => (x.type === 'table' ? (x.rows || []).flat().join(' ') : x.text)).join('\n');
+        // 兜底：部分页面（如「灵晶」）的特性标题未被识别成 h3，导致「属性值加成」整条丢失。
+        // 这里在 traits 里找不到「属性值加成」时，直接从正文抽一条补上（反馈 4498-b）。
+        if (!traits.some((t) => /属性值加成/.test(t.name))) {
+          const am = /属性值加成[。.：:]\s*([^\n]{1,60})/.exec(flat);
+          if (am) traits.push({ name: '属性值加成', text: am[1].replace(/[。．\s]+$/, '') });
+        }
+        // —— 亚种块：5z 的亚种（丘陵矮人/山地矮人/灰矮人、高等精灵/木精灵…）写在种族页正文里，
+        // 每条亚种自带一段「属性值加成」。候选名从「亚种」特性文本里取，再到正文按名字定位其加成段（反馈 3b58-b）。
+        const subraces = [];
+        {
+          const subTrait = traits.find((t) => /^亚种/.test(t.name || ''));
+          if (subTrait) {
+            // 直接按「亚种名 + 英文原名」定位正文里的亚种块（丘陵矮人Hill Dwarf / 灰矮人Duergar / 高等精灵high elves）
+            const seenSub = new Set();
+            const re = /([\u4e00-\u9fa5]{1,5})(矮人|精灵|半身人|侏儒|龙裔|兽人|人类|妖精|地精|人鱼|鸟人)\s*[A-Za-z]/g;
+            let m;
+            while ((m = re.exec(flat)) !== null) {
+              const cand = m[1] + m[2];
+              if (seenSub.has(cand) || cand === title || cand === name) continue;
+              if (/[的是了着和与在为也都]/.test(cand)) continue;
+              const at = m.index;
+              const seg = flat.slice(at, at + 700);
+              const bm = /属性值加成[。.：:]\s*([^\n]{1,60})/.exec(seg);
+              if (!bm) continue;
+              seenSub.add(cand);
+              const bonus = {};
+              const bre2 = /(力量|敏捷|体质|智力|感知)\s*(?:值)?\s*[+＋加]\s*(\d+)/g;
+              let b2;
+              while ((b2 = bre2.exec(bm[1])) !== null) bonus[b2[1]] = (bonus[b2[1]] || 0) + +b2[2];
+              const hpPerLevel = /最大生命值提升等同于你的等级/.test(seg) ? 1 : 0;
+              subraces.push({
+                name: cand,
+                bonus,
+                hpPerLevel,
+                text: seg.slice(0, 420).replace(/\s+/g, ' ').trim(),
+              });
+            }
+          }
+        }
         races.push({
           id: name, name: title, category: path.basename(d),
-          url: relUrl(full), traits, raceFeats,
+          url: relUrl(full), traits, raceFeats, subraces,
         });
       }
     }
@@ -524,11 +565,15 @@ function parseFeats() {
             // 过滤规则说明类条目（如"玩家可选变体：爆发式卓越骰"），它们不是专长
             if (/^玩家可选变体/.test(name)) continue;
             let text = '';
+            const tables = [];
             for (let j = i + 1; j < flow.length; j++) {
               if (flow[j].type === 'h2') break;
               if (flow[j].type === 'p') text += (text ? '\n' : '') + flow[j].text;
+              else if (flow[j].type === 'table' && flow[j].rows && flow[j].rows.length) tables.push(flow[j].rows);
             }
-            feats.push({ name, category: bigCat, sub: subCat, page: pageLabel, url: relUrl(full), text });
+            const feat = { name, category: bigCat, sub: subCat, page: pageLabel, url: relUrl(full), text };
+            if (tables.length) feat.tables = tables;   // 专长自带表格（如「进阶法术位」的法术位表，反馈 4498-e）
+            feats.push(feat);
           }
         }
       }
