@@ -126,6 +126,8 @@ function newChar() {
     programProtocol: '阿尔法',
     programs: [],
     equipment: [], budget: '', attuneSlots: 3,   // attuneSlots：同调位上限（默认 3，反馈 7）
+    equipBonus: { ac: 0, save: 0, dc: 0, atk: 0 }, // 装备加值：魔法物品自动算不准，由玩家在购物步手动填（AC/豁免/法术DC/法术攻击）
+    style: '',                                   // 1 级风格选择（法术风格/战斗风格的具体选项，如「远程医疗」）
     notes: '', items: '', traitsNote: '',
   };
 }
@@ -144,6 +146,10 @@ function load() {
       if (!state.char.raceChoice) state.char.raceChoice = { mode: '', a: '', b: '', c: '' };
       // 同调位上限兜底（反馈 7）：旧存档没有该字段/非法时按 3（不覆盖 newChar 里的正常值）
       if (state.char.attuneSlots == null || !Number.isFinite(Number(state.char.attuneSlots))) state.char.attuneSlots = 3;
+      // 装备加值/风格选择兜底（旧存档无字段；equipBonus 做键级合并，避免旧存档缺子键）
+      state.char.equipBonus = Object.assign({ ac: 0, save: 0, dc: 0, atk: 0 },
+        (state.char.equipBonus && typeof state.char.equipBonus === 'object') ? state.char.equipBonus : {});
+      if (typeof state.char.style !== 'string') state.char.style = '';
       // 旧存档步骤迁移到新顺序（v<3），避免老存档落在错误步骤
       let step = saved.step || 1;
       if ((+saved.v || 0) < 3) step = SAVE_STEP_MIGRATE_V2[step] || step;
@@ -242,6 +248,9 @@ function normalizeClassChoice() {
   if (c.variant && !activeVariant()) c.variant = '';
   const opts = subclassList();
   if (c.subclass && !opts.some(s => s.name === c.subclass)) c.subclass = '';
+  // 风格选择（法术风格/战斗风格）：职业变了或选项不存在时清空
+  const sf = classStyleFeature(klass());
+  if (c.style && (!sf || !parseStyleOptions(sf.text).some(o => o.name === c.style))) c.style = '';
 }
 
 function levelRow() { return rules().levelTable[Math.min(19, Math.max(0, state.char.level - 1))]; }
@@ -343,6 +352,12 @@ function hpMax() {
   const srHp = sr && sr.hpPerLevel ? sr.hpPerLevel * state.char.level : 0;
   return 10 + state.char.level * (exp + finalMod('体质')) + srHp;
 }
+// 装备加值（购物步手动填写：AC / 豁免 / 法术豁免 DC / 法术攻击；旧存档做键级兜底）
+function equipBonusOf(key) {
+  const b = state.char.equipBonus || {};
+  const v = Number(b[key]);
+  return Number.isFinite(v) ? v : 0;
+}
 function acValue() {
   const prof = profBonus();
   const dex = finalMod('敏捷');
@@ -359,11 +374,11 @@ function acValue() {
     default: v = 8 + prof + dex;
   }
   if (state.char.shield) v += 2;
-  return v + (state.char.armorBonus || 0);
+  return v + (state.char.armorBonus || 0) + equipBonusOf('ac');
 }
 function saveMod(attr) {
   const saves = klass() ? klass().core.saveList : [];
-  return finalMod(attr) + (saves.includes(attr) ? profBonus() : 0);
+  return finalMod(attr) + (saves.includes(attr) ? profBonus() : 0) + equipBonusOf('save');
 }
 function skillMod(skill) {
   const s = DATA.rules.skills.find(x => x.name === skill);
@@ -391,9 +406,37 @@ function featQuota() {
 function featBaseQuota() {
   return levelRow()[1];
 }
-function spellDC() { return 8 + profBonus() + finalMod(state.char.keyAttr); }
-function spellAttack() { return profBonus() + finalMod(state.char.keyAttr); }
+function spellDC() { return 8 + profBonus() + finalMod(state.char.keyAttr) + equipBonusOf('dc'); }
+function spellAttack() { return profBonus() + finalMod(state.char.keyAttr) + equipBonusOf('atk'); }
 function initBonus() { return finalMod('敏捷'); }
+// 1 级风格（法术风格/战斗风格）——职业特性里的可选项，需在职业步选择（反馈：法术风格应可选）
+function classStyleFeature(k) {
+  if (!k) return null;
+  return (k.features || []).find(f => f && /^(法术|战斗)风格$/.test(String(f.name || '').trim())) || null;
+}
+// 从「XX：说明」逐行文本解析风格选项（名称 2–12 字，去掉重复项）
+function parseStyleOptions(text) {
+  const out = [];
+  const seen = new Set();
+  for (const line of String(text || '').split('\n')) {
+    const m = /^\s*([^\s：:]{2,12})[：:]\s*(.+)$/.exec(line);
+    if (!m) continue;
+    const name = m[1].trim();
+    if (seen.has(name)) continue;
+    if (/^第\d+级/.test(name)) continue;
+    seen.add(name);
+    out.push({ name, desc: m[2].trim() });
+  }
+  return out;
+}
+function styleOptions() {
+  const f = classStyleFeature(klass());
+  return f ? parseStyleOptions(f.text) : [];
+}
+function styleSelection() {
+  const cur = state.char.style || '';
+  return cur ? styleOptions().find(o => o.name === cur) || null : null;
+}
 function keyAttrHint() {
   const hint = {
     狂战士: '力量', 盗贼: '敏捷', 武僧: '感知', 圣武士: '感知', 游侠: '感知',
@@ -520,6 +563,16 @@ function selectedSpellObjs() {
 function featPrereqLine(f) {
   const lines = String(f.text || '').split('\n');
   return lines.find(l => /^先决条件/.test(l)) || '';
+}
+// 专长「效果摘要」：跳过先决条件/注释行，取正文第一段（角色卡/Word/Excel 摘要列共用）
+function featEffectSummary(f, maxLen) {
+  if (!f) return '';
+  const lines = String(f.text || '').split('\n')
+    .map(s => s.trim())
+    .filter(s => s && !/^先决条件/.test(s) && !/^\/\//.test(s));
+  const text = lines.join(' ').replace(/\s+/g, ' ').trim();
+  const max = maxLen || 70;
+  return text.length > max ? text.slice(0, max) + '…' : text;
 }
 /* ---------- 专长先决条件：可判定条件的辅助（反馈 2） ----------
  * 反馈：14 级牧师勾选「仅显示当前可选」仍会列出大量圣武士/德鲁伊专长。
@@ -793,7 +846,7 @@ const STEP_HINTS = {
   7: '选择战技流派（及门弟子）与战技。流派入门专长见专长步骤。',
   8: '赛博格专属：按协议层级选择准备程序。其他职业可跳过。',
   9: '可填写角色姓名/玩家、上传立绘，预览角色卡并导出 Word/Excel；也可在最后一步「设定背景与角色信息」补填姓名。',
-  10: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。需同调的魔法物品计入同调位（默认 3 个）。',
+  10: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。需同调的魔法物品计入同调位（默认 3 个）；买到带加值的装备后，可在下方「装备加值」手动填 AC/豁免/法术DC/法术攻击（自动判定不可靠，未填则按基础公式算）。',
   11: '最后一步：填写角色姓名/玩家与背景故事（与游戏数据无关）。姓名用于角色卡标题和导出文件名；立绘仍可在第 9 步「角色卡」上传。',
 };
 
@@ -816,6 +869,10 @@ function stepIssues(n) {
       break;
     case 2:
       if (!c.classId) err('尚未选择职业');
+      else {
+        const sf = classStyleFeature(klass());
+        if (sf && !state.char.style) warn(`尚未选择${sf.name}（1 级可选，见职业详情）`);
+      }
       break;
     case 3:
       if (!(c.level >= 1 && c.level <= 20)) err('角色等级需在 1–20 之间');
@@ -1281,8 +1338,10 @@ function renderClass() {
       <div class="ci-desc">${esc(roleText || (core.skills ? '技能：' + core.skills : '') || '')}</div>`;
     card.onclick = () => {
       const sameBase = state.char.classId === base.id;
+      const sameVersion = sameBase && (state.char.variant || '') === (variant ? variant.name : '');
       state.char.classId = base.id;
       state.char.variant = variant ? variant.name : '';
+      if (!sameVersion) state.char.style = '';   // 换职业/职业版本后风格选项不同，清空重选
       if (!sameBase || !subclassList().some(s => s.name === state.char.subclass)) state.char.subclass = '';
       state.char.keyAttr = keyAttrHint();
       save(); render(); renderLive();
@@ -1343,6 +1402,21 @@ function renderClass() {
         }
       }
     }
+    // 1 级风格选择（法术风格 / 战斗风格）——规则书里是「从下列选项中选择其一」的可选项（反馈）
+    const styleFeat = classStyleFeature(k);
+    if (styleFeat) {
+      const styleOpts = parseStyleOptions(styleFeat.text);
+      const chosen = styleOpts.find(o => o.name === state.char.style);
+      html += `<h4 style="margin:12px 0 4px">${esc(styleFeat.name)}（1 级可选）</h4>`;
+      html += `<select id="style-sel" class="subclass-sel"><option value="">（暂不选择）</option>` +
+        styleOpts.map(o => `<option value="${esc(o.name)}"${chosen && chosen.name === o.name ? ' selected' : ''}>${esc(o.name)}</option>`).join('') +
+        `</select>`;
+      if (chosen) {
+        html += `<p class="muted" style="margin-top:6px"><b>已选 ${esc(chosen.name)}</b>：${esc(chosen.desc)}</p>`;
+      } else {
+        html += `<p class="muted" style="margin-top:6px">从下列选项中选择其一（各选项效果见上方「1 级特性」原文；选择结果会写入角色卡与 Word 导出）。</p>`;
+      }
+    }
     // 子职（普通职业 / 变体职业各自的候选表）
     const v = activeVariant();
     const opts = subclassList();
@@ -1385,9 +1459,16 @@ function renderClass() {
     d.querySelectorAll('.vs-btn').forEach(btn => btn.addEventListener('click', () => {
       state.char.variant = btn.dataset.variant || '';
       state.char.subclass = '';
+      state.char.style = '';   // 变体职业的风格选项与基础职业不同，清空重选
       save(); render(); renderLive();
       try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
     }));
+    const styleSel = $('#style-sel', d);
+    if (styleSel) styleSel.addEventListener('change', () => {
+      state.char.style = styleSel.value;
+      save(); render(); renderLive();
+      try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
+    });
     const ss = $('#subclass-sel', d);
     if (ss) ss.addEventListener('change', () => {
       state.char.subclass = ss.value;
@@ -2335,7 +2416,15 @@ function renderShop() {
       <input type="number" id="shop-attune" min="0" max="30" step="1" value="${attuneSlotsOf()}" title="默认为 3 个同调位（0–30）"
         style="width:64px;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)">
     </span>
-    <span id="shop-attune-count" class="attune-count" style="margin-left:10px;font-weight:600"></span>`;
+    <span id="shop-attune-count" class="attune-count" style="margin-left:10px;font-weight:600"></span>
+    <div class="equip-bonus-row" style="margin-top:10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px">
+      <b>装备加值：</b>
+      <span class="hint">魔法物品的具体加值无法自动判定，可在这里手动填（会计入角色卡 / Word 导出）</span>
+      <label class="eq-label">AC +<input type="number" id="eq-ac" min="-10" max="20" step="1" value="${equipBonusOf('ac')}" title="护甲/盾牌/奇物提供的 AC 加值"></label>
+      <label class="eq-label">豁免 +<input type="number" id="eq-save" min="-10" max="20" step="1" value="${equipBonusOf('save')}" title="对所有豁免的加值（如防护斗篷 +1）"></label>
+      <label class="eq-label">法术豁免 DC +<input type="number" id="eq-dc" min="-10" max="20" step="1" value="${equipBonusOf('dc')}" title="法术豁免 DC 的加值"></label>
+      <label class="eq-label">法术攻击 +<input type="number" id="eq-atk" min="-10" max="20" step="1" value="${equipBonusOf('atk')}" title="法术攻击加值的加值"></label>
+    </div>`;
   stage().appendChild(budgetBox);
   const budgetIn = $('#shop-budget');
   budgetIn.addEventListener('input', () => { c.budget = budgetIn.value.trim(); save(); paintShop(); });
@@ -2348,6 +2437,23 @@ function renderShop() {
     c.attuneSlots = clampAttuneSlots(attuneIn.value);
     attuneIn.value = c.attuneSlots;
     save(); paintShop();
+  });
+  // 装备加值：AC/豁免/法术DC/法术攻击（-10~20，手动填写；自动读取魔法物品加值不可靠，故不做自动）
+  const EQ_KEYS = [['eq-ac', 'ac'], ['eq-save', 'save'], ['eq-dc', 'dc'], ['eq-atk', 'atk']];
+  c.equipBonus = Object.assign({ ac: 0, save: 0, dc: 0, atk: 0 }, c.equipBonus || {});
+  EQ_KEYS.forEach(([id, key]) => {
+    const inp = $('#' + id);
+    if (!inp) return;
+    const apply = () => {
+      let v = Number(inp.value);
+      if (!Number.isFinite(v)) v = 0;
+      v = Math.max(-10, Math.min(20, Math.round(v)));
+      c.equipBonus[key] = v;
+      save();
+      try { renderLive(); } catch (e) { /* 首屏未就绪 */ }
+    };
+    inp.addEventListener('input', apply);
+    inp.addEventListener('change', () => { apply(); inp.value = c.equipBonus[key]; });
   });
 
   // 已购面板 + 合计行
@@ -2559,11 +2665,10 @@ function renderSheet() {
   </div>`);
 
   // —— 战斗数据 ——
-  const acName = { naked: '裸体', light: '轻甲', medium: '中甲', heavy: '重甲', mage: '法师护甲', monk: '武僧无甲', barb: '狂战士无甲' }[c.armorType] || '裸体';
   sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>战斗数据</h3>
     <div class="kvs">
       <div class="kv"><span class="k">防御等级 AC</span><span class="v">${acValue()}</span></div>
-      <div class="kv"><span class="k">AC 来源</span><span class="v">${acName}${c.shield ? ' + 盾牌' : ''}${c.armorBonus ? ' + 其它 ' + c.armorBonus : ''}</span></div>
+      <div class="kv"><span class="k">AC 来源</span><span class="v">${esc(acSourceName())}</span></div>
       <div class="kv"><span class="k">先攻</span><span class="v">${initBonus() >= 0 ? '+' : ''}${initBonus()}</span></div>
       <div class="kv"><span class="k">法术豁免 DC</span><span class="v">${spellDC()}</span></div>
       <div class="kv"><span class="k">法术攻击加值</span><span class="v">${spellAttack() >= 0 ? '+' : ''}${spellAttack()}</span></div>
@@ -2606,7 +2711,7 @@ function renderSheet() {
       c.feats.map((fn, i) => {
         const f = DATA.feats.find(x => x.name === fn);
         const lv = [1, 1, 3, 6, 9, 12, 15, 18][i] || '';
-        return `<tr><td>${lv}</td><td><b>${esc(fn)}</b></td><td>${f ? esc(f.text.split('\n')[0]) : ''}</td></tr>`;
+        return `<tr><td>${lv}</td><td><b>${esc(fn)}</b></td><td>${f ? esc(featEffectSummary(f, 60)) : ''}</td></tr>`;
       }).join('') + '</table>' : '<p class="muted">未选择专长</p>'}
   </div>`);
 
@@ -2620,9 +2725,14 @@ function renderSheet() {
       const fLevels = Array.isArray(f.levels) && f.levels.length ? f.levels.filter(x => Number.isFinite(x)) : (f.level ? [f.level] : []);
       return fLevels.length ? f.name + '（第' + Math.min.apply(null, fLevels) + '级）' : f.name;
     };
+    // 1 级风格（法术风格/战斗风格）的已选项：在特性名后标注，并单独列一行所选效果
+    const styleFeat = classStyleFeature(k);
+    const styleSel = styleSelection();
+    const withStyle = (f) => (styleFeat && f.name === styleFeat.name && c.style) ? `${tName(f)}（已选：${c.style}）` : tName(f);
     if (mainFeats.length || subFeats.length || c.subclass) {
       sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>职业特性（至 ${c.level} 级${c.subclass ? ' · ' + esc(c.subclass) : ''}）</h3>
-        ${mainFeats.length ? mainFeats.map(f => `<div class="trait"><span class="t-name">${esc(tName(f))}</span>　<span class="t-text">${esc(f.text)}</span></div>`).join('') : '<p class="muted">主职特性数据未收录（见职业表）</p>'}
+        ${mainFeats.length ? mainFeats.map(f => `<div class="trait"><span class="t-name">${esc(withStyle(f))}</span>　<span class="t-text">${esc(f.text)}</span></div>`).join('') : '<p class="muted">主职特性数据未收录（见职业表）</p>'}
+        ${styleSel ? `<p class="muted" style="margin-top:6px">所选 ${esc(styleFeat.name)}：<b>${esc(styleSel.name)}</b> —— ${esc(styleSel.desc)}</p>` : ''}
         ${subFeats.length ? `<h4 style="margin:10px 0 4px">子职特性（${esc(c.subclass)}）</h4>` + subFeats.map(f => `<div class="trait"><span class="t-name">${esc(tName(f))}</span>　<span class="t-text">${esc(f.text)}</span></div>`).join('') : ''}
         <p class="muted">已获得特性按当前 ${c.level} 级列出；更多见规则书：<a href="${esc(k.url)}" target="_blank">${esc(k.name)}</a></p>
       </div>`);
@@ -2914,8 +3024,9 @@ function speedValue() {
 }
 function acSourceName() {
   const c = state.char;
+  const eq = equipBonusOf('ac');
   return ({ naked: '无盔甲', light: '轻甲', medium: '中甲', heavy: '重甲', mage: '法师护甲', monk: '武僧无甲防御', barb: '狂战士无甲防御' }[c.armorType] || '无盔甲') +
-    (c.shield ? ' + 盾牌' : '') + (c.armorBonus ? ' + 其它 ' + c.armorBonus : '');
+    (c.shield ? ' + 盾牌' : '') + (c.armorBonus ? ' + 其它 ' + c.armorBonus : '') + (eq ? ' + 装备 ' + eq : '');
 }
 function classLv1Features() {
   const k = klass();
@@ -3096,7 +3207,7 @@ function buildSheetChar() {
       const f = DATA.feats.find(x => x.name === fn);
       s.set(rr, 1, featLv(i), SX.num);
       s.set(rr, 2, fn, SX.value);
-      s.set(rr, 3, f ? f.text.split('\n')[0] : '', SX.text);
+      s.set(rr, 3, featEffectSummary(f, 90), SX.text);
       s.merge(rr, 3, 8);
       s.height(rr, 22);
     });
@@ -3506,7 +3617,7 @@ function __docxAcParts() {
     default: parts.push(['8', 8], ['熟练', prof], ['敏捷', dex]);
   }
   const name = ({ naked: '无盔甲', light: '轻甲', medium: '中甲', heavy: '重甲', mage: '法师护甲', monk: '武僧无甲防御', barb: '狂战士无甲防御' })[type] || '无盔甲';
-  return { type, name, shield: c.shield ? 2 : 0, extra: c.armorBonus || 0, value: acValue(), parts };
+  return { type, name, shield: c.shield ? 2 : 0, extra: c.armorBonus || 0, equip: equipBonusOf('ac'), value: acValue(), parts };
 }
 // 速度：步行 + 种族特性中的游泳/飞行/掘穴/攀爬
 function __docxSpeedText() {
@@ -3718,19 +3829,21 @@ function buildDocxBody() {
   const ac = __docxAcParts();
   const acSum = ac.parts.map(([label, v], i) => i === 0 ? String(v) : label + __docxMod(v)).join('+');
   b.push(docxP(docxRun('防御等级 AC', { b: true }) +
-    docxRun(`：${ac.value}（基础AC=${acSum}，盾牌+${ac.shield}${ac.extra ? '，其它+' + ac.extra : ''}；${ac.name}${c.shield ? ' + 盾牌' : ''}）`)));
+    docxRun(`：${ac.value}（基础AC=${acSum}，盾牌+${ac.shield}${ac.extra ? '，其它+' + ac.extra : ''}${ac.equip ? '，装备+' + ac.equip : ''}；${ac.name}${c.shield ? ' + 盾牌' : ''}）`)));
 
   // ===== 豁免（每项分解） + 专注/先攻/熟练加值/速度/特殊感官 =====
   b.push(docxSec('豁免'));
   const saveRows = ATTRS.map(a => {
     const hasSave = k ? k.core.saveList.includes(a) : false;
+    const eqSave = equipBonusOf('save');
     return [a, String(finalAttr(a)), __docxMod(finalMod(a)), hasSave ? `熟练+${profBonus()}` : '—', __docxMod(saveMod(a)),
-      `${a}${__docxMod(finalMod(a))}${hasSave ? '，熟练+' + profBonus() : ''}`];
+      `${a}${__docxMod(finalMod(a))}${hasSave ? '，熟练+' + profBonus() : ''}${eqSave ? '，装备+' + eqSave : ''}`];
   });
   b.push(docxTable(['属性', '属性值', '调整值', '熟练', '豁免总值', '分解'], saveRows, [1100, 1100, 1100, 1400, 1400, 3300]));
   const conSave = k ? k.core.saveList.includes('体质') : false;
+  const eqSaveAll = equipBonusOf('save');
   b.push(docxP(docxRun('专注（体质豁免）', { b: true }) +
-    docxRun(`：${__docxMod(saveMod('体质'))}（体质${__docxMod(finalMod('体质'))}${conSave ? '，熟练+' + profBonus() : ''}）　　先攻：${__docxMod(initBonus())}（敏捷${__docxMod(finalMod('敏捷'))}）　　熟练加值：+${profBonus()}`)));
+    docxRun(`：${__docxMod(saveMod('体质'))}（体质${__docxMod(finalMod('体质'))}${conSave ? '，熟练+' + profBonus() : ''}${eqSaveAll ? '，装备+' + eqSaveAll : ''}）　　先攻：${__docxMod(initBonus())}（敏捷${__docxMod(finalMod('敏捷'))}）　　熟练加值：+${profBonus()}`)));
   b.push(docxP(docxRun('速度', { b: true }) + docxRun('：' + (__docxSpeedText() || '—') + '　　特殊感官：' + (__docxSensesText() || '—'))));
 
   // ===== 攻击与施法（无武器数据 → 灰字粘贴区，保留公式加数） =====
@@ -3741,8 +3854,9 @@ function buildDocxBody() {
   const cs = (typeof classSpellList === 'function') ? classSpellList() : null;
   const isCyborg = (k && /赛博格/.test(t(k.name) + t(k.baseName))) || (c.programs || []).length > 0;
   if (k && (cs || (c.spells || []).length)) {
+    const eqDc = equipBonusOf('dc'), eqAtk = equipBonusOf('atk');
     b.push(docxP(docxRun('法术豁免 DC', { b: true }) +
-      docxRun(`：${spellDC()}（8+熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}）　　法术攻击加值：${__docxMod(spellAttack())}（熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}）`)));
+      docxRun(`：${spellDC()}（8+熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}${eqDc ? '，装备+' + eqDc : ''}）　　法术攻击加值：${__docxMod(spellAttack())}（熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}${eqAtk ? '，装备+' + eqAtk : ''}）`)));
   }
   if (isCyborg) {
     b.push(docxP(docxRun('程序豁免 DC', { b: true }) +
@@ -3772,7 +3886,7 @@ function buildDocxBody() {
   for (let i = 0; i < featSlotCount; i++) {
     const fn = t(c.feats[i]);
     const f = fn ? DATA.feats.find(x => x.name === fn) : null;
-    featRows.push([String(featLv(i) || '额外'), fn || '（待填）', f ? (t(f.text).split('\n')[0] || '') : '']);
+    featRows.push([String(featLv(i) || '额外'), fn || '（待填）', f ? featEffectSummary(f, 95) : '']);
   }
   b.push(docxTable(['等级', '专长名称', '效果摘要'], featRows, [1100, 2600, 5900]));
   if (c.feats.length) b.push(docxPaste('专长完整效果（从规则书复制粘贴，或删除本行后手写）'));
@@ -3787,11 +3901,18 @@ function buildDocxBody() {
   if (k) {
     const mainFeats = (typeof classFeatureListToLevel === 'function' ? classFeatureListToLevel(level) : [])
       .filter(f => f && f.name && t(f.text).trim());
+    const styleFeat = classStyleFeature(k);
+    const styleSel = styleSelection();
     if (mainFeats.length) {
       for (const f of mainFeats) {
         const fLevels = Array.isArray(f.levels) ? f.levels.filter(x => Number.isFinite(x)) : [];
-        const label = fLevels.length ? f.name + '（第' + Math.min.apply(null, fLevels) + '级）' : f.name;
+        let label = fLevels.length ? f.name + '（第' + Math.min.apply(null, fLevels) + '级）' : f.name;
+        // 1 级风格（法术风格/战斗风格）：标注已选选项
+        if (styleFeat && f.name === styleFeat.name && c.style) label += `（已选：${c.style}）`;
         b.push(docxKV(label, f.text, { long: true }));
+      }
+      if (styleFeat && styleSel) {
+        b.push(docxP(docxRun(`所选${styleFeat.name}：${styleSel.name} —— ${styleSel.desc}`, { b: false, color: '2F5496' })));
       }
     } else {
       b.push(docxPaste(`主职特性（${k.name}，请从规则书中复制粘贴已获得的特性全文）`));

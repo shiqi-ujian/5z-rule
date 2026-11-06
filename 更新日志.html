@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>53</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>54</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（53 条）</summary>
+    <summary>✅ 已修复（54 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -558,6 +558,15 @@
       
       
       <div class="cl-detail">步骤顺序调整后「背景」变成最后一步，用户车到第 11 步找不到填名字的地方（原姓名/玩家输入只在第 9 步「角色卡」的基本信息区）。修复：最后一步更名「设定背景与角色信息」，顶部新增「角色信息」小节（角色姓名/玩家），与第 9 步共用同一个 state.char（两处编辑实时同步，右侧预览、角色卡标题、Word/JSON 导出文件名同步更新）；步骤提示与第 9 步提示都注明两处入口；立绘仍在第 9…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261106-200900-7c3e-export</span>
+      <b>Word 角色卡：专长效果摘要修正 / 装备加值手动计入 / 法术·战斗风格可选</b>
+      <span class="cl-page">（car.html 车卡 · 职业步 / 购物步 / Word 导出）</span>
+      <span class="cl-date">2026-11-06</span>
+      
+      
+      <div class="cl-detail">用户导出 Word 角色卡后反馈 3 点：① 专长表「效果摘要」把「先决条件」行当成效果（如 和平誓言 的摘要只有「先决条件：玩家角色」）——改为跳过先决条件/注释行取正文首段，角色卡/Word/Excel 三处摘要统一（共用 featEffectSummary()）；② 防御等级/豁免/法术豁免 DC/法术攻击没有计入买的魔法物品，车卡器无法可靠判断物品加值——在购物步新增「装备加值」手动输入（…</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
@@ -609,9 +618,9 @@
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-11-06 · v1.65</span><span class="cl-batch-hint">✅3</span></summary>
+    <summary><span class="cl-title">2026-11-06 · v1.65</span><span class="cl-batch-hint">✅4</span></summary>
     <p class="cl-release">车卡器 10 项使用反馈修复（网页车卡截图反馈）：子职下拉配色、专长「仅显示当前可选」筛选、车卡步骤顺序、专长数据污染与重复、变体职业、购物同调位、Word 角色卡格式。</p>
-    <h3>✅ 已修复（3）</h3><ul>
+    <h3>✅ 已修复（4）</h3><ul>
     <li class="cl-fix">
       <span class="cl-id">#20261106-200900-7c3e</span>
       <b>车卡器 10 项反馈：子职选择配色 / 专长筛选 / 步骤顺序 / 专长数据 / 变体职业 / 同调位 / Word 角色卡</b>
@@ -629,6 +638,12 @@
       <b>车卡最后一步补上「角色姓名 / 玩家」输入（名字在哪填）</b>
       <span class="cl-page">（car.html 车卡 · 步骤 11 设定背景与角色信息）</span>
       <div class="cl-detail">步骤顺序调整后「背景」变成最后一步，用户车到第 11 步找不到填名字的地方（原姓名/玩家输入只在第 9 步「角色卡」的基本信息区）。修复：最后一步更名「设定背景与角色信息」，顶部新增「角色信息」小节（角色姓名/玩家），与第 9 步共用同一个 state.char（两处编辑实时同步，右侧预览、角色卡标题、Word/JSON 导出文件名同步更新）；步骤提示与第 9 步提示都注明两处入口；立绘仍在第 9 步上传。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20261106-200900-7c3e-export</span>
+      <b>Word 角色卡：专长效果摘要修正 / 装备加值手动计入 / 法术·战斗风格可选</b>
+      <span class="cl-page">（car.html 车卡 · 职业步 / 购物步 / Word 导出）</span>
+      <div class="cl-detail">用户导出 Word 角色卡后反馈 3 点：① 专长表「效果摘要」把「先决条件」行当成效果（如 和平誓言 的摘要只有「先决条件：玩家角色」）——改为跳过先决条件/注释行取正文首段，角色卡/Word/Excel 三处摘要统一（共用 featEffectSummary()）；② 防御等级/豁免/法术豁免 DC/法术攻击没有计入买的魔法物品，车卡器无法可靠判断物品加值——在购物步新增「装备加值」手动输入（AC/豁免/法术 DC/法术攻击，-10~20，存档持久化），acValue/saveMod/spellDC/spellAttack 与角色卡/Word/Excel 导出同步计入，分解里显示「装备+N」；③ 法术风格（法师/灵能师/牧师）与战斗风格（狂战士/灵能武士/圣武士/游侠及变体）在规则书里是 1 级可选项——职业步新增风格选择下拉（从职业特性文本解析选项），state.char.style 持久化，切换职业/职业版本时重置，待补清单提示未选；角色卡与 Word 主职特性标注「（已选：X）」并单列所选效果。</div>
     </li></ul>
     
   </details>

@@ -214,6 +214,15 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
 /* 输入行 */
 .field { margin-bottom: 14px; }
 .field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
+/* 购物步：装备加值手动填写（AC/豁免/法术DC/法术攻击） */
+.equip-bonus-row .eq-label, .equip-bonus-row > label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 600; color: var(--sub);
+}
+.equip-bonus-row input[type=number] {
+  width: 60px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--ink); font-size: 13px;
+}
 /* 表单内小节标题（如最后一步的「角色信息」「背景与扮演」） */
 .sub-h {
   margin: 2px 0 10px; font-size: 14px; font-weight: 700; color: var(--acc);
