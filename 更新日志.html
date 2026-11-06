@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>52</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>53</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（52 条）</summary>
+    <summary>✅ 已修复（53 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -549,6 +549,15 @@
       
       
       <div class="cl-detail">为支持上述车卡修复，5z_build/parse-card-data.mjs 同步加固（词典与骰子查询同源）：① parseRaces 的「种族专长」段识别改为「标题元素且 trim 后以种族专长结尾、长度≤10」，并对种族页来源的专长名做清洗（≤20 字、不含句读/顿号/冒号）；种族特性不再混入专长，同时修复旧解析提前进入该段导致真龙/狗头人/眼魔/序位巨人的种族特性 traits 被截断。② …</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261106-200900-7c3e-name</span>
+      <b>车卡最后一步补上「角色姓名 / 玩家」输入（名字在哪填）</b>
+      <span class="cl-page">（car.html 车卡 · 步骤 11 设定背景与角色信息）</span>
+      <span class="cl-date">2026-11-06</span>
+      
+      
+      <div class="cl-detail">步骤顺序调整后「背景」变成最后一步，用户车到第 11 步找不到填名字的地方（原姓名/玩家输入只在第 9 步「角色卡」的基本信息区）。修复：最后一步更名「设定背景与角色信息」，顶部新增「角色信息」小节（角色姓名/玩家），与第 9 步共用同一个 state.char（两处编辑实时同步，右侧预览、角色卡标题、Word/JSON 导出文件名同步更新）；步骤提示与第 9 步提示都注明两处入口；立绘仍在第 9…</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
@@ -600,9 +609,9 @@
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
 
   <details class="cl-entry">
-    <summary><span class="cl-title">2026-11-06 · v1.65</span><span class="cl-batch-hint">✅2</span></summary>
+    <summary><span class="cl-title">2026-11-06 · v1.65</span><span class="cl-batch-hint">✅3</span></summary>
     <p class="cl-release">车卡器 10 项使用反馈修复（网页车卡截图反馈）：子职下拉配色、专长「仅显示当前可选」筛选、车卡步骤顺序、专长数据污染与重复、变体职业、购物同调位、Word 角色卡格式。</p>
-    <h3>✅ 已修复（2）</h3><ul>
+    <h3>✅ 已修复（3）</h3><ul>
     <li class="cl-fix">
       <span class="cl-id">#20261106-200900-7c3e</span>
       <b>车卡器 10 项反馈：子职选择配色 / 专长筛选 / 步骤顺序 / 专长数据 / 变体职业 / 同调位 / Word 角色卡</b>
@@ -614,6 +623,12 @@
       <b>card-data 解析：专长去重与污染修复、变体职业结构化、职业特性等级 / 子职特性挂接</b>
       <span class="cl-page">（assets/card-data（车卡 / 词典 / 骰子查询数据源））</span>
       <div class="cl-detail">为支持上述车卡修复，5z_build/parse-card-data.mjs 同步加固（词典与骰子查询同源）：① parseRaces 的「种族专长」段识别改为「标题元素且 trim 后以种族专长结尾、长度≤10」，并对种族页来源的专长名做清洗（≤20 字、不含句读/顿号/冒号）；种族特性不再混入专长，同时修复旧解析提前进入该段导致真龙/狗头人/眼魔/序位巨人的种族特性 traits 被截断。② 新增 dedupeFeats()：专长按名称去重（优先「专长/」规范来源 → 全文更长 → 先出现），合并 categories 并集；专长 801→704，锚点 631 条（缺 0，门禁通过）。③ parseClasses 重构：职业特性统一走 parseFeatureSection（带 levels 反推），新增变体职业解析（variants：core/职业表/特性/子职规则），subclasses 增加 kind/owner/displayName 分类（subclass 152 / variant 7 / variant-sub 15 / appendix 2 / vestige 7 / protocol 7 = 190），并把 951 条子职特性按 url 挂到对应子职条目上供车卡器/Word 导出使用。④ 契约保持：classes.json 仍 15 个职业、各职业 subclasses 条数不变（骰子 qq-dice build-5z-data 的下限门禁不破），features.json 与发布基线逐字节一致（classFeatures 227 / subclassFeatures 951），class-spells/magic-items/maneuvers/monsters/programs/rules/spells 亦逐字节一致；仅 classes/feats/races 变化。代价：classes.json 因内嵌子职特性全文由 311KB→1.2MB，card-data.js 增加约 0.9MB（后续可做懒加载/裁剪）。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20261106-200900-7c3e-name</span>
+      <b>车卡最后一步补上「角色姓名 / 玩家」输入（名字在哪填）</b>
+      <span class="cl-page">（car.html 车卡 · 步骤 11 设定背景与角色信息）</span>
+      <div class="cl-detail">步骤顺序调整后「背景」变成最后一步，用户车到第 11 步找不到填名字的地方（原姓名/玩家输入只在第 9 步「角色卡」的基本信息区）。修复：最后一步更名「设定背景与角色信息」，顶部新增「角色信息」小节（角色姓名/玩家），与第 9 步共用同一个 state.char（两处编辑实时同步，右侧预览、角色卡标题、Word/JSON 导出文件名同步更新）；步骤提示与第 9 步提示都注明两处入口；立绘仍在第 9 步上传。</div>
     </li></ul>
     
   </details>

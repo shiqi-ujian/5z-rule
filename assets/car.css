@@ -214,6 +214,13 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
 /* 输入行 */
 .field { margin-bottom: 14px; }
 .field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
+/* 表单内小节标题（如最后一步的「角色信息」「背景与扮演」） */
+.sub-h {
+  margin: 2px 0 10px; font-size: 14px; font-weight: 700; color: var(--acc);
+  border-left: 3px solid var(--acc); padding-left: 8px;
+}
+.sub-h + .field, .sub-h + div { margin-top: 0; }
+form .sub-h:not(:first-child), .stage .sub-h:not(:first-child) { margin-top: 18px; }
 .field input[type=text], .field input[type=number], .field textarea, .field select {
   width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff;
 }

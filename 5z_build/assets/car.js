@@ -781,7 +781,7 @@ async function initData() {
 const stage = () => $('#stage');
 const STEP_TITLES = {
   1: '选择种族', 2: '选择职业', 3: '决定属性值', 4: '选择技能熟练', 5: '选择专长',
-  6: '选择法术', 7: '选择战技', 8: '选择程序', 9: '角色卡', 10: '购物（魔法物品）', 11: '设定背景',
+  6: '选择法术', 7: '选择战技', 8: '选择程序', 9: '角色卡', 10: '购物（魔法物品）', 11: '设定背景与角色信息',
 };
 const STEP_HINTS = {
   1: '每个角色都有其所属种族。种族提供属性值加成、速度、语言与种族特性。',
@@ -792,9 +792,9 @@ const STEP_HINTS = {
   6: '按职业法术列表选择已知/准备法术（可搜索、按环位筛选）。准备施法者（法师等）需从已选法术中标记「已准备」，数量按职业规则（如法师=等级+智力调整值）。',
   7: '选择战技流派（及门弟子）与战技。流派入门专长见专长步骤。',
   8: '赛博格专属：按协议层级选择准备程序。其他职业可跳过。',
-  9: '完成！可打印、导出 JSON 存档、导出 Excel 角色卡。',
+  9: '可填写角色姓名/玩家、上传立绘，预览角色卡并导出 Word/Excel；也可在最后一步「设定背景与角色信息」补填姓名。',
   10: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。需同调的魔法物品计入同调位（默认 3 个）。',
-  11: '背景给予 2 项技能熟练、1 门额外语言与一段身份特性。5z 背景为开放式自定义。',
+  11: '最后一步：填写角色姓名/玩家与背景故事（与游戏数据无关）。姓名用于角色卡标题和导出文件名；立绘仍可在第 9 步「角色卡」上传。',
 };
 
 /* ============================================================
@@ -1556,7 +1556,14 @@ function renderBg() {
     <input type="text" id="${id}" value="${esc(value)}" placeholder="${esc(ph || '')}">
     ${hint ? `<div class="f-hint">${hint}</div>` : ''}</div>`;
   const wrap = el('div');
-  wrap.innerHTML = f('背景名称', 'bg-name', c.bgName, '如：平民英雄、罪犯、流浪儿…', '5z 背景为开放式设计：任意自拟背景，获得 2 项技能熟练 + 1 门额外语言。') +
+  // 角色信息放最后一步顶部：姓名/玩家（第 9 步「角色卡」也有编辑入口，两处同步，反馈「名字在哪填」）
+  wrap.innerHTML = `<h4 class="sub-h">角色信息</h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+      ${f('角色姓名', 'bg-char-name', c.name, '如：卡菈·晨光', '显示在角色卡标题与导出文件名上；也可以在第 9 步「角色卡」里填写。')}
+      ${f('玩家', 'bg-player', c.player, '你的名字 / 昵称')}
+    </div>
+    <h4 class="sub-h">背景与扮演</h4>` +
+    f('背景名称', 'bg-name', c.bgName, '如：平民英雄、罪犯、流浪儿…', '5z 背景为开放式设计：任意自拟背景，获得 2 项技能熟练 + 1 门额外语言。') +
     f('背景特性 / 身份描述', 'bg-text', c.bgText, '你的来历、身份、特性文本…') +
     f('额外语言', 'bg-lang', c.bgLanguage, '如：精灵语、龙语…', '背景允许角色掌握种族语言外的一门额外语言。') +
     `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
@@ -1569,9 +1576,18 @@ function renderBg() {
     `<div class="field"><label>随身物品 / 备注</label>
      <textarea id="bg-items" placeholder="初始资金、装备、物品…">${esc(c.items)}</textarea></div>`;
   stage().appendChild(wrap);
-  const bind = (id, key) => {
-    $('#' + id).addEventListener('input', (e) => { c[key] = e.target.value; save(); });
+  const bind = (id, key, after) => {
+    const node = $('#' + id);
+    if (!node) return;
+    node.addEventListener('input', (e) => {
+      c[key] = e.target.value;
+      save();
+      if (after) after();
+    });
   };
+  // 姓名/玩家：同步右侧实时预览（两处编辑入口共用 state.char）
+  bind('bg-char-name', 'name', () => { try { renderLive(); } catch (e) { /* 首屏未就绪 */ } });
+  bind('bg-player', 'player');
   bind('bg-name', 'bgName'); bind('bg-text', 'bgText'); bind('bg-lang', 'bgLanguage');
   bind('bg-age', 'age'); bind('bg-gender', 'gender'); bind('bg-align', 'alignment');
   bind('bg-faith', 'faith'); bind('bg-hw', 'heightWeight'); bind('bg-items', 'items');
@@ -2711,7 +2727,7 @@ function renderSheet() {
         <button type="button" id="info-clear-p" class="nav-btn" style="color:var(--warn)">清除</button>
       </span>
     </div>
-    <div class="f-hint">立绘支持图片 URL 或本地文件（自动压缩后存入浏览器本地存档，仅本机可见）。</div>`;
+    <div class="f-hint">立绘支持图片 URL 或本地文件（自动压缩后存入浏览器本地存档，仅本机可见）。角色姓名/玩家也可在最后一步「设定背景与角色信息」填写。</div>`;
   s.appendChild(info);
   const $name = $('#info-name', info);
   const $player = $('#info-player', info);

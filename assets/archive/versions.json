@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-11-06T12:38:57.908Z",
+  "generatedAt": "2026-11-06T13:15:53.926Z",
   "source": "git-history",
   "repo": "shiqi-ujian/5z-rule",
   "versions": [
     {
       "version": "1.64",
       "label": "5z 规则 1.64 版",
-      "commit": "4cfc07b512d502847df3c50c7303a228fffc5557",
+      "commit": "9074f6cb5c0b2b4500f15084b776c21ae6b76870",
       "date": "2026-10-28",
       "pages": 671
     },
