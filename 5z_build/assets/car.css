@@ -124,6 +124,28 @@ table.data { border-collapse: collapse; font-size: 13px; }
 table.data th, table.data td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; }
 table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowrap; }
 
+/* 职业卡：变体职业（反馈 5）——与子职区分开，单独成卡 + 「变体」角标 */
+.card-item.variant-card { border-style: dashed; }
+.variant-badge {
+  display: inline-block; font-size: 11px; font-weight: 700; color: #fff;
+  background: #0891b2; border-radius: 999px; padding: 1px 8px;
+  vertical-align: 2px; margin-left: 6px; letter-spacing: .5px;
+}
+.variant-switch { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 10px; }
+.variant-switch .vs-label { font-size: 12.5px; color: var(--sub); }
+.variant-switch .vs-btn {
+  border: 1px solid var(--line); background: #fff; color: #1e293b;
+  border-radius: 8px; padding: 4px 12px; font-size: 13px;
+}
+.variant-switch .vs-btn.sel { background: var(--acc); border-color: var(--acc); color: #fff; }
+/* 子职下拉：显式给 select/option 配色，避免深色模式下「白底 ← 浅字」看不清（反馈 1） */
+.subclass-sel {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: #fff; color: #1e293b; font-size: 14px;
+}
+.subclass-sel option { background: #fff; color: #1e293b; }
+.detail-box select, .detail-box select option { color: #1e293b; }
+
 /* 属性页 */
 .attr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
 .attr-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fafbfe; }
@@ -264,6 +286,11 @@ table.data th { background: var(--acc-soft); font-weight: 700; white-space: nowr
     background: var(--panel); color: var(--ink); border-color: var(--line);
   }
   .detail-box { background: #1a2637; }
+  .variant-switch .vs-btn { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .variant-switch .vs-btn.sel { background: var(--acc); border-color: var(--acc); color: #0f172a; }
+  .subclass-sel { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  .subclass-sel option { background: var(--panel); color: var(--ink); }
+  .detail-box select, .detail-box select option { background: var(--panel); color: var(--ink); }
   .attr-card { background: #1a2637; }
   .attr-notes { background: #1a2637; color: var(--sub); }
   .seg button { background: var(--panel); color: var(--ink); }

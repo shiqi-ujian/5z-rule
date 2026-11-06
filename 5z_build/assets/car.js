@@ -1,6 +1,6 @@
 /* 5z 车卡 - 前端逻辑
  * 数据：assets/card-data/{rules,races,classes,feats}.json（构建时从规则书解析）
- * 流程：种族 → 职业 → 属性 → 背景 → 技能 → 专长 → 角色卡
+ * 流程（v3）：种族 → 职业 → 属性 → 技能 → 专长 → 法术 → 战技 → 程序 → 角色卡 → 购物 → 背景
  */
 (function () {
 'use strict';
@@ -105,7 +105,7 @@ let rollBuf = null; // 随机骰临时数组
 function newChar() {
   return {
     name: '', player: '', level: 1, portrait: '',
-    raceId: null, classId: null, subclass: '', raceTraining: '', subrace: '',
+    raceId: null, classId: null, variant: '', subclass: '', raceTraining: '', subrace: '',
     raceChoice: { mode: '', a: '', b: '', c: '' }, // 种族属性加值的选择型分配（如人类/精灵）
     majorAttr: '力量',
     buyMethod: 'points',
@@ -125,10 +125,15 @@ function newChar() {
     prepared: [],
     programProtocol: '阿尔法',
     programs: [],
-    equipment: [], budget: '',
+    equipment: [], budget: '', attuneSlots: 3,   // attuneSlots：同调位上限（默认 3，反馈 7）
     notes: '', items: '', traitsNote: '',
   };
 }
+
+// 存档步骤迁移表（v2 → v3，反馈 3：背景步从第 4 步移到最后一格第 11 步）
+// 旧顺序：1种族 2职业 3属性 4背景 5技能 6专长 7法术 8战技 9程序 10角色卡 11购物
+// 新顺序：1种族 2职业 3属性 4技能 5专长 6法术 7战技 8程序 9角色卡 10购物 11背景
+const SAVE_STEP_MIGRATE_V2 = { 4: 11, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, 11: 10 };
 
 function load() {
   try {
@@ -137,7 +142,12 @@ function load() {
       const saved = JSON.parse(raw);
       state.char = Object.assign(newChar(), saved.char || {});
       if (!state.char.raceChoice) state.char.raceChoice = { mode: '', a: '', b: '', c: '' };
-      state.step = Math.min(11, Math.max(1, saved.step || 1)); // 11 步向导；旧版曾误钳到 7
+      // 同调位上限兜底（反馈 7）：旧存档没有该字段/非法时按 3（不覆盖 newChar 里的正常值）
+      if (state.char.attuneSlots == null || !Number.isFinite(Number(state.char.attuneSlots))) state.char.attuneSlots = 3;
+      // 旧存档步骤迁移到新顺序（v<3），避免老存档落在错误步骤
+      let step = saved.step || 1;
+      if ((+saved.v || 0) < 3) step = SAVE_STEP_MIGRATE_V2[step] || step;
+      state.step = Math.min(11, Math.max(1, step)); // 11 步向导；旧版曾误钳到 7
       if (state.step > 1) setTimeout(() => toast(`已恢复上次进度（第 ${state.step} 步）`), 500);
     }
   } catch (e) { /* 忽略损坏存档 */ }
@@ -146,7 +156,7 @@ function load() {
 function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      v: 2,
+      v: 3,
       step: state.step,
       rulesVersion: (DATA && DATA.rules && DATA.rules.version) || '',
       char: state.char,
@@ -180,7 +190,60 @@ function traitValOf(r, re) {
 /* ---------- 派生计算 ---------- */
 function rules() { return DATA.rules; }
 function race() { return DATA.races.find(r => r.id === state.char.raceId) || null; }
-function klass() { return DATA.classes.find(c => c.id === state.char.classId) || null; }
+// 基础职业（卡片列表用）；变体职业请用 activeVariant()/klass()（反馈 5）
+function baseKlass() { return DATA.classes.find(c => c.id === state.char.classId) || null; }
+function activeVariant() {
+  const b = baseKlass();
+  if (!b || !state.char.variant || !Array.isArray(b.variants)) return null;
+  return b.variants.find(v => v.name === state.char.variant) || null;
+}
+// 车卡计算用职业对象：选中变体职业时返回「变体合并对象」——
+// name/core/table/features 全部取变体数据，另带 baseId/baseName/isVariant 便于回链与先决条件判定。
+function klass() {
+  const b = baseKlass();
+  if (!b) return null;
+  const v = activeVariant();
+  if (!v) return b;
+  return Object.assign({}, b, {
+    baseId: b.id, baseName: b.name, isVariant: true,
+    name: v.name,
+    url: v.url || b.url,
+    core: (v.core && Object.keys(v.core).length) ? v.core : b.core,
+    table: (Array.isArray(v.table) && v.table.length) ? v.table : b.table,
+    tableTitle: v.tableTitle || b.tableTitle,
+    features: (Array.isArray(v.features) && v.features.length) ? v.features : b.features,
+  });
+}
+// 子职候选项（UI 用）：
+//   普通职业 = kind 为 subclass 的条目；inherit 变体 = 基础子职去掉 subclassExclude；own 变体 = 该变体专属子职；none = 无子职。
+//   兼容旧数据（无 kind 时）：非嵌套条目视为 subclass，嵌套（战士变体子职）视为 variant-sub。
+function subclassList() {
+  const b = baseKlass();
+  if (!b) return [];
+  const all = (b.subclasses || []).filter(s => s && s.url);
+  const v = activeVariant();
+  if (!v) return all.filter(s => (s.kind || (s.nested ? 'variant-sub' : 'subclass')) === 'subclass');
+  if (v.subclassMode === 'own') return all.filter(s => s.kind === 'variant-sub' && s.owner === v.name);
+  if (v.subclassMode === 'none') return [];
+  return all.filter(s => (s.kind || 'subclass') === 'subclass' && !(v.subclassExclude || []).includes(s.name));
+}
+function subclassDisplayName(s) {
+  const n = (s && (s.displayName || s.name)) || '';
+  // 「助虐之誓（恶武士）」这类变体专属子职在 UI 上省略后缀（反馈 5）
+  return n.replace(/（[^（）]*变体）$/g, '').replace(/（恶武士）$/g, '').trim() || n;
+}
+// 载入存档后校正职业/变体/子职选择（规则数据变化后避免悬空选择）
+function normalizeClassChoice() {
+  const c = state.char;
+  if (!baseKlass()) {
+    if (c.classId) { c.classId = null; c.variant = ''; c.subclass = ''; }
+    return;
+  }
+  if (c.variant && !activeVariant()) c.variant = '';
+  const opts = subclassList();
+  if (c.subclass && !opts.some(s => s.name === c.subclass)) c.subclass = '';
+}
+
 function levelRow() { return rules().levelTable[Math.min(19, Math.max(0, state.char.level - 1))]; }
 function abilityMod(v) {
   for (const [lo, hi, m] of rules().abilityModTable) {
@@ -198,13 +261,15 @@ function finalAttr(attr) {
 
 /* ---------- 种族属性加值（自动/半自动） ----------
  * 规则书种族特性里写作「属性值加成：你的感知+2，敏捷+1」；
+ * 部分种族页（真龙/狗头人/眼魔/序位巨人）写作「属性值提升」——两种标题都要识别（反馈 4 顺带修复）。
  * 人类/精灵为「一项属性值+2，另一项属性值+1；或三项属性值+1」需玩家分配。
  */
 function raceAbilityText(r) {
   if (!r) return '';
   const traits = r.traits || [];
-  const t = traits.find(x => /属性值加成/.test(x.name || '')) ||
-    traits.find(x => /属性值加成/.test(x.text || ''));
+  const re = /属性值(?:加成|提升)/;
+  const t = traits.find(x => re.test(x.name || '')) ||
+    traits.find(x => re.test(x.text || ''));
   return t ? String(t.text || '') : '';
 }
 // 当前所选亚种（种族页解析出的 subraces：{name, bonus, hpPerLevel, text}）
@@ -355,11 +420,11 @@ const PREPARED_CASTERS = {
   灵能武士: { attr: '智力', half: true, balls: false },
   奇械师: { attr: '智力', half: false, balls: true },
 };
-// 是否为准备施法者（返回规则对象或 null）
+// 是否为准备施法者（返回规则对象或 null）——按基础职业判定（变体职业沿用基础职业的施法规则，反馈 5）
 function preparedRule() {
-  const k = klass();
-  if (!k) return null;
-  return PREPARED_CASTERS[k.name] || null;
+  const b = baseKlass();
+  if (!b) return null;
+  return PREPARED_CASTERS[b.name] || null;
 }
 // 当前可准备的最高法术数量（null 表示无固定上限，如奇械师）
 function preparedLimit() {
@@ -372,13 +437,13 @@ function preparedLimit() {
 }
 // 准备数量公式的说明文本
 function preparedLimitText() {
-  const k = klass();
+  const b = baseKlass();
   const rule = preparedRule();
-  if (!rule || !k) return '';
+  if (!rule || !b) return '';
   if (rule.balls) return '压缩球制：每个准备法术对应一枚机械压缩球，消耗法术位与材料成分';
   const attr = rule.attr;
   const half = rule.half ? '等级的一半' : '等级';
-  return `${attr}调整值 + ${k.name}${half}（当前 ${preparedLimit()} 个，最少 1 个）`;
+  return `${attr}调整值 + ${b.name}${half}（当前 ${preparedLimit()} 个，最少 1 个）`;
 }
 // 当前等级拥有的最高法术位环阶（0 = 无法术位）
 // 除职业表「法术位」列外，还要合并「专长授予的额外法术位」（如 进阶法术位 的法术位表），反馈 4498-e。
@@ -456,7 +521,132 @@ function featPrereqLine(f) {
   const lines = String(f.text || '').split('\n');
   return lines.find(l => /^先决条件/.test(l)) || '';
 }
-// 只对「能确定的先决条件」做判断：属性值、等级、前置专长；武器/护甲熟练等未知项不误杀。
+/* ---------- 专长先决条件：可判定条件的辅助（反馈 2） ----------
+ * 反馈：14 级牧师勾选「仅显示当前可选」仍会列出大量圣武士/德鲁伊专长。
+ * 为此把「职业（含变体）、职业等级、种族、只能在N级选择、职业特性、专长类别」等
+ * 可判定的条件也纳入判定；武器/护甲熟练、阵营、出身地等无法从车卡数据判定的项
+ * 仍返回 null（不误杀）。
+ */
+// 变体职业 → 基础职业名（与解析器的变体数据同口径；数据未更新时也能用）
+const VARIANT_BASE_FALLBACK = {
+  神官: '牧师', 萨满: '德鲁伊', 侠客: '武僧', 术士: '法师',
+  灵契师: '契术师', 恶武士: '圣武士', 战士: '狂战士',
+};
+const stripVariantSuffix = (n) => String(n || '').replace(/（[^（）]*变体）$/, '').trim();
+function classBaseNameOf(name) {
+  const n = stripVariantSuffix(name);
+  if (!n) return '';
+  if (VARIANT_BASE_FALLBACK[n]) return VARIANT_BASE_FALLBACK[n];
+  if (!DATA || !Array.isArray(DATA.classes)) return '';
+  for (const c of DATA.classes) {
+    if (c.id === n || c.name === n) return c.id || c.name;
+    for (const v of (c.variants || [])) {
+      if (v.name === n || stripVariantSuffix(v.name) === n) return c.id || c.name;
+    }
+  }
+  return '';
+}
+// 当前角色的基础职业名（选中变体职业时折算回基础职业）
+function currentBaseClassName() {
+  const b = baseKlass();
+  if (b) return b.id || b.name || '';
+  const k = klass();
+  if (k && k.baseName) return classBaseNameOf(k.baseName) || k.baseName;
+  return classBaseNameOf(state.char.classId) || '';
+}
+// 先决条件里可能出现的职业名表（基础职业 + 变体职业），长名优先匹配
+let CLASS_ATOM_CACHE = null;
+function classAtomTable() {
+  if (CLASS_ATOM_CACHE) return CLASS_ATOM_CACHE;
+  const out = [];
+  const push = (name, base) => {
+    const n = stripVariantSuffix(name);
+    if (n && !out.some(x => x.name === n)) out.push({ name: n, base });
+  };
+  for (const c of (DATA && DATA.classes) || []) {
+    const base = c.id || c.name;
+    if (c.name) push(c.name, base);
+    for (const v of c.variants || []) push(v.name, base);
+    // 兼容旧数据：变体页被解析成子职（「神官（牧师变体）」）
+    for (const s of c.subclasses || []) {
+      const m = /^(.+?)（[^（）]*变体）$/.exec(String(s.name || ''));
+      if (m) push(m[1], base);
+    }
+  }
+  for (const [k, v] of Object.entries(VARIANT_BASE_FALLBACK)) push(k, v);
+  CLASS_ATOM_CACHE = out.sort((a, b) => b.name.length - a.name.length);
+  return CLASS_ATOM_CACHE;
+}
+const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// 原子条件是否为「职业」或「职业N级」→ { base, level, name }；否则 null
+function matchClassAtom(t) {
+  for (const c of classAtomTable()) {
+    if (t === c.name) return { base: c.base, level: 0, name: c.name };
+    const m = new RegExp('^' + reEsc(c.name) + '\\s*(\\d+)\\s*级$').exec(t);
+    if (m) return { base: c.base, level: +m[1], name: c.name };
+  }
+  return null;
+}
+// 原子条件是否为种族（含「卓尔精灵」「绿皮兽人」这类前缀叫法）→ 种族名；否则 null
+function matchRaceAtom(t) {
+  const names = ((DATA && DATA.races) || []).map(r => r.name).filter(Boolean);
+  if (!names.length) return null;
+  if (names.includes(t)) return t;
+  const alias = { 卓尔精灵: '精灵', 高等精灵: '精灵', 木精灵: '精灵', 黑暗精灵: '精灵', 绿皮兽人: '兽人', 混血儿: '' };
+  if (alias[t]) return alias[t];
+  const suffix = names.filter(n => t !== n && t.endsWith(n) && t.length <= n.length + 2)
+    .sort((a, b) => b.length - a.length)[0];
+  return suffix || null;
+}
+// 所有职业（含变体）的特性名集合
+let ALL_CLASS_FEATURE_CACHE = null;
+function allClassFeatureNameSet() {
+  if (ALL_CLASS_FEATURE_CACHE) return ALL_CLASS_FEATURE_CACHE;
+  ALL_CLASS_FEATURE_CACHE = new Set();
+  for (const c of (DATA && DATA.classes) || []) {
+    for (const f of c.features || []) if (f && f.name) ALL_CLASS_FEATURE_CACHE.add(f.name);
+    for (const v of c.variants || []) for (const f of v.features || []) if (f && f.name) ALL_CLASS_FEATURE_CACHE.add(f.name);
+  }
+  return ALL_CLASS_FEATURE_CACHE;
+}
+// 当前职业（含变体）在角色等级是否已获得该特性：true/false；数据无法判断时 null（不误杀）
+function currentClassHasFeature(fname) {
+  const k = klass();
+  if (!k) return null;
+  const level = state.char.level;
+  const pool = [];
+  for (const f of k.features || []) if (f && f.name === fname) pool.push(f);
+  const b = baseKlass();
+  if (b && b !== k) for (const f of b.features || []) if (f && f.name === fname) pool.push(f);
+  if (!pool.length) return false;                      // 本职业（含变体）没有该特性
+  if (pool.some(f => Array.isArray(f.levels) && f.levels.length)) {
+    return pool.some(f => (f.levels || []).some(l => Number(l) <= level));
+  }
+  // 旧数据无 levels：用职业表「特性」列反推已获得等级
+  const gained = classTableFeatureNames(k, level);
+  if (gained.includes(fname)) return true;
+  const all = classTableFeatureNames(k, 20);
+  if (all.includes(fname)) return false;               // 表里有，但要更高等级才获得
+  return true;                                         // 表里没列（数据不全）→ 不误杀
+}
+// 已选专长里属于指定分类（category 或合并后的 categories）的个数
+function selectedFeatCategoryCount(cat) {
+  let n = 0;
+  for (const fn of state.char.feats || []) {
+    const f = DATA.feats.find((x) => x.name === fn);
+    if (!f) continue;
+    if (f.category === cat || (Array.isArray(f.categories) && f.categories.includes(cat))) n++;
+  }
+  return n;
+}
+// 条件文本剥外层引号：「引导神力」→ 引导神力
+function unquoteCond(s) {
+  return String(s || '').trim()
+    .replace(/^[“”"'‘’「『]+/, '').replace(/[“”"'‘’」』]+$/, '').trim();
+}
+
+// 只对「能确定的先决条件」做判断：属性值、等级、职业/变体、种族、职业特性、专长类别、前置专长；
+// 武器/护甲熟练、阵营、出生地等未知项不误杀。
 // 支持「或」：同一子句内用「或/、」并列的可选项，满足任一即通过（反馈 4498-c）。
 function featPrereqStatus(f) {
   const line = featPrereqLine(f);
@@ -464,30 +654,87 @@ function featPrereqStatus(f) {
   const body = line.replace(/^先决条件[：:]\s*/, '').trim();
   const reasons = [];
   const known = state.char.feats || [];
+  const curBase = currentBaseClassName();
+  const featureSet = allClassFeatureNameSet();
   // 单条原子条件 → { ok, why } ；无法判定返回 null（不误杀）
   const atom = (s) => {
-    const t = String(s || '').trim();
+    const t = String(s || '').trim().replace(/^[，,；;、]+|[，,；;、]+$/g, '');
     if (!t) return null;
+    // 「只能在N级时选择」：必须恰好 N 级
+    const onlyLv = /只能在\s*(\d+)\s*级(?:时)?选择/.exec(t);
+    if (onlyLv) {
+      const need = +onlyLv[1];
+      return { ok: state.char.level === need, why: `只能 ${need} 级时选择（当前 ${state.char.level} 级）` };
+    }
+    // 职业 / 变体职业："圣武士"「圣武士5级」「恶武士5级」「德鲁伊12级」
+    const ca = matchClassAtom(t);
+    if (ca) {
+      if (!curBase) return null;
+      if (ca.base !== curBase) {
+        const kname = baseKlass() ? baseKlass().name : curBase;
+        return { ok: false, why: `需职业「${ca.name}」（当前 ${kname}）` };
+      }
+      if (!ca.level) return { ok: true, why: '' };
+      return { ok: state.char.level >= ca.level, why: `需 ${ca.name}${ca.level} 级（当前 ${state.char.level} 级）` };
+    }
+    // 种族 / 亚种："人类""真龙""石猴""序位巨人"
+    const rn = matchRaceAtom(t);
+    if (rn) {
+      const r = race();
+      if (!r) return null;
+      const sub = state.char.subrace || '';
+      const hit = r.name === rn || (!!sub && (sub.indexOf(rn) >= 0 || rn.indexOf(sub) >= 0));
+      return { ok: hit, why: `需种族「${rn}」（当前 ${r.name}${sub ? '·' + sub : ''}）` };
+    }
+    // 属性值
     const am = /(力量|敏捷|体质|智力|感知)\s*(?:值)?\s*(?:至少)?\s*(\d+)/.exec(t);
     if (am) {
       const need = +am[2], have = finalAttr(am[1]);
       return { ok: have >= need, why: `${am[1]}需 ${need}（当前 ${have}）` };
     }
-    const lm = /(\d+)\s*级/.exec(t);
-    if (lm) return { ok: state.char.level >= +lm[1], why: `需 ${+lm[1]} 级` };
-    const cleaned = t.replace(/^(拥有|已获得|获得|学会)\s*/, '').replace(/专长$/, '').trim();
-    const hit = DATA.feats.find((x) => x.name === cleaned || x.name === t);
+    // 职业特性类条件（施法/引导神力/额外攻击/偷袭/狂暴/使用魔法装置/指令点/魂铸武器…）
+    const plain = unquoteCond(t);
+    const fbase = featureSet.has(plain) ? plain
+      : featureSet.has(plain.split(/[·：:]/)[0].trim()) ? plain.split(/[·：:]/)[0].trim() : '';
+    if (fbase) {
+      const has = currentClassHasFeature(fbase);
+      if (has === null) return null;
+      return { ok: has, why: has ? '' : `需职业特性「${fbase}」` };
+    }
+    // 专长类别类条件（任意超魔专长 / 至少一个超魔专长 / 至少一个战技专长）
+    if (/^(?:任意|至少一个|拥有至少一个|至少有一个)(超魔|战技)专长$/.test(t)) {
+      const cat = /超魔/.test(t) ? '超魔专长' : '战技专长';
+      const n = selectedFeatCategoryCount(cat);
+      return { ok: n > 0, why: `需至少一个「${cat}」（当前 ${n} 个）` };
+    }
+    // 习得一个战技：靠战技步（state.char.maneuvers），不是专长
+    if (/^(?:习得|学会|掌握)一个战技$/.test(t)) {
+      return { ok: (state.char.maneuvers || []).length > 0, why: '需先在战技步学会至少一个战技' };
+    }
+    // 「玩家角色」恒真
+    if (t === '玩家角色') return { ok: true, why: '' };
+    // 一般等级条件（"16级""9级"）：至少 N 级（职业相关等级已在上面的职业分支处理）
+    const glm = /^(\d+)\s*级$/.exec(t);
+    if (glm) return { ok: state.char.level >= +glm[1], why: `需 ${+glm[1]} 级（当前 ${state.char.level} 级）` };
+    // 前置专长
+    const cleaned = plain.replace(/^(拥有|已获得|获得|学会)\s*/, '').replace(/专长$/, '').trim();
+    const hit = DATA.feats.find((x) => x.name === cleaned || x.name === plain);
     if (hit) return { ok: known.includes(hit.name), why: `需先选「${hit.name}」` };
     return null;
   };
-  // 子句 = 逗号/分号分隔；子句内部若含「或」则视为可选项（任一满足即可）
-  const clauses = body.split(/[，,；;]/).map((s) => s.trim()).filter(Boolean);
+  // 子句 = 逗号/分号分隔；以「或」开头的片段并入上一子句（"魔鬼，或提夫林，或地狱之子"）。
+  // 子句内部若含「或」则视为可选项（任一满足即可）
+  const clauses = [];
+  for (const p of body.split(/[，,；;]/).map((s) => s.trim()).filter(Boolean)) {
+    if (/^或/.test(p) && clauses.length) clauses[clauses.length - 1] += '，' + p;
+    else clauses.push(p);
+  }
   for (const clause of clauses) {
     const alts = clause.split(/\s*或\s*|[、]/).map((s) => s.trim()).filter(Boolean);
     const results = alts.map(atom).filter((r) => r !== null);
     if (!results.length) continue;                 // 全是无法判定的条件 → 跳过
     if (results.some((r) => r.ok)) continue;       // 任一满足 → 该子句通过
-    reasons.push(results.length > 1 ? results.map((r) => r.why).join(' 或 ') : results[0].why);
+    reasons.push(results.length > 1 ? results.map((r) => r.why).filter(Boolean).join(' 或 ') : results[0].why);
   }
   return { blocked: reasons.length > 0, reasons, line };
 }
@@ -533,21 +780,21 @@ async function initData() {
  * ============================================================ */
 const stage = () => $('#stage');
 const STEP_TITLES = {
-  1: '选择种族', 2: '选择职业', 3: '决定属性值', 4: '设定背景', 5: '选择技能熟练',
-  6: '选择专长', 7: '选择法术', 8: '选择战技', 9: '选择程序', 10: '角色卡', 11: '购物（魔法物品）',
+  1: '选择种族', 2: '选择职业', 3: '决定属性值', 4: '选择技能熟练', 5: '选择专长',
+  6: '选择法术', 7: '选择战技', 8: '选择程序', 9: '角色卡', 10: '购物（魔法物品）', 11: '设定背景',
 };
 const STEP_HINTS = {
   1: '每个角色都有其所属种族。种族提供属性值加成、速度、语言与种族特性。',
   2: '职业决定了你的生命骰、熟练项与职业特性。可先看定位与难度选择。',
   3: '5z 规则共 5 项属性。使用 32 点购点（8~16），或直接采用标准属性组，或随机掷骰。',
-  4: '背景给予 2 项技能熟练、1 门额外语言与一段身份特性。5z 背景为开放式自定义。',
-  5: '技能熟练来源：职业（自动按职业文本）、背景 2 项、智力 14/18/22/26/30 各 +1 项。',
-  6: '1 级获得 2 个专长（其一代表背景训练），此后每 3 级再获得 1 个。',
-  7: '按职业法术列表选择已知/准备法术（可搜索、按环位筛选）。准备施法者（法师等）需从已选法术中标记「已准备」，数量按职业规则（如法师=等级+智力调整值）。',
-  8: '选择战技流派（及门弟子）与战技。流派入门专长见专长步骤。',
-  9: '赛博格专属：按协议层级选择准备程序。其他职业可跳过。',
-  10: '完成！可打印、导出 JSON 存档、导出 Excel 角色卡。',
-  11: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。',
+  4: '技能熟练来源：职业（自动按职业文本）、背景 2 项、智力 14/18/22/26/30 各 +1 项。',
+  5: '1 级获得 2 个专长（其一代表背景训练），此后每 3 级再获得 1 个。',
+  6: '按职业法术列表选择已知/准备法术（可搜索、按环位筛选）。准备施法者（法师等）需从已选法术中标记「已准备」，数量按职业规则（如法师=等级+智力调整值）。',
+  7: '选择战技流派（及门弟子）与战技。流派入门专长见专长步骤。',
+  8: '赛博格专属：按协议层级选择准备程序。其他职业可跳过。',
+  9: '完成！可打印、导出 JSON 存档、导出 Excel 角色卡。',
+  10: '为角色选购魔法物品（可选）。顶部手动输入金币预算，超出预算标红提醒；物品价格为规则书价格区间下限。需同调的魔法物品计入同调位（默认 3 个）。',
+  11: '背景给予 2 项技能熟练、1 门额外语言与一段身份特性。5z 背景为开放式自定义。',
 };
 
 /* ============================================================
@@ -581,14 +828,14 @@ function stepIssues(n) {
         else if (spent < rules().buyPoints) warn(`购点未用完：已花 ${spent} / ${rules().buyPoints} 点`);
       }
       break;
-    case 5: {
+    case 4: {
       if (!k) { err('请先完成第 2 步：选择职业'); break; }
       const chosen = skillChosen(), quota = skillQuota();
       if (chosen < quota) err(`技能熟练未选满：${chosen} / ${quota}`);
       else if (chosen > quota) err(`技能熟练超出配额：${chosen} / ${quota}`);
       break;
     }
-    case 6: {
+    case 5: {
       if (!k) { err('请先完成第 2 步：选择职业'); break; }
       const max = featQuota();
       if (c.feats.length < max) err(`专长未选满：${c.feats.length} / ${max}`);
@@ -601,7 +848,7 @@ function stepIssues(n) {
       }
       break;
     }
-    case 7: {
+    case 6: {
       if (!k) { err('请先完成第 2 步：选择职业'); break; }
       if (!classSpellList()) break;
       const maxL = maxSlotLevel();
@@ -627,11 +874,11 @@ function stepIssues(n) {
       if (!c.spells.length) warn('尚未选择任何法术');
       break;
     }
-    case 8:
+    case 7:
       if (!k) err('请先完成第 2 步：选择职业');
       else if (c.maneuvers.length && !c.maneuverStyle) warn('已选战技但未选择流派');
       break;
-    case 9:
+    case 8:
       if (!k) err('请先完成第 2 步：选择职业');
       else if (k.name === '赛博格' && !c.programs.length) warn('赛博格尚未选择程序');
       break;
@@ -711,8 +958,8 @@ function refreshChrome() {
     const list = stepIssues(n);
     let errs = list.filter(x => x.level === 'error');
     const warns = list.filter(x => x.level === 'warn');
-    // 角色卡/购物：前面步骤还有错误时也标记为未完成（不重复计入待补总数）
-    if (n >= 10) {
+    // 角色卡/购物：前面步骤还有错误时也标记为未完成（不重复计入待补总数；背景步不适用）
+    if (n >= 9 && n <= 10) {
       for (let i = 1; i < n; i++) errs = errs.concat(stepIssues(i).filter(x => x.level === 'error'));
     }
     b.classList.toggle('active', n === state.step);
@@ -791,14 +1038,14 @@ function render() {
     case 1: renderRace(); break;
     case 2: renderClass(); break;
     case 3: renderAttr(); break;
-    case 4: renderBg(); break;
-    case 5: renderSkills(); break;
-    case 6: renderFeats(); break;
-    case 7: renderSpells(); break;
-    case 8: renderManeuvers(); break;
-    case 9: renderPrograms(); break;
-    case 10: renderSheet(); break;
-    case 11: renderShop(); break;
+    case 4: renderSkills(); break;
+    case 5: renderFeats(); break;
+    case 6: renderSpells(); break;
+    case 7: renderManeuvers(); break;
+    case 8: renderPrograms(); break;
+    case 9: renderSheet(); break;
+    case 10: renderShop(); break;
+    case 11: renderBg(); break;
   }
   renderLive();
 }
@@ -1013,16 +1260,30 @@ function renderClass() {
   const wrap = el('div');
   const grid = el('div', 'grid');
   wrap.appendChild(grid);
+  const keyOf = (base, variant) => (variant ? base.id + '|' + variant.name : base.id + '|');
+  const activeKey = () => (state.char.classId || '') + '|' + (state.char.variant || '');
+  // 卡片列表：基础职业 + 该职业的变体职业（变体单独成卡并标注「变体」，与子职区分，反馈 5）
+  const entries = [];
   for (const c of DATA.classes) {
-    const sel = state.char.classId === c.id;
-    const card = el('div', 'card-item' + (sel ? ' sel' : ''));
-    const hd = c.core.hitDie ? `生命骰 D${c.core.hitDie} · ` : '';
-    const roleText = (c.core.roles || []).slice(0, 3).join(' ');
-    card.innerHTML = `<div class="ci-name">${esc(c.name)}</div>
-      <div class="ci-sub">${esc(hd)}豁免：${esc(c.core.saves || '—')}</div>
-      <div class="ci-desc">${esc(roleText || (c.core.skills ? '技能：' + c.core.skills : '') || '')}</div>`;
+    entries.push({ base: c, variant: null });
+    for (const v of (c.variants || [])) entries.push({ base: c, variant: v });
+  }
+  for (const { base, variant } of entries) {
+    const sel = activeKey() === keyOf(base, variant);
+    const core = variant ? variant.core : base.core;
+    const nm = variant ? variant.name : base.name;
+    const card = el('div', 'card-item' + (sel ? ' sel' : '') + (variant ? ' variant-card' : ''));
+    card.dataset.key = keyOf(base, variant);
+    const hd = core.hitDie ? `生命骰 D${core.hitDie} · ` : '';
+    const roleText = (core.roles || []).slice(0, 3).join(' ');
+    card.innerHTML = `<div class="ci-name">${esc(nm)}${variant ? ' <span class="variant-badge">变体</span>' : ''}</div>
+      <div class="ci-sub">${variant ? `替换「${esc(base.name)}」 · ` : ''}${esc(hd)}豁免：${esc(core.saves || '—')}</div>
+      <div class="ci-desc">${esc(roleText || (core.skills ? '技能：' + core.skills : '') || '')}</div>`;
     card.onclick = () => {
-      state.char.classId = c.id;
+      const sameBase = state.char.classId === base.id;
+      state.char.classId = base.id;
+      state.char.variant = variant ? variant.name : '';
+      if (!sameBase || !subclassList().some(s => s.name === state.char.subclass)) state.char.subclass = '';
       state.char.keyAttr = keyAttrHint();
       save(); render(); renderLive();
       // 详情（职业表/子职选择）在卡片列表上方，选中后滚回可见
@@ -1036,72 +1297,106 @@ function renderClass() {
     grid.appendChild(card);
   }
   const paint = () => {
-    $$('.card-item', grid).forEach(c => c.classList.toggle('sel', false));
-    const c = klass();
-    if (!c) return;
-    const k = DATA.classes.indexOf(c);
-    const cards = $$('.card-item', grid);
-    if (cards[k]) cards[k].classList.add('sel');
+    const key = activeKey();
+    $$('.card-item', grid).forEach(cd => cd.classList.toggle('sel', cd.dataset.key === key));
   };
-  const c = klass();
-  if (c) {
+  const b = baseKlass();
+  if (b) {
+    const k = klass();
     const d = el('div', 'detail-box');
-    let html = `<h3>${esc(c.name)}</h3>`;
-    if (c.core.roles && c.core.roles.length) {
-      html += c.core.roles.map(r => `<p>${esc(r)}</p>`).join('');
+    let html = `<h3>${esc(k.name)}${k.isVariant ? ' <span class="variant-badge">变体职业</span>' : ''}</h3>`;
+    if (k.isVariant) {
+      html += `<p class="muted">变体职业：替换「${esc(k.baseName)}」的基础职业特性；考虑先决条件时按等量 ${esc(k.baseName)} 等级计算。
+        <a href="${esc(b.url)}" target="_blank">基础职业页面</a> · <a href="${esc(k.url)}" target="_blank">${esc(k.name)} 页面</a></p>`;
+    }
+    if (k.core.roles && k.core.roles.length) {
+      html += k.core.roles.map(r => `<p>${esc(r)}</p>`).join('');
+    }
+    // 变体职业切换（基础 ↔ 变体）
+    if ((b.variants || []).length) {
+      html += `<div class="variant-switch"><span class="vs-label">职业版本</span>
+        <button type="button" class="vs-btn${k.isVariant ? '' : ' sel'}" data-variant="">${esc(b.name)}（基础）</button>` +
+        b.variants.map(v => `<button type="button" class="vs-btn${k.isVariant && k.name === v.name ? ' sel' : ''}" data-variant="${esc(v.name)}">${esc(v.name)}</button>`).join('') +
+        `</div>`;
     }
     html += `<div class="table-wrap"><table class="data"><tbody>
-      <tr><th>生命骰</th><td>D${c.core.hitDie || '?'}（期望值 ${c.core.hitDie ? Math.ceil((c.core.hitDie + 1) / 2) : '?'}）</td></tr>
-      <tr><th>防具熟练</th><td>${esc(c.core.armor || '—')}</td></tr>
-      <tr><th>武器熟练</th><td>${esc(c.core.weapons || '—')}</td></tr>
-      <tr><th>豁免熟练</th><td>${esc(c.core.saves || '—')}</td></tr>
-      <tr><th>技能熟练</th><td>${esc(c.core.skills || '—')}</td></tr>
+      <tr><th>生命骰</th><td>D${k.core.hitDie || '?'}（期望值 ${k.core.hitDie ? Math.ceil((k.core.hitDie + 1) / 2) : '?'}）</td></tr>
+      <tr><th>防具熟练</th><td>${esc(k.core.armor || '—')}</td></tr>
+      <tr><th>武器熟练</th><td>${esc(k.core.weapons || '—')}</td></tr>
+      <tr><th>豁免熟练</th><td>${esc(k.core.saves || '—')}</td></tr>
+      <tr><th>技能熟练</th><td>${esc(k.core.skills || '—')}</td></tr>
     </tbody></table></div>`;
-    if (c.tableTitle) {
-      html += `<h4 style="margin:10px 0 4px">${esc(c.tableTitle)}</h4><div class="table-wrap"><table class="data">`;
-      c.table.forEach((row, i) => {
+    if (k.tableTitle) {
+      html += `<h4 style="margin:10px 0 4px">${esc(k.tableTitle)}</h4><div class="table-wrap"><table class="data">`;
+      k.table.forEach((row, i) => {
         html += '<tr>' + row.map(cell => i === 0 ? `<th>${esc(cell)}</th>` : `<td>${esc(cell)}</td>`).join('') + '</tr>';
       });
       html += '</table></div>';
     }
     // 1 级特性
-    const lv1 = (c.table.find(r => r[0] === '1') || [])[1] || '';
+    const lv1 = (k.table.find(r => r[0] === '1') || [])[1] || '';
     if (lv1) {
       html += `<h4 style="margin:10px 0 4px">1 级特性：${esc(lv1)}</h4>`;
-      for (const f of c.features) {
-        if (lv1.split(/[，,、]/).includes(f.name)) {
+      for (const f of k.features) {
+        if (lv1.split(/[，,、]/).some(n => f.name === n || f.name === n.split('：')[0])) {
           html += `<p><b>${esc(f.name)}</b>　${esc(f.text)}</p>`;
         }
       }
     }
-    // 子职
-    if (c.subclasses.length) {
-      html += `<h4 style="margin:10px 0 4px">子职</h4><select id="subclass-sel" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff">`;
-      html += `<option value="">（暂不选择）</option>`;
-      const direct = c.subclasses.filter(s => !s.nested);
-      const nested = c.subclasses.filter(s => s.nested);
-      const groups = [];
-      for (const s of direct) groups.push([s.name, s]);
-      const nestNames = [...new Set(nested.map(s => s.url.split('/')[2]))];
-      for (const nn of nestNames) {
-        const kids = nested.filter(s => s.url.split('/')[2] === nn);
-        groups.push([nn + '（含子职）', kids[0]]);
+    // 子职（普通职业 / 变体职业各自的候选表）
+    const v = activeVariant();
+    const opts = subclassList();
+    if (v && v.subclassMode === 'none') {
+      const vestiges = (b.subclasses || []).filter(s => s.kind === 'vestige');
+      html += `<h4 style="margin:10px 0 4px">子职</h4><p class="muted">${esc(v.subclassNote || '该变体职业没有子职。')}</p>`;
+      if (vestiges.length) {
+        html += `<p class="muted">契灵阶位：` +
+          vestiges.map(s => `<a href="${esc(s.url)}" target="_blank">${esc(s.name)}</a>`).join(' · ') + `</p>`;
       }
-      for (const [label, s] of groups) {
+    } else if (opts.length) {
+      html += `<h4 style="margin:10px 0 4px">子职</h4><select id="subclass-sel" class="subclass-sel">`;
+      html += `<option value="">（暂不选择）</option>`;
+      for (const s of opts) {
         const sel2 = state.char.subclass === s.name;
-        html += `<option value="${esc(s.name)}"${sel2 ? ' selected' : ''}>${esc(label)}</option>`;
+        html += `<option value="${esc(s.name)}"${sel2 ? ' selected' : ''}>${esc(subclassDisplayName(s))}</option>`;
       }
       html += '</select>';
+      let note = '';
+      if (v) {
+        if (v.subclassMode === 'inherit' && (v.subclassExclude || []).length) {
+          note = `与「${esc(v.subclassFrom || b.name)}」相同的子职，但不能选择：${v.subclassExclude.map(esc).join('、')}。`;
+        } else if (v.subclassMode === 'inherit') {
+          note = `与「${esc(v.subclassFrom || b.name)}」相同的子职。`;
+        } else if (v.subclassMode === 'own') {
+          note = '该变体职业专属的子职。';
+        }
+      } else if ((b.variants || []).some(x => x.subclassMode === 'own')) {
+        note = '该职业的变体职业有专属子职，切换职业版本后子职选项会同步变化。';
+      }
+      if (note) html += `<p class="muted" style="margin-top:6px">${note}</p>`;
       html += `<p class="muted" style="margin-top:6px">子职特性全文请从规则书页面查看：
-        <a href="${esc(c.url)}" target="_blank">${esc(c.name)}</a></p>`;
+        <a href="${esc(k.url)}" target="_blank">${esc(k.name)}</a></p>`;
+    } else {
+      html += `<h4 style="margin:10px 0 4px">子职</h4><p class="muted">该职业暂无可选子职数据。</p>`;
     }
-    html += `<p class="muted">完整页面：<a href="${esc(c.url)}" target="_blank">${esc(c.name)}（规则书）</a></p>`;
+    html += `<p class="muted">完整页面：<a href="${esc(k.url)}" target="_blank">${esc(k.name)}（规则书）</a>${k.isVariant ? ` · <a href="${esc(b.url)}" target="_blank">${esc(b.name)}（基础职业）</a>` : ''}</p>`;
     d.innerHTML = html;
     stage().appendChild(d);
+    d.querySelectorAll('.vs-btn').forEach(btn => btn.addEventListener('click', () => {
+      state.char.variant = btn.dataset.variant || '';
+      state.char.subclass = '';
+      save(); render(); renderLive();
+      try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
+    }));
     const ss = $('#subclass-sel', d);
-    if (ss) ss.addEventListener('change', () => { state.char.subclass = ss.value; save(); });
+    if (ss) ss.addEventListener('change', () => {
+      state.char.subclass = ss.value;
+      save(); renderLive();
+      try { refreshChrome(); } catch (err) { /* 首屏未就绪 */ }
+    });
   }
   stage().appendChild(wrap);
+  paint();
 }
 
 /* ---------- 步骤3 属性 ---------- */
@@ -1362,7 +1657,9 @@ function renderFeats() {
   pkPager.hidden = true;
   pk.append(pkToolbar, pkChips, pkList, pkDetail, pkPager);
   stage().appendChild(pk);
-  const cats = [...new Set(DATA.feats.map(f => f.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  // 分类筛选项 = category ∪ categories（同名专长去重后多来源分类并入 categories，反馈 6）
+  const cats = [...new Set(DATA.feats.flatMap(f => [f.category, ...(f.categories || [])]).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
   let onlyOk = false;
   const picker = Picker.create({
     data: DATA.feats,
@@ -1370,7 +1667,8 @@ function renderFeats() {
     pageSize: 60,
     placeholder: '搜索专长名或描述…',
     emptyText: '没有匹配的专长。',
-    chips: [{ key: 'category', label: '分类', items: cats }],
+    chips: [{ key: 'category', label: '分类', items: cats,
+      match: (f, k) => f.category === k || (Array.isArray(f.categories) && f.categories.includes(k)) }],
     hay: (f) => f.name + ' ' + (f.text || ''),
     filter: (f) => !onlyOk || !featPrereqStatus(f).blocked,
     containers: { toolbar: pkToolbar, chips: pkChips, list: pkList, detail: pkDetail, pager: pkPager },
@@ -1393,6 +1691,8 @@ function renderFeats() {
         ${f.url ? `<a class="pk-d-link" href="${esc(f.url)}" target="_blank">📖 规则书原文 →</a>` : ''}`;
     },
   });
+  // 回归测试钩子：当前筛选结果（「仅显示当前可选」生效后的列表）
+  window.__CAR_FEATLIST__ = () => picker.filtered().map(x => x.name);
   const paintSel = () => {
     const max = featQuota(), base = featBaseQuota();
     quota.innerHTML = `本等级基础专长 <b>${base}</b> 个${c.extraFeats ? ` + 额外 <b>${c.extraFeats}</b>` : ''}，共 <b>${max}</b> 个，已选 <b class="${c.feats.length > max ? 'over' : ''}">${c.feats.length}</b> 个。`;
@@ -1479,9 +1779,10 @@ function renderFeats() {
 
 /* ---------- 步骤7 法术 ---------- */
 function classSpellList() {
-  const k = klass();
-  if (!k) return null;
-  return DATA['class-spells'].find(cs => cs.class === k.name) || null;
+  const b = baseKlass();
+  if (!b) return null;
+  // 变体职业沿用基础职业的法术列表（神官→牧师、萨满→德鲁伊、灵契师→契术师…，反馈 5）
+  return DATA['class-spells'].find(cs => cs.class === b.name) || null;
 }
 /* 已选法术按环阶汇总（戏法单列）：如「戏法 2、1 环 3」 */
 function spellLevelSummary() {
@@ -1996,19 +2297,42 @@ function miById(id) {
   // 旧存档兜底：多价位原词条已展开成变体，原 id 仍可用于显示（价格会标为未定）
   return (DATA.magicItems || []).find((m) => m.id === id) || null;
 }
+// 同调位上限（反馈 7）：默认 3，缺失/非法时按 3，允许 0–30
+function clampAttuneSlots(v) {
+  if (v === '' || v == null) return 3;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 3;
+  return Math.max(0, Math.min(30, Math.floor(n)));
+}
+function attuneSlotsOf() { return clampAttuneSlots(state.char.attuneSlots); }
 function renderShop() {
   const c = state.char;
   const MI = magicItemsAll().filter((i) => !i.hasVariants);   // 多价位词条已展开为变体，原条目不再单列
   if (!MI.length) { stage().insertAdjacentHTML('beforeend', '<p class="hint">魔法物品数据未加载。</p>'); return; }
 
-  // 预算输入
+  // 预算输入 + 同调位上限
   const budgetBox = el('div', 'guide-box');
   budgetBox.innerHTML = `<b>购物预算（gp）：</b>
     <input type="number" id="shop-budget" min="0" step="100" value="${c.budget == null ? '' : esc(c.budget)}" placeholder="如 1000" style="width:130px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)">
-    <span class="hint" style="margin-left:8px">留空 = 不限预算。价格为规则书价格区间下限；「非卖品/价格见下表」不计入合计。</span>`;
+    <span class="hint" style="margin-left:8px">留空 = 不限预算。价格为规则书价格区间下限；「非卖品/价格见下表」不计入合计。</span>
+    <span class="attune-box" style="margin-left:14px;white-space:nowrap">同调位上限
+      <input type="number" id="shop-attune" min="0" max="30" step="1" value="${attuneSlotsOf()}" title="默认为 3 个同调位（0–30）"
+        style="width:64px;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)">
+    </span>
+    <span id="shop-attune-count" class="attune-count" style="margin-left:10px;font-weight:600"></span>`;
   stage().appendChild(budgetBox);
   const budgetIn = $('#shop-budget');
   budgetIn.addEventListener('input', () => { c.budget = budgetIn.value.trim(); save(); paintShop(); });
+  const attuneIn = $('#shop-attune');
+  attuneIn.addEventListener('input', () => {
+    const v = Number(attuneIn.value);
+    if (Number.isFinite(v) && v >= 0 && v <= 30) { c.attuneSlots = Math.floor(v); save(); paintShop(); }
+  });
+  attuneIn.addEventListener('change', () => {
+    c.attuneSlots = clampAttuneSlots(attuneIn.value);
+    attuneIn.value = c.attuneSlots;
+    save(); paintShop();
+  });
 
   // 已购面板 + 合计行
   const cnt = el('div', 'skill-count');
@@ -2113,22 +2437,36 @@ function renderShop() {
   // 已购面板 + 合计
   const paintShop = () => {
     const eq = c.equipment || [];
-    let total = 0, unpriced = 0;
+    let total = 0, unpriced = 0, attuned = 0;
     const rows = [];
     let plusBaseCnt = 0;
     for (const x of eq) {
       const it = miById(x.id);
       const p = miPrice(it);
+      const isAttune = !!(it && it.attune);
       if (it && it.plusBase) plusBaseCnt++;
-      if (p != null) { total += p; rows.push({ id: x.id, name: it ? it.name : x.id, p, plusBase: !!(it && it.plusBase) }); }
-      else { unpriced++; rows.push({ id: x.id, name: it ? it.name : x.id, p: null, plusBase: !!(it && it.plusBase) }); }
+      if (isAttune) attuned++;
+      if (p != null) { total += p; rows.push({ id: x.id, name: it ? it.name : x.id, p, plusBase: !!(it && it.plusBase), attune: isAttune }); }
+      else { unpriced++; rows.push({ id: x.id, name: it ? it.name : x.id, p: null, plusBase: !!(it && it.plusBase), attune: isAttune }); }
     }
     const budget = c.budget != null && c.budget !== '' ? Math.max(0, parseInt(c.budget, 10) || 0) : null;
     const over = budget != null && total > budget;
+    // 同调位：已同调件数 / 上限（默认 3），超限红色提示（反馈 7）
+    const slotMax = attuneSlotsOf();
+    const slotLeft = slotMax - attuned;
+    const attuneOver = slotLeft < 0;
     cnt.innerHTML = `已购 <b>${eq.length}</b> 件 · 合计 <b class="${over ? 'over' : ''}" style="${over ? 'color:var(--bad)' : ''}">${total}gp</b>${unpriced ? ` · ${unpriced} 件价格未定（不计入）` : ''}${plusBaseCnt ? ` · 其中 ${plusBaseCnt} 件需另加基底盔甲价` : ''}${budget != null ? ` · 预算 <b>${budget}gp</b>${over ? ' <span style="color:var(--bad)">⚠ 超预算</span>' : ''}` : ''}`;
-    selBox.innerHTML = rows.length ? `<div class="sel-box-title">已购清单（<b>${eq.length}</b> 件${budget != null ? ` / 预算 ${budget}gp` : ''}）：</div>
+    const attuneCnt = $('#shop-attune-count');
+    if (attuneCnt) {
+      attuneCnt.innerHTML = `已同调 <b>${attuned}</b> / 上限 <b>${slotMax}</b>（剩余 <b>${Math.max(0, slotLeft)}</b>${attuneOver ? '，<span style="color:var(--bad)">⚠ 超限 ' + (-slotLeft) + ' 件</span>' : ''}）`;
+      attuneCnt.style.color = attuneOver ? 'var(--bad)' : '';
+      attuneCnt.title = attuneOver
+        ? `需同调的物品已超出同调位上限 ${-slotLeft} 件：请移除部分物品或调高上限`
+        : '需同调的物品件数不能超过同调位上限（默认 3）';
+    }
+    selBox.innerHTML = rows.length ? `<div class="sel-box-title">已购清单（<b>${eq.length}</b> 件${budget != null ? ` / 预算 ${budget}gp` : ''}${attuned ? ` / 已同调 ${attuned}` : ''}${attuneOver ? ` <span style="color:var(--bad)">⚠ 同调超限</span>` : ''}）：</div>
       <div class="sel-groups">` + rows.map(x =>
-        `<button type="button" class="sel-chip" data-id="${esc(x.id)}">${esc(x.name)}${x.p != null ? ` · ${x.p}gp` : ' · 价格未定'}${x.plusBase ? '＋基底' : ''} ✕</button>`).join('') + `</div>`
+        `<button type="button" class="sel-chip" data-id="${esc(x.id)}">${esc(x.name)}${x.attune ? ' · 同调' : ''}${x.p != null ? ` · ${x.p}gp` : ' · 价格未定'}${x.plusBase ? '＋基底' : ''} ✕</button>`).join('') + `</div>`
       : `<div class="sel-box-title">已购清单：暂无</div>`;
     selBox.querySelectorAll('.sel-chip').forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.id;
@@ -2256,19 +2594,24 @@ function renderSheet() {
       }).join('') + '</table>' : '<p class="muted">未选择专长</p>'}
   </div>`);
 
-  // —— 1 级职业特性 ——
+  // —— 职业特性（到当前等级；与 Word 导出同源，反馈 8） ——
   if (k) {
-    const lv1 = (k.table.find(row => row[0] === '1') || [])[1] || '';
-    const feats1 = lv1 ? lv1.split(/[，,、]/) : [];
-    const featTexts = k.features.filter(f => feats1.includes(f.name));
-    if (featTexts.length) {
-      sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>1 级职业特性</h3>
-        ${featTexts.map(f => `<div class="trait"><span class="t-name">${esc(f.name)}</span>　<span class="t-text">${esc(f.text)}</span></div>`).join('')}
-        <p class="muted">更多等级特性见职业表与规则书页面：<a href="${esc(k.url)}" target="_blank">${esc(k.name)}</a></p>
+    const mainFeats = (typeof classFeatureListToLevel === 'function' ? classFeatureListToLevel(c.level) : [])
+      .filter(f => f && f.name && String(f.text || '').trim());
+    const subFeats = (typeof subclassFeatureListToLevel === 'function' ? subclassFeatureListToLevel(c.level) : [])
+      .filter(f => f && f.name && String(f.text || '').trim());
+    const tName = (f) => {
+      const fLevels = Array.isArray(f.levels) && f.levels.length ? f.levels.filter(x => Number.isFinite(x)) : (f.level ? [f.level] : []);
+      return fLevels.length ? f.name + '（第' + Math.min.apply(null, fLevels) + '级）' : f.name;
+    };
+    if (mainFeats.length || subFeats.length || c.subclass) {
+      sheet.insertAdjacentHTML('beforeend', `<div class="sheet-sec"><h3>职业特性（至 ${c.level} 级${c.subclass ? ' · ' + esc(c.subclass) : ''}）</h3>
+        ${mainFeats.length ? mainFeats.map(f => `<div class="trait"><span class="t-name">${esc(tName(f))}</span>　<span class="t-text">${esc(f.text)}</span></div>`).join('') : '<p class="muted">主职特性数据未收录（见职业表）</p>'}
+        ${subFeats.length ? `<h4 style="margin:10px 0 4px">子职特性（${esc(c.subclass)}）</h4>` + subFeats.map(f => `<div class="trait"><span class="t-name">${esc(tName(f))}</span>　<span class="t-text">${esc(f.text)}</span></div>`).join('') : ''}
+        <p class="muted">已获得特性按当前 ${c.level} 级列出；更多见规则书：<a href="${esc(k.url)}" target="_blank">${esc(k.name)}</a></p>
       </div>`);
     }
   }
-
   // —— 法术 ——
   if (c.spells.length) {
     const byLv = {};
@@ -2565,6 +2908,78 @@ function classLv1Features() {
   const names = lv1.split(/[，,、]/).filter(Boolean);
   return k.features.filter(f => names.includes(f.name));
 }
+// 职业表「特性」列 → 到指定等级已获得的特性名（兼容「专长（2项）」「引导神力：荒野变形」等写法）
+function classTableFeatureNames(k, level) {
+  if (!k || !Array.isArray(k.table) || !k.table.length) return [];
+  const head = k.table[0] || [];
+  const col = head.indexOf('特性');
+  if (col < 0) {
+    // 兼容表头被拆分的页面（如「特性」列头带换行/附加字）
+    const alt = head.findIndex(h => /^特性/.test(String(h)));
+    if (alt < 0) return [];
+    return classTableFeatureNamesAt(k, alt, level);
+  }
+  return classTableFeatureNamesAt(k, col, level);
+}
+function classTableFeatureNamesAt(k, col, level) {
+  const names = [];
+  for (const row of k.table.slice(1)) {
+    const lv = Number(String(row[0] || '').replace(/[^\d]/g, ''));
+    if (!lv || lv > level) continue;
+    for (const raw of String(row[col] || '').split(/[，,、]/)) {
+      const base = String(raw).replace(/[（(][^（()）]*[)）]/g, '').trim();
+      if (!base || /环$/.test(base) || base === '子职特性') continue;
+      const key = base.split('：')[0].trim();
+      if (key && names.indexOf(key) < 0) names.push(key);
+    }
+  }
+  return names;
+}
+// 主职特性（到指定等级，反馈 8）：优先用解析器给的 features[].levels；旧数据则按职业表「特性」列反推
+function classFeatureListToLevel(level) {
+  const k = klass();
+  if (!k) return [];
+  const lv = Math.max(1, Math.min(20, level || state.char.level || 1));
+  const feats = (k.features || []).filter(f => f && f.name && !/^玩家可选变体/.test(f.name));
+  const out = [];
+  if (feats.some(f => Array.isArray(f.levels))) {
+    for (const f of feats) {
+      const lvls = (Array.isArray(f.levels) ? f.levels : []).filter(x => Number.isFinite(x));
+      const min = lvls.length ? Math.min.apply(null, lvls) : 1;
+      if (lvls.length ? lvls.some(x => x <= lv) : min <= lv) {
+        out.push({ name: f.name, text: f.text || '', level: min, levels: lvls });
+      }
+    }
+  } else {
+    const names = classTableFeatureNames(k, lv);
+    for (const f of feats) {
+      if (names.includes(f.name)) out.push({ name: f.name, text: f.text || '', level: 1, levels: [] });
+    }
+  }
+  out.sort((a, b) => a.level - b.level);
+  return out;
+}
+// 当前子职条目（基础职业 subclasses 里按 name 匹配）
+function subclassEntryByName(name) {
+  const b = baseKlass();
+  if (!b || !name) return null;
+  return (b.subclasses || []).find(s => s.name === name) || null;
+}
+// 子职特性（到指定等级，反馈 8）：解析器把子职特性挂在 subclasses[].features 上（旧数据则为空）
+function subclassFeatureListToLevel(level) {
+  const s = subclassEntryByName(state.char.subclass);
+  const lv = Math.max(1, Math.min(20, level || state.char.level || 1));
+  const feats = (s && Array.isArray(s.features)) ? s.features : [];
+  return feats
+    .filter(f => f && f.name && (!f.level || f.level <= lv))
+    .map(f => ({ name: f.name, text: f.text || '', level: f.level || 0 }))
+    .sort((a, b) => a.level - b.level);
+}
+function levelUpFeatureText(f) {
+  const lv = f.level ? `第${f.level}级` : '';
+  return lv ? `${f.name}（${lv}）` : f.name;
+}
+
 function skillGroupRows() {
   const groups = [['力量系', ['运动', '威吓']], ['敏捷系', ['体操', '巧手', '隐匿']],
     ['智力系', ['奥秘', '灵能', '历史', '调查', '自然', '宗教', '表演']],
@@ -2933,222 +3348,585 @@ function docxPaste(label) {
   return docxP(docxRun('▼ ' + label + '　（请从规则书中复制粘贴）', { b: true, color: '808080' }),
     { spacing: 'w:before="80" w:after="20"' });
 }
-// 表格：headers 数组，rows 二维数组，widths 数组（twips，总和应≤内容宽 9638）
+// 表格：headers 数组，rows 二维数组，widths 数组（twips，总和应≤内容宽 9638，超出自动等比缩放）
+// 单元格可为字符串/数字，或 { t, b, i, color, gray, shd } 对象（灰字提示、重点标签等）
 function docxTable(headers, rows, widths) {
-  const total = widths.reduce((a, b) => a + b, 0);
+  widths = (widths || []).slice();
+  if (!widths.length) widths = [9638];
+  let total = widths.reduce((a, b) => a + b, 0);
+  if (total > 9638) {
+    const ratio = 9638 / total;
+    widths = widths.map(w => Math.max(300, Math.floor(w * ratio)));
+    total = widths.reduce((a, b) => a + b, 0);
+  }
   const tblPr = `<w:tblW w:w="${total}" w:type="dxa"/>` +
     '<w:tblBorders>' +
     ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
       .map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="B0B0B0"/>`).join('') +
     '</w:tblBorders>';
   const grid = `<w:tblGrid>${widths.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+  const normCell = (x) => (x && typeof x === 'object' && !Array.isArray(x)) ? x : { t: x };
   const cell = (content, w, head) => {
+    const o = normCell(content);
+    const runOpt = { b: !!(o.b || head) };
+    if (o.i) runOpt.i = true;
+    if (o.color) runOpt.color = o.color;
+    if (o.gray) runOpt.color = '808080';
+    if (o.sz) runOpt.sz = o.sz;
+    else if (head) runOpt.sz = 21;
     const tcPr = `<w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>` +
-      (head ? '<w:shd w:val="clear" w:color="auto" w:fill="D9E2F3"/>' : '') + '</w:tcPr>';
-    const p = docxP(docxRun(content, head ? { b: true, sz: 21 } : {}), { spacing: 'w:before="40" w:after="40"' });
+      ((head || o.shd) ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.shd || 'D9E2F3'}"/>` : '') + '</w:tcPr>';
+    const p = docxP(docxRun(o.t == null ? '' : o.t, runOpt), { spacing: 'w:before="40" w:after="40"' });
     return `<w:tc>${tcPr}${p}</w:tc>`;
   };
   let xml = '';
-  if (headers) {
-    xml += `<w:tr>${headers.map((h, i) => cell(h, widths[i], true)).join('')}</w:tr>`;
+  if (headers && headers.length) {
+    xml += `<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>${headers.map((h, i) => cell(h, widths[i] || 800, true)).join('')}</w:tr>`;
   }
   for (const r of rows) {
-    xml += `<w:tr>${r.map((c, i) => cell(c, widths[i], false)).join('')}</w:tr>`;
+    xml += `<w:tr><w:trPr><w:cantSplit/></w:trPr>${r.map((c, i) => cell(c, widths[i] || 800, false)).join('')}</w:tr>`;
   }
   return `<w:tbl><w:tblPr>${tblPr}</w:tblPr>${grid}${xml}</w:tbl>`;
 }
 function docxGap() { return docxP('', { spacing: 'w:after="20"' }); }
 
+/* ---------- Word 导出 · 规则书「空白角色卡（详细版）」字段推导 ----------
+ * 主职/子职特性到等级、变体职业合并、职业法术列表分别由 Lead 提供的
+ * baseKlass()/klass()/classFeatureListToLevel()/subclassFeatureListToLevel()/classSpellList() 负责；
+ * 这里只做导出排版需要的字段整形：职业表等级行/法术位、生命值/AC 分解、种族派生字段、同调位、物品分类。
+ * 全部函数带 __docx 前缀，避免与车卡器其他区域的重名冲突。 */
+function __docxK() { return (typeof klass === 'function' ? klass() : null); }
+function __docxStr(x) { return String(x == null ? '' : x); }
+function __docxSign(v) { return (v >= 0 ? '+' : '') + v; }
+function __docxMod(v) { return __docxSign(v); }
+// 职业显示名：变体职业标题里去掉「（牧师变体）」这类后缀，避免章节标题嵌套括号
+function __docxClassName() {
+  const k = __docxK();
+  if (!k) return '';
+  return __docxStr(k.name).replace(/（[^（）]*变体）$/, '').trim() || __docxStr(k.name);
+}
+// 子职显示名（变体专属子职去掉「（恶武士）」后缀，沿用 Lead 的 subclassDisplayName）
+function __docxSubclassName() {
+  const c = state.char;
+  if (!c.subclass) return '';
+  try {
+    if (typeof subclassEntryByName === 'function' && typeof subclassDisplayName === 'function') {
+      const s = subclassEntryByName(c.subclass);
+      if (s) return subclassDisplayName(s);
+    }
+  } catch (e) { /* 旧数据无子职特性时忽略 */ }
+  return c.subclass;
+}
+// 职业表结构：等级行起点（表头可能占 1~2 行；第二行可能是「1环…9环」法术位环阶标签）
+function __docxClassTableMeta(k) {
+  const out = { lvStart: 1, header: [], slotIdx: -1, ringIdx: -1, ringRow: null };
+  if (!k || !Array.isArray(k.table) || !k.table.length) return out;
+  out.header = k.table[0] || [];
+  out.lvStart = k.table.findIndex(r => Array.isArray(r) && /^\d+$/.test(__docxStr(r[0]).trim()));
+  if (out.lvStart < 0) out.lvStart = 1;
+  out.slotIdx = out.header.findIndex(h => /法术位/.test(__docxStr(h)));
+  out.ringIdx = out.header.findIndex(h => /环阶/.test(__docxStr(h)));
+  if (out.lvStart > 0) {
+    const maybe = k.table[out.lvStart - 1];
+    if (Array.isArray(maybe) && maybe.some(x => /^\d+环$/.test(__docxStr(x).trim()))) out.ringRow = maybe;
+  }
+  return out;
+}
+// 当前等级职业表行
+function __docxClassLevelRow(k, level) {
+  if (!k || !Array.isArray(k.table) || !k.table.length) return null;
+  const lv = Math.max(1, Math.min(20, level || state.char.level || 1));
+  return k.table.find(r => Array.isArray(r) && __docxStr(r[0]).trim() === String(lv)) || null;
+}
+// 当前等级各环法术位（1–9 环，值为职业表原文，如「3」「4+1」）
+function __docxSpellSlots(k, level) {
+  const slots = {};
+  if (!k) return slots;
+  const meta = __docxClassTableMeta(k);
+  const row = __docxClassLevelRow(k, level);
+  if (!row || meta.slotIdx < 0) return slots;
+  if (meta.ringRow) {
+    for (let i = meta.slotIdx; i < row.length; i++) {
+      const ringIdx = i - meta.slotIdx;
+      const m = /^(\d+)环$/.exec(__docxStr(meta.ringRow[ringIdx]).trim());
+      const ring = m ? +m[1] : ringIdx + 1;
+      const v = __docxStr(row[i]).trim();
+      if (ring >= 1 && ring <= 9 && v && v !== '—' && v !== '-' && !/^0+$/.test(v)) slots[ring] = v;
+    }
+    return slots;
+  }
+  // 契术师式：法术位数量 × 环阶（如 3 个 2 环法术位）
+  const ring = parseInt(__docxStr(meta.ringIdx >= 0 ? row[meta.ringIdx] : '').replace(/[^\d]/g, ''), 10);
+  const cnt = __docxStr(row[meta.slotIdx]).trim();
+  if (ring >= 1 && ring <= 9 && cnt && cnt !== '—' && cnt !== '-' && !/^0+$/.test(cnt)) slots[ring] = cnt;
+  return slots;
+}
+// 生命值分解：10 + 等级 ×（生命骰期望 + 体质调整值）[+ 亚种每级生命]
+function __docxHpParts() {
+  const k = __docxK();
+  if (!k) return null;
+  const lv = state.char.level || 1;
+  const exp = Math.ceil((hitDie() + 1) / 2);
+  const con = finalMod('体质');
+  const sr = (typeof subraceObj === 'function') ? subraceObj(race()) : null;
+  const srHp = sr && sr.hpPerLevel ? sr.hpPerLevel * lv : 0;
+  return { lv, exp, con, srHp, total: hpMax() };
+}
+// AC 分解：按护甲类型给出基础公式各加数 + 盾牌 + 其它加值
+function __docxAcParts() {
+  const c = state.char;
+  const prof = profBonus();
+  const dex = finalMod('敏捷');
+  const type = c.armorType || 'naked';
+  const dexUse = type === 'medium' ? Math.min(2, dex) : dex;
+  const parts = [];
+  switch (type) {
+    case 'light': parts.push(['10', 10], ['熟练', prof], ['敏捷', dexUse]); break;
+    case 'medium': parts.push(['13', 13], ['熟练', prof], ['敏捷', dexUse]); break;
+    case 'heavy': parts.push(['16', 16], ['熟练', prof]); break;
+    case 'mage': parts.push(['11', 11], ['熟练', prof], ['敏捷', dexUse]); break;
+    case 'monk': parts.push(['8', 8], ['熟练', prof], ['敏捷', dex], ['感知', finalMod('感知')]); break;
+    case 'barb': parts.push(['8', 8], ['熟练', prof], ['敏捷', dex], ['体质', finalMod('体质')]); break;
+    default: parts.push(['8', 8], ['熟练', prof], ['敏捷', dex]);
+  }
+  const name = ({ naked: '无盔甲', light: '轻甲', medium: '中甲', heavy: '重甲', mage: '法师护甲', monk: '武僧无甲防御', barb: '狂战士无甲防御' })[type] || '无盔甲';
+  return { type, name, shield: c.shield ? 2 : 0, extra: c.armorBonus || 0, value: acValue(), parts };
+}
+// 速度：步行 + 种族特性中的游泳/飞行/掘穴/攀爬
+function __docxSpeedText() {
+  const r = race();
+  const walk = speedValue();
+  if (!r) return walk ? `步行 ${walk} 尺` : '';
+  const text = (r.traits || []).map(t => `${t.name || ''} ${t.text || ''}`).join('\n');
+  const seg = [];
+  if (walk) seg.push(`步行 ${walk} 尺`);
+  const add = (label, re) => {
+    const m = re.exec(text);
+    if (m) seg.push(`${label} ${m[1]} 尺`);
+  };
+  add('游泳', /游泳[^。\n]{0,20}?(\d+)\s*尺/);
+  add('飞行', /飞行[^。\n]{0,20}?(\d+)\s*尺/);
+  add('掘穴', /掘穴[^。\n]{0,20}?(\d+)\s*尺/);
+  add('攀爬', /攀爬[^。\n]{0,20}?(\d+)\s*尺/);
+  return seg.join('，');
+}
+// 特殊感官：从种族特性提取黑暗视觉/盲视/真实视觉/震颤感知
+function __docxSensesText() {
+  const r = race();
+  if (!r) return '';
+  const out = [];
+  const pairs = [['黑暗视觉', /黑暗视觉[^。；\n]{0,12}?(\d+)\s*尺/g], ['盲视', /(?:盲视|盲感)[^。；\n]{0,12}?(\d+)\s*尺/g],
+    ['真实视觉', /真实视觉[^。；\n]{0,12}?(\d+)\s*尺/g], ['震颤感知', /震颤感知[^。；\n]{0,12}?(\d+)\s*尺/g]];
+  for (const t of (r.traits || [])) {
+    const s = `${t.name || ''}：${t.text || ''}`;
+    for (const [label, re] of pairs) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(s))) {
+        const v = `${label} ${m[1]} 尺`;
+        if (!out.includes(v)) out.push(v);
+      }
+    }
+  }
+  return out.join('、');
+}
+// 伤害抗性 / 状态免疫：从种族特性正文粗提（仅预填，玩家可在 Word 中修改）
+function __docxDefenseText() {
+  const r = race();
+  const res = { resist: [], status: [] };
+  if (!r) return res;
+  for (const t of (r.traits || [])) {
+    const s = __docxStr(t.text);
+    const push = (arr, v) => {
+      v = __docxStr(v).trim();
+      if (v && v.length <= 16 && !arr.includes(v)) arr.push(v);
+    };
+    let m;
+    const reRes = /对([^，。；\n]{1,14}?)伤害(?:具有|有|获得)?的?抗性/g;
+    while ((m = reRes.exec(s))) push(res.resist, m[1]);
+    const reStatus = /(?:免疫|不会受到)([^，。；\n]{1,14}?)(?:伤害|的状态|状态|的影响)?(?=[，。；\n]|$)/g;
+    while ((m = reStatus.exec(s))) {
+      if (/睡眠|疾病|毒素|麻痹|中毒|魅惑|恐惧|恐慌|石化|即死|耳聋|目盲|力竭|昏迷/.test(m[1])) push(res.status, m[1]);
+    }
+  }
+  return res;
+}
+// 同调位：上限（旧存档缺字段默认 3）+ 已同调魔法物品 + 已购装备花费
+function __docxAttuneInfo() {
+  const c = state.char;
+  let cap = 3;
+  const raw = c.attuneSlots;
+  if (raw != null && raw !== '' && Number.isFinite(+raw)) cap = Math.max(0, Math.min(30, Math.floor(+raw)));
+  const eq = Array.isArray(c.equipment) ? c.equipment : [];
+  const attuned = [];
+  let total = 0, unpriced = 0;
+  for (const x of eq) {
+    const it = miById(x.id);
+    const p = miPrice(it);
+    if (p != null) total += p; else unpriced++;
+    if (it && it.attune) attuned.push(it.name);
+  }
+  return { cap, used: attuned.length, attuned, total, unpriced };
+}
+// 魔法物品分类 → 规则书模板「随身物品」分类
+const DOCX_ITEM_CATS = ['法器', '武器', '护甲', '服饰', '奇物', '卷轴', '魔药', '普通物品'];
+function __docxItemCat(it) {
+  if (!it) return '普通物品';
+  const s = `${it.category || ''} ${it.sub || ''}`;
+  if (/法器/.test(s)) return '法器';
+  if (/武器/.test(s)) return '武器';
+  if (/防具|盔甲|护甲|盾牌/.test(s)) return '护甲';
+  if (/服饰/.test(s)) return '服饰';
+  if (/卷轴/.test(s)) return '卷轴';
+  if (/魔药|药水/.test(s)) return '魔药';
+  if (/奇物|套装/.test(s)) return '奇物';
+  return '普通物品';
+}
+// 种族派生信息：生物类型 / 体型 / 语言
+function __docxBioInfo() {
+  const bio = { creatureType: '', size: '', languages: [] };
+  const r = race();
+  if (!r) return bio;
+  const findTrait = (re) => (r.traits || []).find(x => x && re.test(__docxStr(x.name).trim()));
+  const ct = findTrait(/^生物类型$|^生物种类$/);
+  if (ct) {
+    const text = __docxStr(ct.text).trim().replace(/。$/, '');
+    const known = /(类人生物|不死生物|构装生物|天界生物|邪魔|精类|妖精|龙类|巨人|元素生物|软泥怪|异怪|魔法兽|野兽|植物|亡灵)/.exec(text);
+    if (known) bio.creatureType = known[1];
+    else {
+      const m = /是([^。]+)$/.exec(text);
+      bio.creatureType = m ? m[1] : text;
+    }
+  }
+  const sz = findTrait(/^体型$/);
+  if (sz) {
+    const m = /(微型|小型|中型|大型|巨型)/.exec(__docxStr(sz.text));
+    bio.size = m ? m[1] : __docxStr(sz.text).slice(0, 20);
+  }
+  const lang = findTrait(/^语言$/);
+  if (lang) {
+    const text = __docxStr(lang.text);
+    for (const name of ['通用语', '精灵语', '矮人语', '龙语', '地精语', '兽人语', '天界语', '深渊语', '炼狱语', '巨人语', '侏儒语', '半身人语', '木族语', '原初语', '深潜语', '心灵感应']) {
+      if (text.includes(name) && !bio.languages.includes(name)) bio.languages.push(name);
+    }
+    const pick = /(一|二|两|三)门(?:额外的)?自选语言/.exec(text);
+    if (pick) {
+      const num = { 一: 1, 二: 2, 两: 2, 三: 3 }[pick[1]] || 1;
+      const v = num + '门自选语言';
+      if (!bio.languages.includes(v)) bio.languages.push(v);
+    } else if (/自选语言|一门其它语言|一门其他语言/.test(text) && !bio.languages.includes('一门自选语言')) {
+      bio.languages.push('一门自选语言');
+    }
+    if (!bio.languages.length) bio.languages.push(text.slice(0, 40));
+  }
+  const extra = __docxStr(state.char.bgLanguage).split(/[、,，;；\s]+/).filter(Boolean);
+  for (const x of extra) if (!bio.languages.includes(x)) bio.languages.push(x);
+  return bio;
+}
+// 灰色提示行（不需要「请从规则书中复制粘贴」时用）
+function docxHint(text) {
+  return docxP(docxRun(text, { i: true, color: '808080', sz: 18 }), { spacing: 'w:before="20" w:after="20"' });
+}
+
+
 // 构建正文 block 列表（数组，join 后为 body 内容）
+// 章节顺序对齐规则书「空白角色卡（详细版）」：基本信息 → 角色 → 购点属性 → 生命值 → 防御等级 →
+// 豁免 → 攻击与施法 → 熟练项 → 抗性免疫 → 专长 → 缺陷 → 主职特性 → 子职特性 → 种族特性 →
+// 技能 → 战技 → 已知戏法/法术表 → 程序 → 随身物品 → 备注
 function buildDocxBody() {
   const c = state.char;
-  const k = klass();
+  const k = __docxK();
   const r = race();
   const ver = (DATA.rules || {}).version || '';
+  const level = Math.max(1, Math.min(20, c.level || 1));
+  const subName = __docxSubclassName();
   const b = [];
-  const t = (x) => x || '';
+  const t = __docxStr;
+  const push = (x) => { if (x) b.push(x); };
 
-  // —— 标题 ——
+  // ===== 标题 =====
   b.push(docxP(docxRun(`5z 角色卡${ver ? '（规则书 v' + ver + '）' : ''}`, { b: true, sz: 36, color: '1F3864' }),
-    { jc: 'center', spacing: 'w:after="120"' }));
-  b.push(docxP(docxRun('由网页车卡器生成 · 可在 Word 中继续编辑补充', { i: true, color: '808080', sz: 18 }),
-    { jc: 'center', spacing: 'w:after="200"' }));
+    { jc: 'center', spacing: 'w:after="60"' }));
+  b.push(docxP(docxRun('规则书「空白角色卡（详细版）」格式 · 由网页车卡器生成 · 可在 Word 中继续编辑补充', { i: true, color: '808080', sz: 18 }),
+    { jc: 'center', spacing: 'w:after="160"' }));
 
-  // —— 基本信息（label/value/label/value 四列两两成对，紧凑） ——
+  // ===== 基本信息：玩家 / 人物姓名 / 开卡条件 / 背景介绍 =====
   b.push(docxSec('基本信息'));
-  const infoPairs = [
-    ['姓名', t(c.name), '玩家', t(c.player)],
-    ['等级', String(c.level || 1), '生命骰', k ? 'D' + hitDie() + ' × ' + c.level : ''],
-    ['职业', k ? k.name : '', '子职', t(c.subclass)],
-    ['种族', r ? r.name : '', '亚种', t(c.subrace)],
-    ['训练选择', (c.raceTraining || '').replace(/^·/, ''), '阵营', t(c.alignment)],
-    ['信仰', t(c.faith), '体型', ''],
-    ['年龄', t(c.age), '性别', t(c.gender)],
-    ['身高体重', t(c.heightWeight), '语言', t(c.bgLanguage)],
-  ].filter(row => row[1] || row[3]);
-  if (infoPairs.length) {
-    b.push(docxTable(null, infoPairs, [1400, 3200, 1400, 3200]));
-  }
+  const gold = (rules().levelTable[level - 1] || [])[5] || '';
+  b.push(docxTable(null, [
+    [{ t: '玩家', b: true, color: '2F5496' }, t(c.player) || '（待填）', { t: '人物姓名', b: true, color: '2F5496' }, t(c.name) || '（待填）'],
+    [{ t: '开卡条件', b: true, color: '2F5496' }, `5z 规则书 v${ver || '？'}，${level} 级，初始资金 ${gold || '？'}`, { t: '生命骰', b: true, color: '2F5496' }, k ? `D${hitDie()} × ${level}` : ''],
+  ], [1300, 3300, 1200, 3200]));
+  if (t(c.bgText)) b.push(docxKV('背景介绍', c.bgText, { long: true }));
+  else push(docxPaste('背景介绍'));
 
-  // —— 购点属性 ——
+  // ===== 角色：等级/职业/种族/生物类型/体型/年龄/性别/阵营/信仰/语言 =====
+  b.push(docxSec('角色'));
+  const bio = __docxBioInfo();
+  const clsText = k ? (k.name + (subName ? '（' + subName + '）' : '')) : '';
+  const raceText = r ? (r.name + (c.subrace ? '（' + c.subrace + '）' : '')) : '';
+  b.push(docxTable(null, [
+    [{ t: '角色等级', b: true, color: '2F5496' }, `${level} 级`, { t: '职业', b: true, color: '2F5496' }, clsText],
+    [{ t: '种族', b: true, color: '2F5496' }, raceText, { t: '生物类型', b: true, color: '2F5496' }, bio.creatureType],
+    [{ t: '体型', b: true, color: '2F5496' }, bio.size, { t: '年龄', b: true, color: '2F5496' }, t(c.age)],
+    [{ t: '性别', b: true, color: '2F5496' }, t(c.gender), { t: '阵营', b: true, color: '2F5496' }, t(c.alignment)],
+    [{ t: '信仰', b: true, color: '2F5496' }, t(c.faith), { t: '语言', b: true, color: '2F5496' }, bio.languages.join('、')],
+    [{ t: '身高体重', b: true, color: '2F5496' }, t(c.heightWeight), { t: '训练选择', b: true, color: '2F5496' }, (c.raceTraining || '').replace(/^·/, '')],
+  ], [1300, 3300, 1200, 3200]));
+
+  // ===== 购点属性（每项带 初始/种族+/升级+/专长装备+ 分解） =====
   b.push(docxSec('购点属性'));
   const attrRows = ATTRS.map(a => {
-    const manual = c.manual[a] || 0;
-    const lvl = levelUpBonus(a);
-    let breakdown = `基础${c.base[a]}`;
-    if (lvl) breakdown += `，升级+${lvl}`;
-    if (manual) breakdown += `，专长/装备+${manual}`;
-    return [a, finalAttr(a), fmtMod(finalMod(a)), breakdown];
+    const raceB = raceBonus(a);
+    const lvB = levelUpBonus(a);
+    const manualB = c.manual[a] || 0;
+    return [a, String(finalAttr(a)), __docxMod(finalMod(a)), String(c.base[a]), __docxMod(raceB), __docxMod(lvB), __docxMod(manualB)];
   });
-  b.push(docxTable(['属性', '最终值', '调整值', '构成（基础/升级/专长装备）'], attrRows, [1200, 1400, 1400, 5200]));
+  b.push(docxTable(['属性', '最终值', '调整值', '初始', '种族+', '升级+', '专长/装备+'], attrRows, [1200, 1300, 1300, 1200, 1200, 1200, 1800]));
+  b.push(docxHint(`购点：${c.buyMethod === 'points' ? '32 点购点表' : '自定义'}，已花费 ${pointBuySpent()} 点。主要属性 ${t(c.majorAttr)}（每 3 级 +1）；其余四项每 5 级 +1。`));
 
-  // —— 战斗数据 ——
-  b.push(docxSec('战斗数据'));
-  b.push(docxKV('生命值上限', k ? String(hpMax()) : ''));
-  b.push(docxKV('生命骰', k ? 'D' + hitDie() : ''));
-  b.push(docxKV('防御等级 AC', k ? String(acValue()) : ''));
-  b.push(docxKV('AC 来源', t(acSourceName())));
-  b.push(docxKV('先攻', fmtMod(initBonus())));
-  b.push(docxKV('熟练加值', k ? '+' + profBonus() : ''));
-  b.push(docxKV('速度', (speedValue() ? speedValue() + ' 尺' : '')));
-  b.push(docxKV('武器熟练', k ? t(k.core.weapons) : ''));
-  b.push(docxKV('护甲熟练', k ? t(k.core.armor) : ''));
-  b.push(docxKV('法术豁免 DC', k ? String(spellDC()) : ''));
-  b.push(docxKV('法术攻击加值', k ? fmtMod(spellAttack()) : ''));
-  b.push(docxKV('施法关键属性', t(c.keyAttr)));
-  b.push(docxPaste('抗性 / 免疫 / 状态免疫'));
+  // ===== 生命值（含公式） =====
+  b.push(docxSec('生命值'));
+  const hp = __docxHpParts();
+  if (hp) {
+    const srNote = hp.srHp ? `+${hp.srHp}（亚种）` : '';
+    b.push(docxP(docxRun('生命值上限', { b: true }) +
+      docxRun(`（10+职业等级×（生命骰期望值+体质调整值））：${hp.total}（10+${hp.lv}×（${hp.exp}${__docxMod(hp.con)}）${srNote}）`)));
+    b.push(docxP(docxRun('生命骰', { b: true }) + docxRun(`：D${hitDie()} × ${level}（共 ${level} 颗）　期望值 ${hp.exp}/颗`)));
+  } else {
+    push(docxPaste('生命值'));
+  }
 
-  // —— 豁免 ——
+  // ===== 防御等级（基础 AC 分解 + 盾牌） =====
+  b.push(docxSec('防御等级'));
+  const ac = __docxAcParts();
+  const acSum = ac.parts.map(([label, v], i) => i === 0 ? String(v) : label + __docxMod(v)).join('+');
+  b.push(docxP(docxRun('防御等级 AC', { b: true }) +
+    docxRun(`：${ac.value}（基础AC=${acSum}，盾牌+${ac.shield}${ac.extra ? '，其它+' + ac.extra : ''}；${ac.name}${c.shield ? ' + 盾牌' : ''}）`)));
+
+  // ===== 豁免（每项分解） + 专注/先攻/熟练加值/速度/特殊感官 =====
   b.push(docxSec('豁免'));
   const saveRows = ATTRS.map(a => {
     const hasSave = k ? k.core.saveList.includes(a) : false;
-    return [a, finalAttr(a), fmtMod(finalMod(a)), hasSave ? '熟练' : '—', fmtMod(saveMod(a))];
+    return [a, String(finalAttr(a)), __docxMod(finalMod(a)), hasSave ? `熟练+${profBonus()}` : '—', __docxMod(saveMod(a)),
+      `${a}${__docxMod(finalMod(a))}${hasSave ? '，熟练+' + profBonus() : ''}`];
   });
-  b.push(docxTable(['属性', '属性值', '调整值', '豁免熟练', '豁免总值'], saveRows, [1200, 1400, 1400, 1400, 2000]));
+  b.push(docxTable(['属性', '属性值', '调整值', '熟练', '豁免总值', '分解'], saveRows, [1100, 1100, 1100, 1400, 1400, 3300]));
+  const conSave = k ? k.core.saveList.includes('体质') : false;
+  b.push(docxP(docxRun('专注（体质豁免）', { b: true }) +
+    docxRun(`：${__docxMod(saveMod('体质'))}（体质${__docxMod(finalMod('体质'))}${conSave ? '，熟练+' + profBonus() : ''}）　　先攻：${__docxMod(initBonus())}（敏捷${__docxMod(finalMod('敏捷'))}）　　熟练加值：+${profBonus()}`)));
+  b.push(docxP(docxRun('速度', { b: true }) + docxRun('：' + (__docxSpeedText() || '—') + '　　特殊感官：' + (__docxSensesText() || '—'))));
 
-  // —— 背景 ——
-  b.push(docxSec('背景'));
-  if (c.bgName) b.push(docxKV('背景', c.bgName));
-  if (c.bgText) b.push(docxKV('背景设定', c.bgText, { long: true }));
-  b.push(docxKV('额外语言', t(c.bgLanguage)));
-  b.push(docxKV('随身物品', t(c.items), { long: true }));
-  b.push(docxPaste('特点 / 理想 / 牵绊 / 缺点'));
-  b.push(docxPaste('人物简介（故事背景）'));
+  // ===== 攻击与施法（无武器数据 → 灰字粘贴区，保留公式加数） =====
+  b.push(docxSec('攻击与施法'));
+  b.push(docxP(docxRun('武器攻击加值', { b: true }) +
+    docxRun(`：+＿＿（熟练+${profBonus()}，属性+＿＿，装备+＿＿）　　武器攻击伤害：＿＿（武器伤害骰＿＿，属性+＿＿，装备+＿＿）`)));
+  b.push(docxPaste('武器攻击加值与武器攻击伤害'));
+  const cs = (typeof classSpellList === 'function') ? classSpellList() : null;
+  const isCyborg = (k && /赛博格/.test(t(k.name) + t(k.baseName))) || (c.programs || []).length > 0;
+  if (k && (cs || (c.spells || []).length)) {
+    b.push(docxP(docxRun('法术豁免 DC', { b: true }) +
+      docxRun(`：${spellDC()}（8+熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}）　　法术攻击加值：${__docxMod(spellAttack())}（熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}）`)));
+  }
+  if (isCyborg) {
+    b.push(docxP(docxRun('程序豁免 DC', { b: true }) +
+      docxRun(`：${8 + profBonus() + finalMod(c.keyAttr)}（8+熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}）　　程序攻击加值：${__docxMod(profBonus() + finalMod(c.keyAttr))}（熟练${profBonus()}+${t(c.keyAttr)}${__docxMod(finalMod(c.keyAttr))}）`)));
+  }
 
-  // —— 专长 ——
+  // ===== 熟练项 =====
+  b.push(docxSec('熟练项'));
+  b.push(docxP(docxRun('武器熟练', { b: true }) + docxRun('：' + ((k && t(k.core.weapons)) || '—'))));
+  b.push(docxP(docxRun('护甲熟练', { b: true }) + docxRun('：' + ((k && t(k.core.armor)) || '—'))));
+  const tools = k ? t(k.core.tools || k.core.tool || k.core.proficiencies || '') : '';
+  if (tools) b.push(docxP(docxRun('配件熟练', { b: true }) + docxRun('：' + tools)));
+  else push(docxPaste('配件熟练'));
+
+  // ===== 伤害抗性 / 伤害免疫 / 状态免疫 =====
+  b.push(docxSec('伤害抗性 / 伤害免疫 / 状态免疫'));
+  const def = __docxDefenseText();
+  if (def.resist.length) b.push(docxP(docxRun('伤害抗性', { b: true }) + docxRun('：' + def.resist.join('、') + '（来自种族特性）')));
+  if (def.status.length) b.push(docxP(docxRun('状态免疫', { b: true }) + docxRun('：' + def.status.join('、') + '（来自种族特性）')));
+  if (!def.resist.length && !def.status.length) push(docxPaste('伤害抗性 / 伤害免疫 / 状态免疫'));
+  else b.push(docxPaste('伤害免疫 / 其它抗性与状态免疫（补充）'));
+
+  // ===== 专长（等级 1,1,3,6,9,12,15,18 + 额外专长） =====
   b.push(docxSec(`专长（${c.feats.length} / ${featQuota()}）`));
-  if (!c.feats.length) {
-    b.push(docxP(docxRun('（未选择专长）', { color: '808080' })));
-  } else {
-    const featRows = c.feats.map((fn, i) => {
-      const f = DATA.feats.find(x => x.name === fn);
-      return [featLv(i), fn, f ? (f.text.split('\n')[0] || '') : ''];
-    });
-    b.push(docxTable(['等级', '名称', '效果摘要'], featRows, [1200, 2600, 5000]));
-    b.push(docxPaste('专长完整效果（从规则书复制粘贴）'));
+  const featSlotCount = Math.max(8, featQuota(), c.feats.length);
+  const featRows = [];
+  for (let i = 0; i < featSlotCount; i++) {
+    const fn = t(c.feats[i]);
+    const f = fn ? DATA.feats.find(x => x.name === fn) : null;
+    featRows.push([String(featLv(i) || '额外'), fn || '（待填）', f ? (t(f.text).split('\n')[0] || '') : '']);
   }
+  b.push(docxTable(['等级', '专长名称', '效果摘要'], featRows, [1100, 2600, 5900]));
+  if (c.feats.length) b.push(docxPaste('专长完整效果（从规则书复制粘贴，或删除本行后手写）'));
 
-  // —— 种族特性 ——
-  if (r && r.traits.some(x => x.name)) {
-    b.push(docxSec(`种族特性（${r.name}）`));
-    const traits = r.traits.filter(x => x.name);
-    const traitRows = traits.map(tr => [tr.name, tr.text || '']);
-    b.push(docxTable(['特性', '效果'], traitRows, [2200, 7200]));
-    if (c.raceTraining) b.push(docxKV('训练选择', c.raceTraining.replace(/^·/, '')));
-    if (c.subrace) b.push(docxKV('亚种', c.subrace));
-  }
+  // ===== 缺陷 =====
+  b.push(docxSec('缺陷'));
+  b.push(docxTable(null, [['（1）', ''], ['（2）', ''], ['（3）', '']], [1000, 8600]));
+  b.push(docxHint('缺陷仅适配「琉璃的万色卷轴」；无此扩展可留空或删除本节。'));
 
-  // —— 主职 / 子职特性 ——
-  b.push(docxSec('职业特性'));
+  // ===== 主职特性（到当前等级，反馈 8） =====
+  b.push(docxSec(`主职特性（${k ? __docxClassName() : '—'} · 至 ${level} 级）`));
   if (k) {
-    const lv1 = classLv1Features();
-    if (lv1.length) {
-      b.push(docxKV('1 级职业特性', lv1.map(f => f.name).join('、')));
-      lv1.forEach(f => b.push(docxKV(f.name, f.text, { long: true })));
+    const mainFeats = (typeof classFeatureListToLevel === 'function' ? classFeatureListToLevel(level) : [])
+      .filter(f => f && f.name && t(f.text).trim());
+    if (mainFeats.length) {
+      for (const f of mainFeats) {
+        const fLevels = Array.isArray(f.levels) ? f.levels.filter(x => Number.isFinite(x)) : [];
+        const label = fLevels.length ? f.name + '（第' + Math.min.apply(null, fLevels) + '级）' : f.name;
+        b.push(docxKV(label, f.text, { long: true }));
+      }
+    } else {
+      b.push(docxPaste(`主职特性（${k.name}，请从规则书中复制粘贴已获得的特性全文）`));
     }
-    b.push(docxPaste(`主职特性（${k.name}，从规则书复制粘贴你已获得的特性全文）`));
-    if (c.subclass) b.push(docxPaste(`子职特性（${c.subclass}，从规则书复制粘贴）`));
+  } else push(docxPaste('主职特性'));
+
+  // ===== 子职特性（到当前等级，反馈 8） =====
+  b.push(docxSec(`子职特性（${subName || '未选择子职'} · 至 ${level} 级）`));
+  const subFeats = (typeof subclassFeatureListToLevel === 'function' ? subclassFeatureListToLevel(level) : [])
+    .filter(f => f && f.name && t(f.text).trim());
+  if (subFeats.length) {
+    for (const f of subFeats) {
+      const label = f.level ? `${f.name}（第${f.level}级）` : f.name;
+      b.push(docxKV(label, f.text, { long: true }));
+    }
+  } else if (c.subclass) {
+    b.push(docxPaste(`子职特性（${subName}，请从规则书中复制粘贴已获得的特性全文）`));
+  } else {
+    b.push(docxHint('（未选择子职；部分职业 1~3 级获得子职）'));
   }
 
-  // —— 技能（规则书 17 项） ——
+  // ===== 种族特性 =====
+  b.push(docxSec(`种族特性（${r ? r.name + (c.subrace ? ' · ' + c.subrace : '') : '—'}）`));
+  if (r) {
+    const traits = (r.traits || []).filter(x => x && x.name && t(x.text).trim());
+    if (traits.length) b.push(docxTable(['特性', '效果'], traits.map(tr => [tr.name, tr.text]), [2200, 7400]));
+    else push(docxPaste('种族特性'));
+  } else push(docxPaste('种族特性'));
+
+  // ===== 技能（17 项含分解） =====
   b.push(docxSec(`技能（${skillChosen()} / ${skillQuota()}）`));
-  const skRows = skillGroupRows();
-  b.push(docxTable(['分类', '技能', '总值', '状态'], skRows.map(x => [x.group, x.name, fmtMod(x.total), X(x.state)]),
-    [1600, 2200, 1400, 1600]));
-  function X(s) { return s === '专精' ? '专精' : s === '熟练' ? '熟练' : '—'; }
+  const kSkills = k ? (k.core.skillsCount || 0) : 0;
+  const intV = finalAttr('智力');
+  const intExtra = intV >= 14 ? Math.min(5, Math.floor((intV - 14) / 4) + 1) : 0;
+  const otherSkills = Math.max(0, skillChosen() - kSkills - 2 - intExtra);
+  b.push(docxHint(`职业 ${kSkills} 个熟练，背景 2 个熟练，高智力 ${intExtra} 个熟练，其它来源 ${otherSkills} 个熟练（共 ${skillQuota()} 个）。`));
+  const skRows = skillGroupRows().map(x => {
+    const attr = (rules().skills.find(s => s.name === x.name) || {}).attr || '—';
+    const lv = c.skills[x.name] || 0;
+    const train = lv >= 2 ? `专精+${profBonus() * 2}` : lv >= 1 ? `熟练+${profBonus()}` : '—';
+    return [x.group, x.name, __docxMod(x.total), attr, String(finalAttr(attr)), train,
+      `${attr}${__docxMod(finalMod(attr))}${lv >= 1 ? '，' + train : ''}`];
+  });
+  b.push(docxTable(['分类', '技能', '总值', '属性', '属性值', '熟练/专精', '分解'], skRows, [900, 900, 800, 800, 900, 1400, 3900]));
 
-  // —— 法术 ——
-  if (c.spells.length) {
-    const prepN = (c.prepared || []).filter(x => c.spells.includes(x)).length;
-    const prepTitle = preparedRule()
-      ? ` · 已准备 ${prepN}${preparedRule().balls ? '' : ' / ' + preparedLimit()}` : '';
-    b.push(docxSec(`法术（${c.spells.length}${prepTitle}）`));
-    const byLv = {};
-    for (const n of c.spells) {
-      const sp = DATA.spells.find(s => s.name === n);
-      const lv = sp ? sp.level : -1;
-      (byLv[lv] = byLv[lv] || []).push(sp || { name: n, text: '' });
-    }
-    const spellRows = Object.keys(byLv).sort((a, b2) => a - b2).map(lv =>
-      byLv[lv].map(sp => [
-        lv === 0 ? '戏法' : lv < 0 ? '?' : lv + '环', sp.name,
-        (c.prepared || []).includes(sp.name) ? '✓' : '', schoolLabel(sp),
-        (sp.text || '').split('\n').slice(1).join('\n').slice(0, 40) || '',
-      ])).flat();
-    b.push(docxTable(['环阶', '名称', '已准备', '学派', '简介'], spellRows, [1000, 2600, 1000, 1400, 4200]));
-    b.push(docxPaste('法术全文本（从规则书复制粘贴）'));
-  }
-  if (c.spells.length && preparedRule()) {
-    b.push(docxP(docxRun('准备数量公式：' + preparedLimitText() + '（未准备的已选法术不在战斗中可用）', { i: true, color: '808080', sz: 18 })));
-  }
-
-  // —— 战技 ——
-  if (c.maneuvers.length) {
-    b.push(docxSec(`战技（${c.maneuvers.length}）${c.maneuverStyle ? '　流派：' + c.maneuverStyle : ''}`));
+  // ===== 战技（有则输出，无则省略） =====
+  if ((c.maneuvers || []).length) {
+    b.push(docxSec('战技'));
+    const knownLv = ['低级', '中级', '高级', '超级'];
+    const got = {};
+    let dice = '';
     const mvRows = c.maneuvers.map(n => {
       const m = DATA.maneuvers.find(x => x.name === n);
-      return [m ? m.style : '', m ? m.level + '·' + m.type : '', n, (m ? m.text : '').slice(0, 40)];
+      if (m) {
+        got[m.level] = true;
+        if (!dice) { const dm = /卓越骰：([^\n]+)/.exec(m.text || ''); if (dm) dice = dm[1].trim(); }
+      }
+      return [m ? m.style : '', m ? m.level + '·' + m.type : '', n];
     });
-    b.push(docxTable(['流派', '级别·类型', '名称', '详述'], mvRows, [1200, 1400, 2600, 5200]));
-    b.push(docxPaste('战技全文本（从规则书复制粘贴）'));
+    b.push(docxP(docxRun('流派', { b: true }) + docxRun('：' + (t(c.maneuverStyle) || '—') + '　　已知战技等级：' + knownLv.map(l => l + (got[l] ? '☑' : '□')).join(' '))));
+    b.push(docxP(docxRun('准备战技数量', { b: true }) + docxRun(`：${c.maneuvers.length} 个（角色等级 ${level} + 属性）　　卓越骰：${dice || '—'}（见所选战技正文）`)));
+    b.push(docxTable(['流派', '级别·类型', '战技名称'], mvRows, [2000, 2200, 5400]));
   }
 
-  // —— 程序（赛博格专属） ——
-  if (c.programs.length) {
-    b.push(docxSec(`程序（${c.programs.length}）${c.programProtocol ? '　协议：' + c.programProtocol : ''}`));
-    const pgRows = c.programs.map(n => {
+  // ===== 已知戏法 / 已知或准备法术表（紧凑：每环 1 行，反馈 9） =====
+  b.push(docxSec('已知戏法 / 已知或准备法术表'));
+  const spellObjs = (c.spells || []).map(n => DATA.spells.find(s => s.name === n) || { name: n, level: -1 });
+  const slots = __docxSpellSlots(k, level);
+  const preparedSet = new Set(c.prepared || []);
+  const cantrips = spellObjs.filter(s => s.level === 0);
+  const leveled = spellObjs.filter(s => s.level > 0);
+  const prepN = (c.prepared || []).filter(n => (c.spells || []).includes(n)).length;
+  const prepLine = preparedRule() ? `（已准备 ${prepN}${preparedRule().balls ? '' : ' / ' + preparedLimit()}）` : '';
+  b.push(docxP(docxRun('已知戏法', { b: true }) + docxRun(`：${cantrips.length} 个　　已知或准备环法：${leveled.length} 个${prepLine}`)));
+  if (!spellObjs.length && !Object.keys(slots).length) {
+    b.push(docxHint('本角色无已知/准备法术（非施法职业，或尚未在「选择法术」步骤选择）。'));
+  }
+  const byRing = {};
+  for (const sp of spellObjs) (byRing[sp.level] = byRing[sp.level] || []).push(sp.name);
+  const fmtNames = (arr) => ((arr || []).map(nn => (preparedSet.has(nn) ? '★' : '') + nn).join('、') || '—');
+  const spellRows = [['0环（戏法）', '∞', fmtNames(byRing[0])]];
+  for (let ring = 1; ring <= 9; ring++) {
+    spellRows.push([ring + '环', slots[ring] ? slots[ring] + ' 个' : '—', fmtNames(byRing[ring])]);
+  }
+  b.push(docxTable(['环阶', '法术位', '法术名称'], spellRows, [1600, 1400, 6600]));
+  b.push(docxHint('★ = 已准备；法术位为当前等级职业表数值。'));
+  if (preparedRule()) b.push(docxHint('准备数量公式：' + preparedLimitText()));
+
+  // ===== 程序（赛博格） =====
+  if (isCyborg) {
+    b.push(docxSec('程序'));
+    const mods = new Set();
+    for (const n of (c.programs || [])) {
       const p = DATA.programs.find(x => x.name === n);
-      return [p ? p.protocol : '', p ? moduleLabel(p) : '', n, (p ? p.text : '').slice(0, 40)];
-    });
-    b.push(docxTable(['协议', '模块', '名称', '详述'], pgRows, [1200, 1400, 2600, 5200]));
-    b.push(docxPaste('程序全文本（从规则书复制粘贴）'));
-  }
-
-  // —— 随身物品 / 资源 ——
-  b.push(docxSec('随身物品'));
-  if ((c.equipment || []).length) {
-    let total = 0;
-    const lines = (c.equipment || []).map(x => {
-      const it = miById(x.id);
-      const p = miPrice(it);
-      if (p != null) total += p;
-      return `${it ? it.name : x.id}${it && it.sub ? '（' + it.sub + '）' : ''}${p != null ? '　' + p + 'gp' : '　价格未定'}`;
-    });
-    b.push(docxKV('魔法物品', lines.join('\n'), { long: true }));
-    b.push(docxKV('装备合计', total + 'gp'));
-    if (c.budget != null && c.budget !== '') {
-      const bud = Math.max(0, parseInt(c.budget, 10) || 0);
-      b.push(docxKV('购物预算', bud + 'gp' + (total > bud ? `（超支 ${total - bud}gp）` : '')));
+      if (!p) continue;
+      const info = (typeof progModuleInfo === 'function') ? progModuleInfo(p) : { list: [], none: false, any: false };
+      for (const m of (info.list || [])) mods.add(m);
     }
+    b.push(docxP(docxRun('掌握演算模块', { b: true }) + docxRun('：' + ['火力', '工程', '生存', '信息', '时空'].map(m => m + (mods.has(m) ? '☑' : '□')).join(' '))));
+    b.push(docxP(docxRun('准备程序数量', { b: true }) + docxRun(`：${(c.programs || []).length} 个${c.programProtocol ? '　　默认协议：' + c.programProtocol : ''}`)));
+    const PROTOCOLS = ['阿尔法', '贝塔', '伽马', '德尔塔', '伊普西隆', '泽塔', '欧米伽'];
+    const groups = {};
+    for (const n of (c.programs || [])) {
+      const p = DATA.programs.find(x => x.name === n);
+      const proto = p ? t(p.protocol) : '';
+      const key = PROTOCOLS.find(x => proto.indexOf(x) === 0) || proto || '其它';
+      (groups[key] = groups[key] || []).push(n);
+    }
+    const pgRows = PROTOCOLS.map(x => [x, (groups[x] || []).join('、') || '—']);
+    for (const key of Object.keys(groups)) if (PROTOCOLS.indexOf(key) < 0) pgRows.push([key, groups[key].join('、')]);
+    b.push(docxTable(['协议层级', '程序名称'], pgRows, [2400, 7200]));
+    b.push(docxPaste('程序完整文本（从规则书复制粘贴）'));
   }
-  b.push(docxPaste('同调位 / 武器·法器·奇物·卷轴·魔药清单'));
 
-  // —— 备注 ——
-  if (c.traitsNote || c.notes) {
-    b.push(docxSec('备注'));
-    if (c.traitsNote) b.push(docxKV('备注 / 法术 / 战技 / 程序', c.traitsNote, { long: true }));
-    if (c.notes) b.push(docxKV('其他备注', c.notes, { long: true }));
+  // ===== 随身物品（同调位 + 分类清单 + 花费/剩余金钱） =====
+  b.push(docxSec('随身物品'));
+  const at = __docxAttuneInfo();
+  const boxCount = Math.max(3, at.cap);
+  const boxes = [];
+  for (let i = 0; i < boxCount; i++) boxes.push(`${i + 1}${i < at.used ? '☑' : '□'}`);
+  b.push(docxP(docxRun('同调位', { b: true }) + docxRun(`：${boxes.join(' ')}（已同调 ${at.used} / 上限 ${at.cap}）` + (at.attuned.length ? '　已同调：' + at.attuned.join('、') : ''))));
+  const cats = {};
+  for (const cat of DOCX_ITEM_CATS) cats[cat] = [];
+  for (const x of (c.equipment || [])) {
+    const it = miById(x.id);
+    const cat = __docxItemCat(it);
+    const p = it ? miPrice(it) : null;
+    const itemName = it ? (it.name + (it.sub && it.sub !== it.name ? '（' + it.sub + '）' : '')) : x.id;
+    cats[cat].push(`${itemName}${p != null ? '（' + p + 'gp）' : '（价格未定）'}${it && it.attune ? '·同调' : ''}`);
   }
+  if (t(c.items).trim()) cats['普通物品'].push(t(c.items).trim());
+  const catRows = DOCX_ITEM_CATS.map(cat => [cat, cats[cat].length ? cats[cat].join('；') : '—']);
+  b.push(docxTable(['分类', '物品'], catRows, [1600, 8000]));
+  if (!(c.equipment || []).length && !t(c.items).trim()) {
+    b.push(docxPaste('武器 / 护甲 / 服饰 / 奇物 / 卷轴 / 魔药 / 普通物品清单（补充上表）'));
+  }
+  const budget = c.budget != null && c.budget !== '' ? Math.max(0, parseInt(c.budget, 10) || 0) : null;
+  const spentTxt = at.total + 'gp' + (at.unpriced ? `（另有 ${at.unpriced} 件价格未定不计入）` : '');
+  const restTxt = budget != null ? (Math.max(0, budget - at.total) + 'gp' + (at.total > budget ? `（超支 ${at.total - budget}gp）` : '')) : '（未设置购物预算）';
+  b.push(docxP(docxRun('花费金钱', { b: true }) + docxRun(`：${spentTxt}　　剩余金钱：${restTxt}`)));
+  b.push(docxHint('服饰每个部位只能装备一件；没有注明「在施法时消耗」的法术材料不会消耗，只需准备一份。'));
+
+  // ===== 备注（含模板底部粘贴区） =====
+  b.push(docxSec('备注'));
+  if (t(c.traitsNote).trim()) b.push(docxKV('法术 / 战技 / 程序等能力描述', c.traitsNote, { long: true }));
+  if (t(c.notes).trim()) b.push(docxKV('其他备注', c.notes, { long: true }));
+  b.push(docxPaste('续航资源消耗 / 战斗内生命值变化 / 战斗内动态状态变化'));
+  b.push(docxPaste('携带物品效果文本'));
+  b.push(docxPaste('所选法术、战技、程序等能力描述的文本'));
+  b.push(docxPaste('所召唤的部署数据'));
+  b.push(docxPaste('常用的变形数据'));
 
   return b;
 }
@@ -3249,9 +4027,9 @@ function importChar() {
         const ch = data.char || data;
         state.char = Object.assign(newChar(), ch);
         if (!state.char.raceChoice) state.char.raceChoice = { mode: '', a: '', b: '', c: '' };
-        state.step = 10;
+        state.step = 9;   // 导入后跳到「角色卡」步（v3 步骤顺序）
         save();
-        setStep(10);
+        setStep(9);
         toast('已导入角色（可在任意步骤继续修改）');
       } catch (e) { toast('导入失败：文件格式不正确'); }
     };
@@ -3283,6 +4061,7 @@ async function boot() {
   }
   loadSettings();
   load();
+  normalizeClassChoice();   // 规则数据更新/旧存档：清掉悬空的变体/子职选择（反馈 5）
   // 数据版本显示（与词典页一致，便于核对数据是否随规则书更新）
   const verEl = $('#car-ver');
   if (verEl && DATA.rules) verEl.textContent = 'v' + DATA.rules.version + ' · 规则书数据';
@@ -3318,6 +4097,26 @@ async function boot() {
   window.__CAR_FEATPREREQ__ = (name) => {
     const f = DATA.feats.find((x) => x.name === name);
     return f ? featPrereqStatus(f) : null;
+  };
+  // 职业/变体/子职数据——回归脚本核对变体职业（反馈 5）与「职业特性到当前等级」（反馈 8）用
+  window.__CAR_CLASS_INFO__ = () => {
+    const b = baseKlass(), k = klass(), v = activeVariant();
+    return {
+      base: b ? b.name : null,
+      variant: v ? v.name : '',
+      active: k ? k.name : null,
+      subclassMode: v ? v.subclassMode : 'base',
+      subclassExclude: v && Array.isArray(v.subclassExclude) ? v.subclassExclude.slice() : [],
+      subclasses: subclassList().map(s => s.name),
+      classFeatures: classFeatureListToLevel(state.char.level).map(f => f.name),
+      subclassFeatures: subclassFeatureListToLevel(state.char.level).map(f => f.name),
+    };
+  };
+  window.__CAR_FEATURE_HELPERS__ = () => ({ classFeatureListToLevel, subclassFeatureListToLevel });
+  // 种族属性加值解析结果——回归脚本核对「属性值提升」类措辞（反馈 4 顺带）
+  window.__CAR_RACE_INFO__ = (name) => {
+    const r = (name && DATA.races.find(x => x.id === name)) || race();
+    return r ? { name: r.name, abilityText: raceAbilityText(r), plan: raceBonusPlan(r) } : null;
   };
   setStep(state.step);
 }

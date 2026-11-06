@@ -77,10 +77,10 @@
 
 <section class="status-board" id="board">
   <h2>📋 反馈处理状态一览</h2>
-  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>50</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
+  <div><a class="st done" href="#board-done" title="跳转到「✅ 已修复」区块">✅ 已修复 <b>52</b></a><a class="st pend" href="#board-pend" title="跳转到「⏳ 待确认」区块">⏳ 待确认 <b>4</b></a><a class="st open" href="#board-open" title="跳转到「🆕 待处理」区块">🆕 待处理 <b>0</b></a></div>
 
   <details id="board-done" class="board-sec">
-    <summary>✅ 已修复（50 条）</summary>
+    <summary>✅ 已修复（52 条）</summary>
     <ul class="st-list">
     <li>
       <span class="cl-id">#20260816-225600-99b4</span>
@@ -531,6 +531,24 @@
       
       
       <div class="cl-detail">在专长步骤选中「魔法学徒」后，出现专长法术选择区：先选职业（吟游诗人/牧师/德鲁伊/契术师/法师/灵能师等），再从该职业列表里选 2 个戏法与 1 个一环法术；角色卡新增「专长法术（魔法学徒 · 职业）」小节，并提示该一环法术每两次长休可免位施展一次。</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261106-200900-7c3e</span>
+      <b>车卡器 10 项反馈：子职选择配色 / 专长筛选 / 步骤顺序 / 专长数据 / 变体职业 / 同调位 / Word 角色卡</b>
+      <span class="cl-page">（car.html 角色创建器（全部 11 步 + Word 导出））</span>
+      <span class="cl-date">2026-11-06</span>
+      
+      
+      <div class="cl-detail">用户在实际车 14 级牧师时截图反馈 10 条问题，逐条修复：① 子职下拉「白底浅字」看不清——原内联 background:#fff 在深色模式下继承浅色文字；改为 .subclass-sel 类+明暗两套配色（深色 --panel 底/--ink 字，对比度 11.9:1）。② 「仅显示当前可选」对 14 级牧师仍列出圣武士专长——featPrereqStatus 过去把「圣武士5级」误当角色…</div>
+    </li>
+    <li>
+      <span class="cl-id">#20261106-200900-7c3e-data</span>
+      <b>card-data 解析：专长去重与污染修复、变体职业结构化、职业特性等级 / 子职特性挂接</b>
+      <span class="cl-page">（assets/card-data（车卡 / 词典 / 骰子查询数据源））</span>
+      <span class="cl-date">2026-11-06</span>
+      
+      
+      <div class="cl-detail">为支持上述车卡修复，5z_build/parse-card-data.mjs 同步加固（词典与骰子查询同源）：① parseRaces 的「种族专长」段识别改为「标题元素且 trim 后以种族专长结尾、长度≤10」，并对种族页来源的专长名做清洗（≤20 字、不含句读/顿号/冒号）；种族特性不再混入专长，同时修复旧解析提前进入该段导致真龙/狗头人/眼魔/序位巨人的种族特性 traits 被截断。② …</div>
     </li></ul>
   </details>
   <details id="board-pend" class="board-sec">
@@ -580,6 +598,25 @@
 </section>
 
 <h2 style="margin-top:28px;">📜 历史批次记录</h2>
+
+  <details class="cl-entry">
+    <summary><span class="cl-title">2026-11-06 · v1.65</span><span class="cl-batch-hint">✅2</span></summary>
+    <p class="cl-release">车卡器 10 项使用反馈修复（网页车卡截图反馈）：子职下拉配色、专长「仅显示当前可选」筛选、车卡步骤顺序、专长数据污染与重复、变体职业、购物同调位、Word 角色卡格式。</p>
+    <h3>✅ 已修复（2）</h3><ul>
+    <li class="cl-fix">
+      <span class="cl-id">#20261106-200900-7c3e</span>
+      <b>车卡器 10 项反馈：子职选择配色 / 专长筛选 / 步骤顺序 / 专长数据 / 变体职业 / 同调位 / Word 角色卡</b>
+      <span class="cl-page">（car.html 角色创建器（全部 11 步 + Word 导出））</span>
+      <div class="cl-detail">用户在实际车 14 级牧师时截图反馈 10 条问题，逐条修复：① 子职下拉「白底浅字」看不清——原内联 background:#fff 在深色模式下继承浅色文字；改为 .subclass-sel 类+明暗两套配色（深色 --panel 底/--ink 字，对比度 11.9:1）。② 「仅显示当前可选」对 14 级牧师仍列出圣武士专长——featPrereqStatus 过去把「圣武士5级」误当角色等级；现可判定职业等级（含 7 组变体等价：神官≡牧师等）、种族/亚种、「只能在N级时选择」、职业特性（施法/引导神力/额外攻击/偷袭…按已获得特性）、专长类别（任意/至少一个超魔/战技专长）、战技数（习得一个战技）与「玩家角色」恒真，未知条件仍不误杀；14 级牧师单人可选专长由 704→350 条。③ 背景步（姓名/年龄/阵营/信仰/背景故事等与游戏数据无关项）从第 4 步移到最后一格：新顺序 种族→职业→属性→技能→专长→法术→战技→程序→角色卡→购物→背景；旧存档自动按 v2→v3 迁移步骤号，待补清单/徽标/导入跳转同步。④ 专长数据混入非专长——种族页只要正文出现「种族专长」四字就进入该段，导致序位巨人/狗头人/真龙/眼魔/石猴/元素裔等页的种族特性被当成专长（名称含整句话）；改为仅 h1/h2/h3 且标题就是「种族专长」才进入，并清洗名称；顺带修复旧逻辑提前进入该段导致这些种族页 traits 被截断的问题。⑤ 变体职业被当成子职——神官（牧师变体）/萨满/术士/侠客/灵契师/恶武士/战士（狂战士变体）本质是替换基础职业的变体职业，现在解析器输出 variants（各自 core/职业表/特性/子职规则：inherit+排除项、own 专属子职、none），车卡器职业步把它们与子职分开：变体单独成卡（虚框+「变体」角标）并有「职业版本」切换，选中后生命骰/熟练/职业表/特性/法术列表全部切到变体数据，子职按变体规则给（神官不能选战争领域、萨满不能选月亮结社等、恶武士 5 个亵渎誓言、战士 10 个武道流派、灵契师无子职并给出契灵页面链接）。⑥ 同一个「神圣超魔法」出现两次——该专长同时列在牧师/德鲁伊专长页；解析器按名称去重（优先「专长/」规范来源、同类取全文更长者），并合并 categories；专长总数 801→704（种族页脏数据 60 条 + 同名重复 30 条 + 特例合并，新增种族页独有真实专长「弗莱格索斯之焰」）。⑦ 购物页新增同调位计算：预算区可填「同调位上限」（默认 3，0–30，存档持久化），实时显示「已同调 N / 上限 M（剩余 K）」，超限红色提示，已购清单标注「· 同调」，角色卡/Word 导出同步。⑧ Word 角色卡职业特性只导出到 1 级——导出改为按当前等级输出全部主职特性（含变体职业特征，标注第N级）与子职特性全文，不再出现未来等级特性。⑨ 法术准备表太繁琐——原每个法术 4 行（施法时间/距离/目标/成分）；改为规则书模板的紧凑格式：每环 1 行「环阶｜法术位｜法术名称」，已准备法术名加 ★ 并在表头注明。⑩ 导出人物卡整体按规则书「空白角色卡（详细版）」重做：20 个章节顺序（玩家/人物姓名/开卡条件/背景介绍→角色→购点属性分解→生命值公式→AC 分解→豁免分解/专注/先攻/熟练/速度/特殊感官→武器与法术/程序攻击→熟练项→抗性免疫→专长 8 槽→缺陷→主职/子职/种族特性→技能 17 项分解→战技→已知戏法/紧凑法术表→程序→随身物品同调位 1□2□3□+8 分类+花费/剩余金钱→备注粘贴区），表格宽 ≤9638 twips、行不跨页、表头跨页重复；导出仍为纯 JS 手写 OOXML（无外部依赖），python-docx/Word 14 均能打开。顺带把网页角色卡（第 9 步）的「1 级职业特性」升级为「职业特性（至当前等级 + 子职）」。</div>
+    </li>
+    <li class="cl-fix">
+      <span class="cl-id">#20261106-200900-7c3e-data</span>
+      <b>card-data 解析：专长去重与污染修复、变体职业结构化、职业特性等级 / 子职特性挂接</b>
+      <span class="cl-page">（assets/card-data（车卡 / 词典 / 骰子查询数据源））</span>
+      <div class="cl-detail">为支持上述车卡修复，5z_build/parse-card-data.mjs 同步加固（词典与骰子查询同源）：① parseRaces 的「种族专长」段识别改为「标题元素且 trim 后以种族专长结尾、长度≤10」，并对种族页来源的专长名做清洗（≤20 字、不含句读/顿号/冒号）；种族特性不再混入专长，同时修复旧解析提前进入该段导致真龙/狗头人/眼魔/序位巨人的种族特性 traits 被截断。② 新增 dedupeFeats()：专长按名称去重（优先「专长/」规范来源 → 全文更长 → 先出现），合并 categories 并集；专长 801→704，锚点 631 条（缺 0，门禁通过）。③ parseClasses 重构：职业特性统一走 parseFeatureSection（带 levels 反推），新增变体职业解析（variants：core/职业表/特性/子职规则），subclasses 增加 kind/owner/displayName 分类（subclass 152 / variant 7 / variant-sub 15 / appendix 2 / vestige 7 / protocol 7 = 190），并把 951 条子职特性按 url 挂到对应子职条目上供车卡器/Word 导出使用。④ 契约保持：classes.json 仍 15 个职业、各职业 subclasses 条数不变（骰子 qq-dice build-5z-data 的下限门禁不破），features.json 与发布基线逐字节一致（classFeatures 227 / subclassFeatures 951），class-spells/magic-items/maneuvers/monsters/programs/rules/spells 亦逐字节一致；仅 classes/feats/races 变化。代价：classes.json 因内嵌子职特性全文由 311KB→1.2MB，card-data.js 增加约 0.9MB（后续可做懒加载/裁剪）。</div>
+    </li></ul>
+    
+  </details>
 
   <details class="cl-entry">
     <summary><span class="cl-title">2026-11-05 · v1.64</span></summary>
